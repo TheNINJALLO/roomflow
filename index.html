@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=7">
+    <link rel="stylesheet" href="styles.css?v=8">
 </head>
 <body>
     <div id="app-container">
@@ -32,6 +32,16 @@
                 <button id="btn-view-ar" class="toggle-btn">
                     <i data-lucide="aperture"></i> <span>Camera AR</span>
                 </button>
+            </div>
+
+            <div class="level-selector-container">
+                <i data-lucide="layers" class="level-icon"></i>
+                <select id="level-select">
+                    <option value="crawlspace">Crawl Space</option>
+                    <option value="basement" selected>Basement</option>
+                    <option value="main">Main Floor</option>
+                    <option value="second">2nd Floor</option>
+                </select>
             </div>
 
             <div class="project-actions">
@@ -140,6 +150,9 @@
                         </button>
                         <button id="btn-add-discharge" class="tool-btn">
                             <i data-lucide="git-commit"></i> Discharge Line
+                        </button>
+                        <button id="btn-add-interior-pipe" class="tool-btn">
+                            <i data-lucide="git-branch"></i> Interior Pipe
                         </button>
                     </div>
                 </div>
@@ -331,6 +344,19 @@
                         </div>
                         <button id="btn-delete-discharge" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Line</button>
                     </div>
+
+                    <!-- Interior Pipe Edit Fields -->
+                    <div id="interior-pipe-edit-fields" class="hidden">
+                        <div class="input-group">
+                            <label for="interior-pipe-label-input">Label / Name</label>
+                            <input type="text" id="interior-pipe-label-input">
+                        </div>
+                        <div class="input-group">
+                            <label for="interior-pipe-len-input">Length (ft)</label>
+                            <input type="number" id="interior-pipe-len-input" step="0.5" min="1">
+                        </div>
+                        <button id="btn-delete-interior-pipe" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Pipe</button>
+                    </div>
                 </div>
 
                 <!-- Individual Room Estimation Calculations -->
@@ -392,6 +418,10 @@
                         <span class="metric-label">Discharge Lines</span>
                         <span class="metric-value" id="total-discharge-length">0 ft</span>
                     </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">Interior Plumbing</span>
+                        <span class="metric-value" id="total-interior-pipe-length">0 ft</span>
+                    </div>
                 </div>
             </aside>
         </main>
@@ -402,8 +432,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=7"></script>
-    <script src="renderer3d.js?v=7"></script>
-    <script src="ar-estimator.js?v=7"></script>
+    <script src="app.js?v=8"></script>
+    <script src="renderer3d.js?v=8"></script>
+    <script src="ar-estimator.js?v=8"></script>
 </body>
 </html>

@@ -27,6 +27,16 @@ const state = {
     lastMouseWorldY: 0,
     undoStack: [],
     redoStack: [],
+    levels: [
+        { id: 'crawlspace', name: 'Crawl Space', height: 4, elevation: 0 },
+        { id: 'basement', name: 'Basement', height: 8, elevation: 0 },
+        { id: 'main', name: 'Main Floor', height: 9, elevation: 8 },
+        { id: 'second', name: '2nd Floor', height: 8, elevation: 17 }
+    ],
+    currentLevelId: 'basement',
+    interiorPipes: [],
+    selectedInteriorPipeId: null,
+    draggedInteriorPipeHandle: null, // { id, point: 'p1' | 'p2' | 'move' }
     snapGridSize: 0.5,   // Snap to nearest 0.5 foot (6 inches)
     showGrid: true,
     initialMouseOffset: {}
@@ -89,6 +99,7 @@ function addRoom(type) {
     const preset = PRESETS[type];
     const newRoom = {
         id: generateId(),
+        levelId: state.currentLevelId,
         name: preset.name,
         type: type,
         w: preset.w,
@@ -121,6 +132,7 @@ function addSumpPump() {
     if (typeof saveHistoryState === 'function') saveHistoryState();
     const newPump = {
         id: generateId(),
+        levelId: state.currentLevelId,
         name: `Sump Pump ${state.sumpPumps.length + 1}`,
         x: snap(toWorldX(canvas.width / 2)),
         y: snap(toWorldY(canvas.height / 2))
@@ -138,6 +150,7 @@ function addDischargeLine() {
     const cy = snap(toWorldY(canvas.height / 2));
     const newLine = {
         id: generateId(),
+        levelId: state.currentLevelId,
         label: `Discharge Line ${state.dischargeLines.length + 1}`,
         x1: cx - 3,
         y1: cy,
@@ -149,17 +162,40 @@ function addDischargeLine() {
     selectItem('discharge', newLine.id);
     draw();
     updateGlobalStats();
+// Add Interior Pipe
+function addInteriorPipe() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const cx = snap(toWorldX(canvas.width / 2));
+    const cy = snap(toWorldY(canvas.height / 2));
+    const newPipe = {
+        id: generateId(),
+        levelId: state.currentLevelId,
+        label: `Interior Pipe ${state.interiorPipes.length + 1}`,
+        x1: cx - 2,
+        y1: cy,
+        x2: cx + 2,
+        y2: cy,
+        length: 4.0
+    };
+    state.interiorPipes.push(newPipe);
+    selectItem('interiorPipe', newPipe.id);
+    draw();
+    updateGlobalStats();
 }
+
+
 
 // Selection Manager
 function selectItem(type, id) {
     state.selectedRoomId = (type === 'room') ? id : null;
     state.selectedSumpPumpId = (type === 'sump') ? id : null;
     state.selectedDischargeLineId = (type === 'discharge') ? id : null;
+    state.selectedInteriorPipeId = (type === 'interiorPipe') ? id : null;
     
     const roomFields = document.getElementById('room-edit-fields');
     const sumpFields = document.getElementById('sump-edit-fields');
     const dischargeFields = document.getElementById('discharge-edit-fields');
+    const interiorPipeFields = document.getElementById('interior-pipe-edit-fields');
     const noSel = document.getElementById('no-selection-msg');
     
     const btnAddDoor = document.getElementById('btn-add-door');
@@ -169,6 +205,7 @@ function selectItem(type, id) {
     roomFields.classList.add('hidden');
     sumpFields.classList.add('hidden');
     dischargeFields.classList.add('hidden');
+    if (interiorPipeFields) interiorPipeFields.classList.add('hidden');
     noSel.classList.remove('hidden');
     btnAddDoor.disabled = true;
     btnAddWindow.disabled = true;
@@ -248,6 +285,15 @@ function selectItem(type, id) {
             dischargeFields.classList.remove('hidden');
             document.getElementById('discharge-label-input').value = dl.label;
             document.getElementById('discharge-len-input').value = dl.length.toFixed(1);
+        }
+    } else if (type === 'interiorPipe' && id) {
+        const ip = state.interiorPipes.find(l => l.id === id);
+        const interiorPipeFields = document.getElementById('interior-pipe-edit-fields');
+        if (ip && interiorPipeFields) {
+            noSel.classList.add('hidden');
+            interiorPipeFields.classList.remove('hidden');
+            document.getElementById('interior-pipe-label-input').value = ip.label;
+            document.getElementById('interior-pipe-len-input').value = ip.length.toFixed(1);
         }
     }
     
@@ -519,8 +565,13 @@ function updateGlobalStats() {
     let totalDischargeLen = 0;
     state.dischargeLines.forEach(dl => { totalDischargeLen += dl.length; });
     
+    let totalInteriorPipeLen = 0;
+    state.interiorPipes.forEach(ip => { totalInteriorPipeLen += ip.length; });
+    
     document.getElementById('total-sumps-count').innerText = totalSumpCount;
     document.getElementById('total-discharge-length').innerText = `${totalDischargeLen.toFixed(1)} ft`;
+    const intPipeText = document.getElementById('total-interior-pipe-length');
+    if (intPipeText) intPipeText.innerText = `${totalInteriorPipeLen.toFixed(1)} ft`;
 }
 
 // Delete Selected Items
@@ -550,6 +601,16 @@ function deleteSelectedDischarge() {
     selectItem(null);
     draw();
     updateGlobalStats();
+}
+
+function deleteSelectedInteriorPipe() {
+    if (!state.selectedInteriorPipeId) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.interiorPipes = state.interiorPipes.filter(p => p.id !== state.selectedInteriorPipeId);
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
 }
 
 // Helper: Distance from point to segment
@@ -582,7 +643,9 @@ function draw(isPrinting = false) {
 
     // 1. Draw rooms
     state.rooms.forEach(room => {
-        drawRoom(room);
+        if (!room.levelId || room.levelId === state.currentLevelId) {
+            drawRoom(room);
+        }
     });
 
     // Draw committed segments of current custom drawing in progress
@@ -634,6 +697,7 @@ function draw(isPrinting = false) {
 
     // 2. Draw discharge lines
     state.dischargeLines.forEach(dl => {
+        if (dl.levelId && dl.levelId !== state.currentLevelId) return;
         const x1 = toCanvasX(dl.x1);
         const y1 = toCanvasY(dl.y1);
         const x2 = toCanvasX(dl.x2);
@@ -693,8 +757,70 @@ function draw(isPrinting = false) {
         ctx.restore();
     });
 
+    // Draw interior pipes
+    state.interiorPipes.forEach(ip => {
+        if (ip.levelId && ip.levelId !== state.currentLevelId) return;
+        const x1 = toCanvasX(ip.x1);
+        const y1 = toCanvasY(ip.y1);
+        const x2 = toCanvasX(ip.x2);
+        const y2 = toCanvasY(ip.y2);
+        const isSelected = ip.id === state.selectedInteriorPipeId;
+        
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#64748b';
+        ctx.lineWidth = isSelected ? 4 : 2.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        
+        // Draw endpoints if selected
+        if (isSelected) {
+            ctx.fillStyle = varColor('--accent-teal');
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.fillRect(x1 - 5, y1 - 5, 10, 10);
+            ctx.strokeRect(x1 - 5, y1 - 5, 10, 10);
+            ctx.fillRect(x2 - 5, y2 - 5, 10, 10);
+            ctx.strokeRect(x2 - 5, y2 - 5, 10, 10);
+        }
+        
+        // Length label
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        
+        ctx.save();
+        ctx.translate(mx, my);
+        let textAngle = angle;
+        if (textAngle > Math.PI / 2 || textAngle < -Math.PI / 2) {
+            textAngle += Math.PI;
+        }
+        ctx.rotate(textAngle);
+        
+        const label = `${ip.label}: ${ip.length.toFixed(1)} ft`;
+        ctx.font = '600 10px var(--font-mono)';
+        const textWidth = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(10, 13, 20, 0.8)';
+        ctx.fillRect(-textWidth/2 - 4, -14, textWidth + 8, 14);
+        
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : '#cbd5e1';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, 0, -4);
+        ctx.restore();
+    });
+
     // 3. Draw sump pumps
     state.sumpPumps.forEach(sp => {
+        if (sp.levelId && sp.levelId !== state.currentLevelId) return;
         const cx = toCanvasX(sp.x);
         const cy = toCanvasY(sp.y);
         const isSelected = sp.id === state.selectedSumpPumpId;
@@ -1056,6 +1182,7 @@ function drawSnappingGuidelines() {
 
     state.rooms.forEach(r => {
         if (r.id === draggedRoom.id) return;
+        if (r.levelId && r.levelId !== state.currentLevelId) return;
 
         const rEdges = { left: r.x, right: r.x + r.w, top: r.y, bottom: r.y + r.l };
         const dEdges = { left: draggedRoom.x, right: draggedRoom.x + draggedRoom.w, top: draggedRoom.y, bottom: draggedRoom.y + draggedRoom.l };
@@ -1200,6 +1327,7 @@ canvas.addEventListener('mousedown', (e) => {
     // 0. Check Door/Window Openings click first
     for (let i = state.rooms.length - 1; i >= 0; i--) {
         const room = state.rooms[i];
+        if (room.levelId && room.levelId !== state.currentLevelId) continue;
         for (let j = 0; j < room.openings.length; j++) {
             const op = room.openings[j];
             const rx = toCanvasX(room.x);
@@ -1243,6 +1371,7 @@ canvas.addEventListener('mousedown', (e) => {
     // 1. Check Sump Pumps click
     for (let i = state.sumpPumps.length - 1; i >= 0; i--) {
         const sp = state.sumpPumps[i];
+        if (sp.levelId && sp.levelId !== state.currentLevelId) continue;
         const spcx = toCanvasX(sp.x);
         const spcy = toCanvasY(sp.y);
         const dist = Math.sqrt((mx - spcx)**2 + (my - spcy)**2);
@@ -1256,6 +1385,7 @@ canvas.addEventListener('mousedown', (e) => {
     // 2. Check Discharge Lines endpoints & bodies
     for (let i = state.dischargeLines.length - 1; i >= 0; i--) {
         const dl = state.dischargeLines[i];
+        if (dl.levelId && dl.levelId !== state.currentLevelId) continue;
         const h1x = toCanvasX(dl.x1);
         const h1y = toCanvasY(dl.y1);
         const h2x = toCanvasX(dl.x2);
@@ -1286,6 +1416,40 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
+    // Check Interior Pipes click
+    for (let i = state.interiorPipes.length - 1; i >= 0; i--) {
+        const ip = state.interiorPipes[i];
+        if (ip.levelId && ip.levelId !== state.currentLevelId) continue;
+        const h1x = toCanvasX(ip.x1);
+        const h1y = toCanvasY(ip.y1);
+        const h2x = toCanvasX(ip.x2);
+        const h2y = toCanvasY(ip.y2);
+        
+        if (Math.sqrt((mx - h1x)**2 + (my - h1y)**2) < 10) {
+            selectItem('interiorPipe', ip.id);
+            state.draggedInteriorPipeHandle = { id: ip.id, point: 'p1' };
+            return;
+        }
+        if (Math.sqrt((mx - h2x)**2 + (my - h2y)**2) < 10) {
+            selectItem('interiorPipe', ip.id);
+            state.draggedInteriorPipeHandle = { id: ip.id, point: 'p2' };
+            return;
+        }
+        
+        const distToSegment = getDistanceToSegment(wx, wy, ip.x1, ip.y1, ip.x2, ip.y2);
+        if (distToSegment < 0.6) {
+            selectItem('interiorPipe', ip.id);
+            state.draggedInteriorPipeHandle = { id: ip.id, point: 'move' };
+            state.initialMouseOffset = {
+                x1: wx - ip.x1,
+                y1: wy - ip.y1,
+                x2: wx - ip.x2,
+                y2: wy - ip.y2
+            };
+            return;
+        }
+    }
+
     // 3. Check selected room handles
     if (state.selectedRoomId) {
         const room = state.rooms.find(r => r.id === state.selectedRoomId);
@@ -1302,6 +1466,7 @@ canvas.addEventListener('mousedown', (e) => {
     // 4. Check room bodies
     for (let i = state.rooms.length - 1; i >= 0; i--) {
         const room = state.rooms[i];
+        if (room.levelId && room.levelId !== state.currentLevelId) continue;
         const handle = getHitHandle(room, wx, wy);
         if (handle === 'move') {
             selectItem('room', room.id);
@@ -1428,6 +1593,35 @@ canvas.addEventListener('mousemove', (e) => {
         return;
     }
 
+    // Interior Pipe Dragging
+    if (state.draggedInteriorPipeHandle) {
+        const ip = state.interiorPipes.find(l => l.id === state.draggedInteriorPipeHandle.id);
+        if (ip) {
+            if (state.draggedInteriorPipeHandle.point === 'p1') {
+                ip.x1 = snap(wx);
+                ip.y1 = snap(wy);
+            } else if (state.draggedInteriorPipeHandle.point === 'p2') {
+                ip.x2 = snap(wx);
+                ip.y2 = snap(wy);
+            } else if (state.draggedInteriorPipeHandle.point === 'move') {
+                ip.x1 = snap(wx - state.initialMouseOffset.x1);
+                ip.y1 = snap(wy - state.initialMouseOffset.y1);
+                ip.x2 = snap(wx - state.initialMouseOffset.x2);
+                ip.y2 = snap(wy - state.initialMouseOffset.y2);
+            }
+            ip.length = Math.sqrt((ip.x2 - ip.x1)**2 + (ip.y2 - ip.y1)**2);
+            
+            // Sync length input in real-time
+            if (state.selectedInteriorPipeId === ip.id) {
+                const lenInput = document.getElementById('interior-pipe-len-input');
+                if (lenInput) lenInput.value = ip.length.toFixed(1);
+            }
+            draw();
+            updateGlobalStats();
+        }
+        return;
+    }
+
     // Opening (Door/Window) Dragging along wall bounds
     if (state.draggedOpening) {
         const room = state.rooms.find(r => r.id === state.draggedOpening.roomId);
@@ -1464,6 +1658,7 @@ canvas.addEventListener('mousemove', (e) => {
 
             state.rooms.forEach(r => {
                 if (r.id === room.id) return;
+                if (r.levelId && r.levelId !== state.currentLevelId) return;
                 const snapTolerance = 0.6;
                 if (Math.abs(targetX - r.x) < snapTolerance) targetX = r.x;
                 if (Math.abs(targetX + room.w - r.x) < snapTolerance) targetX = r.x - room.w;
@@ -1534,6 +1729,7 @@ canvas.addEventListener('mousemove', (e) => {
     
     // Hovering sump pump
     state.sumpPumps.forEach(sp => {
+        if (sp.levelId && sp.levelId !== state.currentLevelId) return;
         const cx = toCanvasX(sp.x);
         const cy = toCanvasY(sp.y);
         if (Math.sqrt((mx - cx)**2 + (my - cy)**2) < 15) {
@@ -1543,6 +1739,7 @@ canvas.addEventListener('mousemove', (e) => {
     
     // Hovering discharge handle
     state.dischargeLines.forEach(dl => {
+        if (dl.levelId && dl.levelId !== state.currentLevelId) return;
         const h1x = toCanvasX(dl.x1);
         const h1y = toCanvasY(dl.y1);
         const h2x = toCanvasX(dl.x2);
@@ -1567,7 +1764,10 @@ canvas.addEventListener('mousemove', (e) => {
     }
     
     if (cursor === 'crosshair') {
-        const hovered = state.rooms.find(r => getHitHandle(r, wx, wy) === 'move');
+        const hovered = state.rooms.find(r => {
+            if (r.levelId && r.levelId !== state.currentLevelId) return false;
+            return getHitHandle(r, wx, wy) === 'move';
+        });
         if (hovered) cursor = 'pointer';
     }
 
@@ -1576,14 +1776,20 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('mouseup', () => {
     // If elements were dragged, check if they actually moved and commit to history
-    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedDischargeHandle || state.draggedOpening || state.draggedVertex) {
+    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedDischargeHandle || state.draggedInteriorPipeHandle || state.draggedOpening || state.draggedVertex) {
         if (state.dragSnapshot) {
             const currentStr = JSON.stringify({
                 rooms: state.rooms,
                 sumpPumps: state.sumpPumps,
-                dischargeLines: state.dischargeLines
+                dischargeLines: state.dischargeLines,
+                interiorPipes: state.interiorPipes
             });
-            const snapStr = JSON.stringify(state.dragSnapshot);
+            const snapStr = JSON.stringify({
+                rooms: state.dragSnapshot.rooms,
+                sumpPumps: state.dragSnapshot.sumpPumps,
+                dischargeLines: state.dragSnapshot.dischargeLines,
+                interiorPipes: state.dragSnapshot.interiorPipes
+            });
             if (currentStr !== snapStr) {
                 state.undoStack.push(state.dragSnapshot);
                 if (state.undoStack.length > 50) {
@@ -1601,6 +1807,7 @@ canvas.addEventListener('mouseup', () => {
     state.draggedHandle = null;
     state.draggedSumpPumpId = null;
     state.draggedDischargeHandle = null;
+    state.draggedInteriorPipeHandle = null;
     state.draggedOpening = null;
     state.draggedVertex = null;
     draw();
@@ -1707,6 +1914,37 @@ document.getElementById('discharge-len-input').addEventListener('input', (e) => 
 });
 document.getElementById('btn-delete-discharge').addEventListener('click', deleteSelectedDischarge);
 
+// Interior pipe listeners
+document.getElementById('interior-pipe-label-input').addEventListener('input', (e) => {
+    if (!state.selectedInteriorPipeId) return;
+    const ip = state.interiorPipes.find(l => l.id === state.selectedInteriorPipeId);
+    if (ip) {
+        ip.label = e.target.value;
+        draw();
+    }
+});
+
+document.getElementById('interior-pipe-len-input').addEventListener('input', (e) => {
+    if (!state.selectedInteriorPipeId) return;
+    const ip = state.interiorPipes.find(l => l.id === state.selectedInteriorPipeId);
+    const val = parseFloat(e.target.value);
+    if (ip && !isNaN(val) && val > 0.1) {
+        const dx = ip.x2 - ip.x1;
+        const dy = ip.y2 - ip.y1;
+        const currentLen = Math.sqrt(dx*dx + dy*dy);
+        if (currentLen > 0.05) {
+            ip.x2 = ip.x1 + (dx / currentLen) * val;
+            ip.y2 = ip.y1 + (dy / currentLen) * val;
+        } else {
+            ip.x2 = ip.x1 + val;
+        }
+        ip.length = val;
+        draw();
+        updateGlobalStats();
+    }
+});
+document.getElementById('btn-delete-interior-pipe').addEventListener('click', deleteSelectedInteriorPipe);
+
 // Trigger presets
 document.querySelectorAll('.add-room-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -1733,6 +1971,10 @@ document.getElementById('btn-add-sump').addEventListener('click', () => {
 });
 document.getElementById('btn-add-discharge').addEventListener('click', () => {
     addDischargeLine();
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
+document.getElementById('btn-add-interior-pipe').addEventListener('click', () => {
+    addInteriorPipe();
     if (typeof closeAllDrawers === 'function') closeAllDrawers();
 });
 
@@ -1817,6 +2059,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
         rooms: state.rooms,
         sumpPumps: state.sumpPumps,
         dischargeLines: state.dischargeLines,
+        interiorPipes: state.interiorPipes || [],
+        currentLevelId: state.currentLevelId,
         capturedMeasurements: state.capturedMeasurements || []
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectData, null, 2));
@@ -1828,6 +2072,16 @@ document.getElementById('btn-save').addEventListener('click', () => {
 
 document.getElementById('btn-load').addEventListener('click', () => {
     document.getElementById('file-input').click();
+});
+
+// Level selector change listener
+document.getElementById('level-select').addEventListener('change', (e) => {
+    state.currentLevelId = e.target.value;
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+    updateHistoryButtons();
 });
 
 document.getElementById('file-input').addEventListener('change', (e) => {
@@ -1842,7 +2096,14 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                 state.rooms = Array.isArray(data) ? data : (data.rooms || []);
                 state.sumpPumps = data.sumpPumps || [];
                 state.dischargeLines = data.dischargeLines || [];
+                state.interiorPipes = data.interiorPipes || [];
+                state.currentLevelId = data.currentLevelId || 'basement';
                 state.capturedMeasurements = data.capturedMeasurements || [];
+                
+                // Sync UI level select dropdown
+                const lvlSelect = document.getElementById('level-select');
+                if (lvlSelect) lvlSelect.value = state.currentLevelId;
+                
                 document.getElementById('customer-name').value = data.customerName || '';
                 document.getElementById('customer-address').value = data.customerAddress || '';
                 selectItem(null);
@@ -2220,6 +2481,7 @@ function finishCustomRoomDrawing() {
 
     const newRoom = {
         id: 'r_' + Date.now(),
+        levelId: state.currentLevelId,
         name: 'Custom Angled Area',
         type: 'custom',
         x: minX,
@@ -2400,6 +2662,8 @@ function getHistorySnapshot() {
         rooms: JSON.parse(JSON.stringify(state.rooms)),
         sumpPumps: JSON.parse(JSON.stringify(state.sumpPumps)),
         dischargeLines: JSON.parse(JSON.stringify(state.dischargeLines)),
+        interiorPipes: JSON.parse(JSON.stringify(state.interiorPipes)),
+        currentLevelId: state.currentLevelId,
         // Save drawing mode variables
         drawMode: state.drawMode,
         sketchVertices: JSON.parse(JSON.stringify(state.sketchVertices)),
@@ -2462,6 +2726,12 @@ function undo() {
     state.rooms = previous.rooms;
     state.sumpPumps = previous.sumpPumps;
     state.dischargeLines = previous.dischargeLines;
+    state.interiorPipes = previous.interiorPipes || [];
+    state.currentLevelId = previous.currentLevelId || 'basement';
+    
+    // Sync level select UI dropdown
+    const lvlSelect = document.getElementById('level-select');
+    if (lvlSelect) lvlSelect.value = state.currentLevelId;
     
     // Restore drawing mode variables
     state.drawMode = previous.drawMode || null;
@@ -2495,6 +2765,12 @@ function redo() {
     state.rooms = nextState.rooms;
     state.sumpPumps = nextState.sumpPumps;
     state.dischargeLines = nextState.dischargeLines;
+    state.interiorPipes = nextState.interiorPipes || [];
+    state.currentLevelId = nextState.currentLevelId || 'basement';
+    
+    // Sync level select UI dropdown
+    const lvlSelect = document.getElementById('level-select');
+    if (lvlSelect) lvlSelect.value = state.currentLevelId;
     
     // Restore drawing mode variables
     state.drawMode = nextState.drawMode || null;

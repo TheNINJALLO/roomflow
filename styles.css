@@ -117,6 +117,45 @@ body {
     box-shadow: var(--shadow-md);
 }
 
+/* Level Selector */
+.level-selector-container {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.35rem 0.6rem;
+    transition: border-color 0.2s ease;
+}
+
+.level-selector-container:hover {
+    border-color: var(--accent-blue);
+}
+
+.level-selector-container select {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    outline: none;
+}
+
+.level-selector-container select option {
+    background-color: #0f172a;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+}
+
+.level-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--accent-teal);
+}
+
 /* Project Actions */
 .project-actions {
     display: flex;
@@ -912,9 +951,14 @@ body {
     
     .view-toggles {
         order: 3;
-        width: 100%;
         justify-content: center;
         margin-top: 0.15rem;
+    }
+    
+    .level-selector-container {
+        order: 4;
+        margin-top: 0.15rem;
+        padding: 0.25rem 0.5rem;
     }
     
     .view-toggles button span,

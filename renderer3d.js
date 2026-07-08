@@ -84,7 +84,9 @@ window.sync3D = function() {
     // Build 3D objects for each room
     state.rooms.forEach(room => {
         const roomGroup = new THREE.Group();
-        roomGroup.position.set(room.x, 0, room.y); // Canvas Y maps to 3D Z
+        const level = state.levels.find(l => l.id === room.levelId) || { elevation: 0 };
+        const elevation = level.elevation || 0;
+        roomGroup.position.set(room.x, elevation, room.y); // Canvas Y maps to 3D Z
 
         if (room.type === 'staircase') {
             const stepCount = room.steps || 12;
@@ -201,6 +203,64 @@ window.sync3D = function() {
         roomMeshes.push(roomGroup);
     });
 
+    // --- UTILITIES & PIPING 3D RENDERING ---
+    // 1. Render Sump Pumps
+    state.sumpPumps.forEach(sp => {
+        const level = state.levels.find(l => l.id === sp.levelId) || { elevation: 0, height: 8 };
+        const elevation = level.elevation || 0;
+        const roomH = level.height || 8;
+        
+        const sumpGroup = new THREE.Group();
+        sumpGroup.position.set(sp.x, elevation, sp.y);
+        
+        // Sump lid
+        const lidGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 16);
+        const lidMat = new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.6 });
+        const lidMesh = new THREE.Mesh(lidGeo, lidMat);
+        lidMesh.position.y = 0.025;
+        lidMesh.receiveShadow = true;
+        sumpGroup.add(lidMesh);
+        
+        // Pump motor block representation
+        const motorGeo = new THREE.BoxGeometry(0.3, 0.4, 0.3);
+        const motorMat = new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.6, roughness: 0.3 });
+        const motorMesh = new THREE.Mesh(motorGeo, motorMat);
+        motorMesh.position.set(0.1, 0.2, 0.1);
+        motorMesh.castShadow = true;
+        sumpGroup.add(motorMesh);
+        
+        // Vertical PVC riser
+        const pipeH = roomH - 0.2;
+        const pipeGeo = new THREE.CylinderGeometry(0.08, 0.08, pipeH, 8);
+        const pipeMat = new THREE.MeshStandardMaterial({ color: '#f8fafc', roughness: 0.5 });
+        const pipeMesh = new THREE.Mesh(pipeGeo, pipeMat);
+        pipeMesh.position.set(-0.2, pipeH / 2, -0.2);
+        pipeMesh.castShadow = true;
+        pipeMesh.receiveShadow = true;
+        sumpGroup.add(pipeMesh);
+        
+        scene.add(sumpGroup);
+        roomMeshes.push(sumpGroup);
+    });
+
+    // 2. Render Discharge Lines (thick green on the floor)
+    state.dischargeLines.forEach(dl => {
+        const level = state.levels.find(l => l.id === dl.levelId) || { elevation: 0 };
+        const elevation = level.elevation || 0;
+        build3DPipe(dl.x1, elevation + 0.1, dl.y1, dl.x2, elevation + 0.1, dl.y2, 0.12, '#10b981', scene);
+    });
+
+    // 3. Render Interior Plumbing (white PVC run overhead)
+    state.interiorPipes.forEach(ip => {
+        const level = state.levels.find(l => l.id === ip.levelId) || { elevation: 0, height: 8 };
+        const elevation = level.elevation || 0;
+        const roomH = level.height || 8;
+        
+        // Route horizontal run at overhead ceiling height (height - 0.5ft)
+        const pipeY = elevation + (roomH - 0.5);
+        build3DPipe(ip.x1, pipeY, ip.y1, ip.x2, pipeY, ip.y2, 0.08, '#f8fafc', scene);
+    });
+
     // Auto-adjust camera focus point
     if (state.rooms.length > 0) {
         // Calculate bounding box of all rooms
@@ -301,6 +361,34 @@ function build3DWall(x1, z1, x2, z2, height, openings, group, material) {
     }
 
     group.add(wallGroup);
+}
+
+// Helper: Builds cylindrical pipe in 3D between two coordinate points
+function build3DPipe(x1, y1, z1, x2, y2, z2, radius, color, sceneGroup) {
+    const point1 = new THREE.Vector3(x1, y1, z1);
+    const point2 = new THREE.Vector3(x2, y2, z2);
+    const direction = new THREE.Vector3().subVectors(point2, point1);
+    const length = direction.length();
+    if (length < 0.01) return;
+    
+    const geometry = new THREE.CylinderGeometry(radius, radius, length, 8);
+    const material = new THREE.MeshStandardMaterial({ 
+        color: color, 
+        roughness: 0.4,
+        metalness: 0.1 
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    
+    mesh.position.copy(point1).add(direction.clone().multiplyScalar(0.5));
+    
+    const up = new THREE.Vector3(0, 1, 0);
+    direction.normalize();
+    mesh.quaternion.setFromUnitVectors(up, direction);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    
+    sceneGroup.add(mesh);
+    roomMeshes.push(mesh);
 }
 
 // 3D Specific UI Controls
