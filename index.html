@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=21">
+    <link rel="stylesheet" href="styles.css?v=22">
 </head>
 <body>
     <div id="app-container">
@@ -377,6 +377,10 @@
                             <label for="interior-pipe-len-input">Length (ft)</label>
                             <input type="number" id="interior-pipe-len-input" step="0.5" min="1">
                         </div>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                            <button id="btn-add-90-turn" class="btn-accent" style="flex: 1; font-size: 0.8rem; padding: 0.5rem;"><i data-lucide="corner-down-right"></i> + 90° Elbow</button>
+                            <button id="btn-add-45-turn" class="btn-accent" style="flex: 1; font-size: 0.8rem; padding: 0.5rem;"><i data-lucide="trending-up"></i> + 45° Elbow</button>
+                        </div>
                         <button id="btn-delete-interior-pipe" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Pipe</button>
                     </div>
 
@@ -515,8 +519,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=21"></script>
-    <script src="renderer3d.js?v=21"></script>
-    <script src="ar-estimator.js?v=21"></script>
+    <script src="app.js?v=22"></script>
+    <script src="renderer3d.js?v=22"></script>
+    <script src="ar-estimator.js?v=22"></script>
 </body>
 </html>

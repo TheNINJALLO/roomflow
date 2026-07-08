@@ -2665,6 +2665,92 @@ document.getElementById('interior-pipe-len-input').addEventListener('input', (e)
 });
 document.getElementById('btn-delete-interior-pipe').addEventListener('click', deleteSelectedInteriorPipe);
 
+// Add 90° Turn (Elbow) from active pipe end
+document.getElementById('btn-add-90-turn').addEventListener('click', () => {
+    if (!state.selectedInteriorPipeId) return;
+    const ip = state.interiorPipes.find(p => p.id === state.selectedInteriorPipeId);
+    if (!ip) return;
+    
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    
+    const dx = ip.x2 - ip.x1;
+    const dy = ip.y2 - ip.y1;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    
+    let nx = 1, ny = 0;
+    if (len > 0.05) {
+        nx = dx / len;
+        ny = dy / len;
+    }
+    
+    // Rotate 90° clockwise: (rx, ry) = (-ny, nx)
+    const rx = -ny;
+    const ry = nx;
+    const defaultLen = 4.0;
+    
+    const newPipe = {
+        id: generateId(),
+        levelId: ip.levelId || state.currentLevelId,
+        label: `Interior Pipe ${state.interiorPipes.length + 1}`,
+        x1: ip.x2,
+        y1: ip.y2,
+        x2: ip.x2 + rx * defaultLen,
+        y2: ip.y2 + ry * defaultLen,
+        length: defaultLen
+    };
+    
+    state.interiorPipes.push(newPipe);
+    selectItem('interiorPipe', newPipe.id);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+});
+
+// Add 45° Turn (Elbow) from active pipe end
+document.getElementById('btn-add-45-turn').addEventListener('click', () => {
+    if (!state.selectedInteriorPipeId) return;
+    const ip = state.interiorPipes.find(p => p.id === state.selectedInteriorPipeId);
+    if (!ip) return;
+    
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    
+    const dx = ip.x2 - ip.x1;
+    const dy = ip.y2 - ip.y1;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    
+    let nx = 1, ny = 0;
+    if (len > 0.05) {
+        nx = dx / len;
+        ny = dy / len;
+    }
+    
+    // Rotate 45° clockwise: 
+    // rx = nx * cos(45) - ny * sin(45)
+    // ry = nx * sin(45) + ny * cos(45)
+    const cos45 = 0.7071;
+    const sin45 = 0.7071;
+    const rx = nx * cos45 - ny * sin45;
+    const ry = nx * sin45 + ny * cos45;
+    const defaultLen = 4.0;
+    
+    const newPipe = {
+        id: generateId(),
+        levelId: ip.levelId || state.currentLevelId,
+        label: `Interior Pipe ${state.interiorPipes.length + 1}`,
+        x1: ip.x2,
+        y1: ip.y2,
+        x2: ip.x2 + rx * defaultLen,
+        y2: ip.y2 + ry * defaultLen,
+        length: defaultLen
+    };
+    
+    state.interiorPipes.push(newPipe);
+    selectItem('interiorPipe', newPipe.id);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+});
+
 // Room Joists Direction change
 document.getElementById('room-joists-select').addEventListener('change', (e) => {
     if (!state.selectedRoomId) return;
