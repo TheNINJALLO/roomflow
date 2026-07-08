@@ -162,6 +162,7 @@ function addDischargeLine() {
     selectItem('discharge', newLine.id);
     draw();
     updateGlobalStats();
+}
 // Add Interior Pipe
 function addInteriorPipe() {
     if (typeof saveHistoryState === 'function') saveHistoryState();
