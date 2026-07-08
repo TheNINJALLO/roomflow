@@ -886,9 +886,23 @@ function updateGlobalStats() {
     });
 
     state.stanchions.forEach(st => {
-        const level = state.levels.find(l => l.id === st.levelId) || { height: 8 };
-        const room = getRoomAt(st.x, st.y, st.levelId);
-        const postH = room ? room.h : (level.height || 8);
+        const stLevelId = st.levelId || 'basement';
+        const level = state.levels.find(l => l.id === stLevelId) || { height: 8 };
+        const room = getRoomAt(st.x, st.y, stLevelId);
+        const roomH = room ? room.h : (level.height || 8);
+        
+        let isUnderBeam = false;
+        const bHeight = 0.9;
+        for (let i = 0; i < state.mainBeams.length; i++) {
+            const bm = state.mainBeams[i];
+            if (bm.levelId !== stLevelId) continue;
+            const dist = getDistanceToSegment(st.x, st.y, bm.x1, bm.y1, bm.x2, bm.y2);
+            if (dist < 0.5) {
+                isUnderBeam = true;
+                break;
+            }
+        }
+        const postH = isUnderBeam ? Math.max(0.5, roomH - bHeight) : roomH;
         
         let perim = 0;
         if (st.type === 'round') {
@@ -3074,9 +3088,23 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     });
 
     state.stanchions.forEach(st => {
-        const level = state.levels.find(l => l.id === st.levelId) || { height: 8 };
-        const room = getRoomAt(st.x, st.y, st.levelId);
-        const postH = room ? room.h : (level.height || 8);
+        const stLevelId = st.levelId || 'basement';
+        const level = state.levels.find(l => l.id === stLevelId) || { height: 8 };
+        const room = getRoomAt(st.x, st.y, stLevelId);
+        const roomH = room ? room.h : (level.height || 8);
+        
+        let isUnderBeam = false;
+        const bHeight = 0.9;
+        for (let i = 0; i < state.mainBeams.length; i++) {
+            const bm = state.mainBeams[i];
+            if (bm.levelId !== stLevelId) continue;
+            const dist = getDistanceToSegment(st.x, st.y, bm.x1, bm.y1, bm.x2, bm.y2);
+            if (dist < 0.5) {
+                isUnderBeam = true;
+                break;
+            }
+        }
+        const postH = isUnderBeam ? Math.max(0.5, roomH - bHeight) : roomH;
         
         let perim = 0;
         if (st.type === 'round') {

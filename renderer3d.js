@@ -408,7 +408,22 @@ window.sync3D = function() {
         const level = state.levels.find(l => l.id === stLevelId) || { elevation: 0, height: 8 };
         const elevation = level.elevation || 0;
         const room = getRoomAt(st.x, st.y, stLevelId);
-        const postH = room ? room.h : (level.height || 8);
+        const roomH = room ? room.h : (level.height || 8);
+        
+        // Check if stanchion is underneath any support beam on this level
+        let isUnderBeam = false;
+        const bHeight = 0.9;
+        for (let i = 0; i < state.mainBeams.length; i++) {
+            const bm = state.mainBeams[i];
+            if (bm.levelId !== stLevelId) continue;
+            const dist = getDistanceToSegment(st.x, st.y, bm.x1, bm.y1, bm.x2, bm.y2);
+            if (dist < 0.5) {
+                isUnderBeam = true;
+                break;
+            }
+        }
+        
+        const postH = isUnderBeam ? Math.max(0.5, roomH - bHeight) : roomH;
         
         let geometry;
         let material;
