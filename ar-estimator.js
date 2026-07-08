@@ -194,6 +194,10 @@ finishBtn.addEventListener('click', () => {
     const l = snap(maxY - minY);
 
     if (w >= 2 && l >= 2) {
+        // Place room at the center of the active canvas viewport
+        const centerX = snap(toWorldX(canvas.width / 2) - w / 2);
+        const centerY = snap(toWorldY(canvas.height / 2) - l / 2);
+
         // Add Room to main state
         const newRoom = {
             id: 'r_' + Math.random().toString(36).substr(2, 9),
@@ -202,8 +206,8 @@ finishBtn.addEventListener('click', () => {
             w: w,
             l: l,
             h: 8, // Default ceiling height
-            x: snap(minX),
-            y: snap(minY),
+            x: centerX,
+            y: centerY,
             color: '#ec4899',
             openings: []
         };
