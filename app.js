@@ -283,6 +283,9 @@ function selectItem(type, id) {
     
     const btnAddDoor = document.getElementById('btn-add-door');
     const btnAddWindow = document.getElementById('btn-add-window');
+    const btnAddStrap = document.getElementById('btn-add-strap');
+    const btnAddPerim = document.getElementById('btn-add-perimeter-strap');
+    const btnAddNb1 = document.getElementById('btn-add-nb1');
     
     // Hide all
     roomFields.classList.add('hidden');
@@ -294,6 +297,9 @@ function selectItem(type, id) {
     noSel.classList.remove('hidden');
     btnAddDoor.disabled = true;
     btnAddWindow.disabled = true;
+    if (btnAddStrap) btnAddStrap.disabled = true;
+    if (btnAddPerim) btnAddPerim.disabled = true;
+    if (btnAddNb1) btnAddNb1.disabled = true;
     
     if (type === 'room' && id) {
         const room = state.rooms.find(r => r.id === id);
@@ -378,6 +384,9 @@ function selectItem(type, id) {
             
             btnAddDoor.disabled = false;
             btnAddWindow.disabled = false;
+            if (btnAddStrap) btnAddStrap.disabled = false;
+            if (btnAddPerim) btnAddPerim.disabled = false;
+            if (btnAddNb1) btnAddNb1.disabled = false;
             updateRoomEstimates(room);
         }
     } else if (type === 'sump' && id) {
@@ -3135,6 +3144,56 @@ document.getElementById('btn-add-window').addEventListener('click', () => {
     addOpening('window');
     if (typeof closeAllDrawers === 'function') closeAllDrawers();
 });
+
+document.getElementById('btn-add-strap').addEventListener('click', () => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.carbonStraps = (room.carbonStraps || 0) + 1;
+        
+        const strapsInput = document.getElementById('room-carbon-straps-input');
+        if (strapsInput) strapsInput.value = room.carbonStraps;
+        
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+document.getElementById('btn-add-perimeter-strap').addEventListener('click', () => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.floorPerimeterStrap = !room.floorPerimeterStrap;
+        
+        const floorStrapCheckbox = document.getElementById('room-floor-perimeter-strap-checkbox');
+        if (floorStrapCheckbox) floorStrapCheckbox.checked = !!room.floorPerimeterStrap;
+        
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+document.getElementById('btn-add-nb1').addEventListener('click', () => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        const next = { 'none': '2ft', '2ft': '4ft', '4ft': 'full', 'full': 'none' };
+        room.nb1Height = next[room.nb1Height || 'none'];
+        
+        const nb1Select = document.getElementById('room-nb1-select');
+        if (nb1Select) nb1Select.value = room.nb1Height;
+        
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
 document.getElementById('btn-delete-room').addEventListener('click', deleteSelectedRoom);
 
 // Add Sump & Discharge actions

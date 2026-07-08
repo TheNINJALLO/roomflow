@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=27">
+    <link rel="stylesheet" href="styles.css?v=28">
 </head>
 <body>
     <div id="app-container">
@@ -138,6 +138,24 @@
                         </button>
                         <button id="btn-add-window" class="tool-btn" disabled>
                             <i data-lucide="square-dashed"></i> Standard Window
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Add Reinforcements</h3>
+                    <p class="section-hint">Select a room first, then click below to add reinforcements.</p>
+                    <div class="element-buttons" style="display: flex; flex-direction: column; gap: 0.5rem; width: 100%;">
+                        <div style="display: flex; gap: 0.5rem; width: 100%;">
+                            <button id="btn-add-strap" class="tool-btn" disabled style="flex: 1; text-align: left; padding: 0.55rem 0.75rem;">
+                                <i data-lucide="align-justify"></i> Vertical Strap (+1)
+                            </button>
+                            <button id="btn-add-perimeter-strap" class="tool-btn" disabled style="flex: 1; text-align: left; padding: 0.55rem 0.75rem;">
+                                <i data-lucide="square"></i> Floor Perimeter
+                            </button>
+                        </div>
+                        <button id="btn-add-nb1" class="tool-btn" disabled style="width: 100%; text-align: left; padding: 0.55rem 0.75rem;">
+                            <i data-lucide="layers"></i> NB1 Coating (Cycle Height)
                         </button>
                     </div>
                 </div>
@@ -596,8 +614,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=27"></script>
-    <script src="renderer3d.js?v=27"></script>
-    <script src="ar-estimator.js?v=27"></script>
+    <script src="app.js?v=28"></script>
+    <script src="renderer3d.js?v=28"></script>
+    <script src="ar-estimator.js?v=28"></script>
 </body>
 </html>
