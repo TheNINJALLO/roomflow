@@ -88,10 +88,12 @@ function calculateDistance() {
     // Camera height in feet
     const camHeightFeet = parseFloat(cameraHeightInput.value) / 12;
     
-    // Horizontal Distance = Camera Height * tan(90 - pitch) 
-    // When looking straight down (pitch near 90), tan approaches infinity, so we clamp pitch
-    const pitchRad = (devicePitch * Math.PI) / 180;
-    activeDistance = camHeightFeet * Math.tan(pitchRad);
+    // Angle from vertical is 90 - devicePitch (which is equal to beta)
+    // Looking horizontal (devicePitch near 0) -> distance goes to infinity
+    // Looking down (devicePitch near 90) -> distance goes to 0
+    const thetaDeg = 90 - devicePitch;
+    const thetaRad = (thetaDeg * Math.PI) / 180;
+    activeDistance = camHeightFeet * Math.tan(thetaRad);
 
     updateARDisplay();
 }
