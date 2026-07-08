@@ -159,6 +159,12 @@ body {
     border: none;
 }
 
+.project-actions button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .project-actions button.btn-accent:hover {
     background-color: #00e0b8;
     transform: translateY(-1px);

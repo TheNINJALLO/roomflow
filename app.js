@@ -22,8 +22,11 @@ const state = {
     draggedVertex: null,         // { roomId, vertexIndex }
     drawMode: null,              // 'custom' or null
     sketchVertices: [],          // temporary drawing vertices
+    sketchRedoVertices: [],      // temporary redo drawing vertices
     lastMouseWorldX: 0,          // live mouse positions for line previews
     lastMouseWorldY: 0,
+    undoStack: [],
+    redoStack: [],
     snapGridSize: 0.5,   // Snap to nearest 0.5 foot (6 inches)
     showGrid: true,
     initialMouseOffset: {}
@@ -82,6 +85,7 @@ function generateId() {
 
 // Add Room Function
 function addRoom(type) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     const preset = PRESETS[type];
     const newRoom = {
         id: generateId(),
@@ -114,6 +118,7 @@ function centerOnRoom(room) {
 
 // Add Sump Pump
 function addSumpPump() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     const newPump = {
         id: generateId(),
         name: `Sump Pump ${state.sumpPumps.length + 1}`,
@@ -128,6 +133,7 @@ function addSumpPump() {
 
 // Add Discharge Line
 function addDischargeLine() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     const cx = snap(toWorldX(canvas.width / 2));
     const cy = snap(toWorldY(canvas.height / 2));
     const newLine = {
@@ -278,6 +284,7 @@ function addOpening(type) {
     if (!state.selectedRoomId) return;
     const room = state.rooms.find(r => r.id === state.selectedRoomId);
     if (!room) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
 
     let bestWall;
     let maxOffset;
@@ -341,6 +348,7 @@ function removeOpening(openingId) {
     if (!state.selectedRoomId) return;
     const room = state.rooms.find(r => r.id === state.selectedRoomId);
     if (!room) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
 
     room.openings = room.openings.filter(op => op.id !== openingId);
     updateRoomEstimates(room);
@@ -354,6 +362,7 @@ window.updateOpening = function(roomId, openingId, property, value) {
     if (!room) return;
     const op = room.openings.find(o => o.id === openingId);
     if (!op) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     
     if (property === 'wall') {
         op.wall = value;
@@ -517,6 +526,7 @@ function updateGlobalStats() {
 // Delete Selected Items
 function deleteSelectedRoom() {
     if (!state.selectedRoomId) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     state.rooms = state.rooms.filter(r => r.id !== state.selectedRoomId);
     selectItem(null);
     draw();
@@ -526,6 +536,7 @@ function deleteSelectedRoom() {
 
 function deleteSelectedSump() {
     if (!state.selectedSumpPumpId) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     state.sumpPumps = state.sumpPumps.filter(p => p.id !== state.selectedSumpPumpId);
     selectItem(null);
     draw();
@@ -534,6 +545,7 @@ function deleteSelectedSump() {
 
 function deleteSelectedDischarge() {
     if (!state.selectedDischargeLineId) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     state.dischargeLines = state.dischargeLines.filter(l => l.id !== state.selectedDischargeLineId);
     selectItem(null);
     draw();
@@ -1133,13 +1145,17 @@ function getHitHandle(room, worldX, worldY) {
     return null;
 }
 
-// Canvas Mouse Handlers
 canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const wx = toWorldX(mx);
     const wy = toWorldY(my);
+
+    // Save history snapshot in case dragging starts
+    if (typeof getHistorySnapshot === 'function') {
+        state.dragSnapshot = getHistorySnapshot();
+    }
 
     // Sketching custom rooms mode mousedown handler
     if (state.drawMode === 'custom') {
@@ -1156,6 +1172,9 @@ canvas.addEventListener('mousedown', (e) => {
         }
         
         state.sketchVertices.push({ x: snapX, y: snapY });
+        state.sketchRedoVertices = [];
+        const btnRedoWall = document.getElementById('btn-draw-redo-wall');
+        if (btnRedoWall) btnRedoWall.disabled = true;
         draw();
         return;
     }
@@ -1555,6 +1574,27 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('mouseup', () => {
+    // If elements were dragged, check if they actually moved and commit to history
+    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedDischargeHandle || state.draggedOpening || state.draggedVertex) {
+        if (state.dragSnapshot) {
+            const currentStr = JSON.stringify({
+                rooms: state.rooms,
+                sumpPumps: state.sumpPumps,
+                dischargeLines: state.dischargeLines
+            });
+            const snapStr = JSON.stringify(state.dragSnapshot);
+            if (currentStr !== snapStr) {
+                state.undoStack.push(state.dragSnapshot);
+                if (state.undoStack.length > 50) {
+                    state.undoStack.shift();
+                }
+                state.redoStack = [];
+                if (typeof updateHistoryButtons === 'function') updateHistoryButtons();
+            }
+        }
+    }
+    state.dragSnapshot = null;
+
     state.isDraggingCanvas = false;
     state.draggedRoomId = null;
     state.draggedHandle = null;
@@ -2195,17 +2235,27 @@ function addSketchWallSegment() {
     const nextX = last.x + length * Math.cos(angleRad);
     const nextY = last.y + length * Math.sin(angleRad);
 
-    state.sketchVertices.push({ x: snap(nextX), y: snap(nextY) });
+    const snapX = snap(nextX);
+    const snapY = snap(nextY);
+
+    state.sketchVertices.push({ x: snapX, y: snapY });
+    state.sketchRedoVertices = [];
+    const btnRedoWall = document.getElementById('btn-draw-redo-wall');
+    if (btnRedoWall) btnRedoWall.disabled = true;
     
-    state.lastMouseWorldX = snap(nextX);
-    state.lastMouseWorldY = snap(nextY);
+    state.lastMouseWorldX = snapX;
+    state.lastMouseWorldY = snapY;
 
     draw();
 }
 
 function undoLastSketchWall() {
     if (state.sketchVertices.length > 1) {
-        state.sketchVertices.pop();
+        const popped = state.sketchVertices.pop();
+        state.sketchRedoVertices.push(popped);
+        const btnRedoWall = document.getElementById('btn-draw-redo-wall');
+        if (btnRedoWall) btnRedoWall.disabled = false;
+        
         const last = state.sketchVertices[state.sketchVertices.length - 1];
         state.lastMouseWorldX = last.x;
         state.lastMouseWorldY = last.y;
@@ -2215,18 +2265,122 @@ function undoLastSketchWall() {
     draw();
 }
 
+function redoLastSketchWall() {
+    if (state.sketchRedoVertices.length > 0) {
+        const popped = state.sketchRedoVertices.pop();
+        state.sketchVertices.push(popped);
+        state.lastMouseWorldX = popped.x;
+        state.lastMouseWorldY = popped.y;
+        
+        const btnRedoWall = document.getElementById('btn-draw-redo-wall');
+        if (btnRedoWall) btnRedoWall.disabled = (state.sketchRedoVertices.length === 0);
+        draw();
+    }
+}
+
 // Bind sketch UI controls
 document.getElementById('btn-draw-walls-mode').addEventListener('click', toggleDrawWallsMode);
 document.getElementById('btn-draw-add-wall').addEventListener('click', addSketchWallSegment);
 document.getElementById('btn-draw-undo-wall').addEventListener('click', undoLastSketchWall);
+document.getElementById('btn-draw-redo-wall').addEventListener('click', redoLastSketchWall);
 document.getElementById('btn-draw-finish-room').addEventListener('click', finishCustomRoomDrawing);
 document.getElementById('btn-draw-cancel').addEventListener('click', () => {
     state.drawMode = null;
     state.sketchVertices = [];
+    state.sketchRedoVertices = [];
+    const btnRedoWall = document.getElementById('btn-draw-redo-wall');
+    if (btnRedoWall) btnRedoWall.disabled = true;
     document.getElementById('custom-wall-drawer-panel').classList.add('hidden');
     document.getElementById('btn-draw-walls-mode').classList.remove('active');
     document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
     draw();
+});
+
+// --- UNDO / REDO HISTORY SYSTEM ---
+function getHistorySnapshot() {
+    return {
+        rooms: JSON.parse(JSON.stringify(state.rooms)),
+        sumpPumps: JSON.parse(JSON.stringify(state.sumpPumps)),
+        dischargeLines: JSON.parse(JSON.stringify(state.dischargeLines))
+    };
+}
+
+function saveHistoryState() {
+    const snapshot = getHistorySnapshot();
+    state.undoStack.push(snapshot);
+    if (state.undoStack.length > 50) {
+        state.undoStack.shift();
+    }
+    state.redoStack = [];
+    updateHistoryButtons();
+}
+
+function updateHistoryButtons() {
+    const btnUndo = document.getElementById('btn-undo');
+    const btnRedo = document.getElementById('btn-redo');
+    if (btnUndo) btnUndo.disabled = (state.undoStack.length === 0);
+    if (btnRedo) btnRedo.disabled = (state.redoStack.length === 0);
+}
+
+function undo() {
+    if (state.undoStack.length === 0) return;
+    
+    const current = getHistorySnapshot();
+    state.redoStack.push(current);
+    
+    const previous = state.undoStack.pop();
+    state.rooms = previous.rooms;
+    state.sumpPumps = previous.sumpPumps;
+    state.dischargeLines = previous.dischargeLines;
+    
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+    updateHistoryButtons();
+}
+
+// Global exposure for touch support
+window.undo = undo;
+
+function redo() {
+    if (state.redoStack.length === 0) return;
+    
+    const current = getHistorySnapshot();
+    state.undoStack.push(current);
+    
+    const nextState = state.redoStack.pop();
+    state.rooms = nextState.rooms;
+    state.sumpPumps = nextState.sumpPumps;
+    state.dischargeLines = nextState.dischargeLines;
+    
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+    updateHistoryButtons();
+}
+
+// Global exposure for touch support
+window.redo = redo;
+
+// Bind Global Undo/Redo Click Listeners
+document.getElementById('btn-undo').addEventListener('click', undo);
+document.getElementById('btn-redo').addEventListener('click', redo);
+
+// Bind Keyboard Shortcuts (Ctrl+Z and Ctrl+Y / Ctrl+Shift+Z)
+window.addEventListener('keydown', (e) => {
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+        return;
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undo();
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+        e.preventDefault();
+        redo();
+    }
 });
 
 // --- AR CAPTURED MEASUREMENTS MANAGEMENT ---

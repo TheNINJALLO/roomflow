@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=3">
+    <link rel="stylesheet" href="styles.css?v=4">
 </head>
 <body>
     <div id="app-container">
@@ -35,6 +35,8 @@
             </div>
 
             <div class="project-actions">
+                <button id="btn-undo" title="Undo Action" disabled><i data-lucide="undo"></i></button>
+                <button id="btn-redo" title="Redo Action" disabled><i data-lucide="redo"></i></button>
                 <button id="btn-new" title="New Project"><i data-lucide="file-plus"></i></button>
                 <button id="btn-save" title="Save Project"><i data-lucide="save"></i></button>
                 <button id="btn-load" title="Load Project"><i data-lucide="folder-open"></i></button>
@@ -107,11 +109,12 @@
                         </select>
                     </div>
                     
-                    <div class="preset-buttons" style="margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                        <button id="btn-draw-add-wall" class="tool-btn"><i data-lucide="plus"></i> Add Wall</button>
-                        <button id="btn-draw-undo-wall" class="tool-btn"><i data-lucide="undo"></i> Undo Wall</button>
-                        <button id="btn-draw-finish-room" class="tool-btn btn-accent" style="grid-column: span 2;"><i data-lucide="check"></i> Close & Create Room</button>
-                        <button id="btn-draw-cancel" class="tool-btn btn-danger" style="grid-column: span 2;"><i data-lucide="x"></i> Cancel Drawing</button>
+                    <div class="preset-buttons" style="margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem;">
+                        <button id="btn-draw-add-wall" class="tool-btn" style="padding: 0.4rem 0.2rem;"><i data-lucide="plus"></i> Add</button>
+                        <button id="btn-draw-undo-wall" class="tool-btn" style="padding: 0.4rem 0.2rem;"><i data-lucide="undo"></i> Undo</button>
+                        <button id="btn-draw-redo-wall" class="tool-btn" style="padding: 0.4rem 0.2rem;" disabled><i data-lucide="redo"></i> Redo</button>
+                        <button id="btn-draw-finish-room" class="tool-btn btn-accent" style="grid-column: span 3;"><i data-lucide="check"></i> Close & Create Room</button>
+                        <button id="btn-draw-cancel" class="tool-btn btn-danger" style="grid-column: span 3;"><i data-lucide="x"></i> Cancel Drawing</button>
                     </div>
                 </div>
 
@@ -399,8 +402,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=3"></script>
-    <script src="renderer3d.js?v=3"></script>
-    <script src="ar-estimator.js?v=3"></script>
+    <script src="app.js?v=4"></script>
+    <script src="renderer3d.js?v=4"></script>
+    <script src="ar-estimator.js?v=4"></script>
 </body>
 </html>
