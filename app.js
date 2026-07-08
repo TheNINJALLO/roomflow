@@ -217,6 +217,15 @@ function selectItem(type, id) {
         estList.classList.add('hidden');
         noEstMsg.classList.remove('hidden');
     }
+
+    // On mobile, if something is selected, slide open the details drawer
+    if (type && id && window.innerWidth <= 900) {
+        if (typeof leftSidebar !== 'undefined' && typeof rightSidebar !== 'undefined' && typeof backdrop !== 'undefined') {
+            leftSidebar.classList.remove('open');
+            rightSidebar.classList.add('open');
+            backdrop.classList.remove('hidden');
+        }
+    }
     
     draw();
 }
@@ -1624,16 +1633,29 @@ document.querySelectorAll('.add-room-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         const type = btn.getAttribute('data-type');
         addRoom(type);
+        if (typeof closeAllDrawers === 'function') closeAllDrawers();
     });
 });
 
-document.getElementById('btn-add-door').addEventListener('click', () => addOpening('door'));
-document.getElementById('btn-add-window').addEventListener('click', () => addOpening('window'));
+document.getElementById('btn-add-door').addEventListener('click', () => {
+    addOpening('door');
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
+document.getElementById('btn-add-window').addEventListener('click', () => {
+    addOpening('window');
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
 document.getElementById('btn-delete-room').addEventListener('click', deleteSelectedRoom);
 
 // Add Sump & Discharge actions
-document.getElementById('btn-add-sump').addEventListener('click', addSumpPump);
-document.getElementById('btn-add-discharge').addEventListener('click', addDischargeLine);
+document.getElementById('btn-add-sump').addEventListener('click', () => {
+    addSumpPump();
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
+document.getElementById('btn-add-discharge').addEventListener('click', () => {
+    addDischargeLine();
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
 
 // Zoom and Grid controls
 document.getElementById('btn-zoom-in').addEventListener('click', () => {
@@ -2215,6 +2237,7 @@ function closeAllDrawers() {
     rightSidebar.classList.remove('open');
     backdrop.classList.add('hidden');
 }
+window.closeAllDrawers = closeAllDrawers;
 
 btnToggleTools.addEventListener('click', (e) => {
     e.stopPropagation();

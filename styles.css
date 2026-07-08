@@ -835,7 +835,7 @@ body {
     left: 1rem;
     right: 1rem;
     justify-content: space-between;
-    z-index: 90;
+    z-index: 101;
     pointer-events: none;
 }
 
@@ -935,6 +935,52 @@ body {
     .logo p {
         font-size: 0.65rem;
     }
+    
+    .sidebar-header-mobile {
+        display: flex;
+    }
+}
+
+/* Sidebar Header for Mobile Drawer */
+.sidebar-header-mobile {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+    background-color: rgba(16, 22, 35, 0.2);
+}
+
+.sidebar-header-mobile h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--accent-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.sidebar-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+}
+
+.sidebar-close-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+}
+
+.sidebar-close-btn i, .sidebar-close-btn svg {
+    width: 18px;
+    height: 18px;
 }
 
 /* AR Captures & Saved Measures Log */
