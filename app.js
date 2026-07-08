@@ -2332,7 +2332,6 @@ document.getElementById('interior-pipe-len-input').addEventListener('input', (e)
         draw();
         updateGlobalStats();
     }
-    }
 });
 document.getElementById('btn-delete-interior-pipe').addEventListener('click', deleteSelectedInteriorPipe);
 
