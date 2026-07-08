@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RoomFlow - Interactive 2D/3D Room Layout & Estimation</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Styling -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app-container">
+        <!-- Top Navigation -->
+        <header class="app-header">
+            <div class="logo">
+                <i data-lucide="layout"></i>
+                <h1>RoomFlow<span>Sketcher</span></h1>
+            </div>
+            
+            <div class="view-toggles">
+                <button id="btn-view-2d" class="toggle-btn active">
+                    <i data-lucide="edit-3"></i> 2D Sketch
+                </button>
+                <button id="btn-view-3d" class="toggle-btn">
+                    <i data-lucide="box"></i> 3D View
+                </button>
+                <button id="btn-view-ar" class="toggle-btn">
+                    <i data-lucide="aperture"></i> Camera AR Estimator
+                </button>
+            </div>
+
+            <div class="project-actions">
+                <button id="btn-new" title="New Project"><i data-lucide="file-plus"></i></button>
+                <button id="btn-save" title="Save Project"><i data-lucide="save"></i></button>
+                <button id="btn-load" title="Load Project"><i data-lucide="folder-open"></i></button>
+                <input type="file" id="file-input" style="display: none;" accept=".json">
+                <button id="btn-export-pdf" class="btn-accent"><i data-lucide="download"></i> Export Estimate</button>
+            </div>
+        </header>
+
+        <!-- Main Body Grid -->
+        <main class="app-body">
+            <!-- Left Sidebar: Toolbox -->
+            <aside class="sidebar toolbox">
+                <div class="sidebar-section">
+                    <h3>Add Presets</h3>
+                    <div class="preset-buttons">
+                        <button class="tool-btn add-room-btn" data-type="living">
+                            <i data-lucide="sofa"></i> Living Room
+                        </button>
+                        <button class="tool-btn add-room-btn" data-type="bedroom">
+                            <i data-lucide="bed"></i> Bedroom
+                        </button>
+                        <button class="tool-btn add-room-btn" data-type="kitchen">
+                            <i data-lucide="chef-hat"></i> Kitchen
+                        </button>
+                        <button class="tool-btn add-room-btn" data-type="bathroom">
+                            <i data-lucide="bath"></i> Bathroom
+                        </button>
+                        <button class="tool-btn add-room-btn" data-type="hallway">
+                            <i data-lucide="split"></i> Hallway
+                        </button>
+                        <button class="tool-btn add-room-btn" data-type="closet">
+                            <i data-lucide="door-closed"></i> Closet
+                        </button>
+                        <button class="tool-btn add-room-btn" data-type="staircase">
+                            <i data-lucide="trending-up"></i> Staircase
+                        </button>
+                        <button class="tool-btn add-room-btn" data-type="custom">
+                            <i data-lucide="square"></i> Custom Room
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Add Structural Elements</h3>
+                    <p class="section-hint">Select a room first, then click below to add elements to walls.</p>
+                    <div class="element-buttons">
+                        <button id="btn-add-door" class="tool-btn" disabled>
+                            <i data-lucide="door-closed"></i> Standard Door
+                        </button>
+                        <button id="btn-add-window" class="tool-btn" disabled>
+                            <i data-lucide="square-dashed"></i> Standard Window
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Add Utilities</h3>
+                    <p class="section-hint">Place sump pumps and trace discharge piping.</p>
+                    <div class="element-buttons">
+                        <button id="btn-add-sump" class="tool-btn">
+                            <i data-lucide="circle-dot"></i> Sump Pump
+                        </button>
+                        <button id="btn-add-discharge" class="tool-btn">
+                            <i data-lucide="git-commit"></i> Discharge Line
+                        </button>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <h3>Canvas Controls</h3>
+                    <div class="canvas-controls">
+                        <button id="btn-zoom-in" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+                        <button id="btn-zoom-out" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
+                        <button id="btn-zoom-reset" title="Fit to View"><i data-lucide="maximize-2"></i></button>
+                        <button id="btn-grid-toggle" class="active" title="Toggle Grid"><i data-lucide="grid"></i></button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Center Viewport -->
+            <section class="viewport-container">
+                <!-- 2D Sketch Board -->
+                <div id="canvas-container" class="viewport active">
+                    <canvas id="sketch-canvas"></canvas>
+                    <div class="canvas-instructions">
+                        <p><kbd>Click & Drag</kbd> rooms to position them. <kbd>Drag Handles</kbd> to resize. Grid snapping is enabled.</p>
+                    </div>
+                </div>
+
+                <!-- 3D Three.js Viewport -->
+                <div id="three-container" class="viewport">
+                    <!-- Three.js Canvas gets injected here -->
+                    <div class="three-controls">
+                        <button id="btn-3d-orbit" class="active" title="Orbit Mode"><i data-lucide="rotate-3d"></i> Orbit</button>
+                        <button id="btn-3d-roof" title="Toggle Ceilings"><i data-lucide="layers"></i> Toggle Ceilings</button>
+                    </div>
+                </div>
+
+                <!-- Camera WebAR Estimator Viewport -->
+                <div id="ar-container" class="viewport">
+                    <video id="ar-video" autoplay playsinline muted></video>
+                    <div class="ar-overlay">
+                        <div class="ar-reticle"></div>
+                        <div class="ar-aim-point"></div>
+                        
+                        <div class="ar-stats">
+                            <div class="ar-stat-card">
+                                <label>Estimated Dist</label>
+                                <span id="ar-distance">0' 0"</span>
+                            </div>
+                            <div class="ar-stat-card">
+                                <label>Active Segment</label>
+                                <span id="ar-segment">0' 0"</span>
+                            </div>
+                        </div>
+
+                        <div class="ar-controls">
+                            <div class="ar-height-selector">
+                                <label for="ar-camera-height">Device Height (inches):</label>
+                                <input type="number" id="ar-camera-height" value="60" min="20" max="100">
+                            </div>
+                            <div class="ar-buttons">
+                                <button id="btn-ar-reset" class="btn-danger"><i data-lucide="refresh-cw"></i> Clear</button>
+                                <button id="btn-ar-pin" class="btn-success"><i data-lucide="map-pin"></i> Pin Corner</button>
+                                <button id="btn-ar-finish" class="btn-accent"><i data-lucide="check"></i> Create Room</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Sidebar: Properties & Estimation -->
+            <aside class="sidebar metrics-panel">
+                <!-- Customer Details Section -->
+                <div class="sidebar-section">
+                    <h3>Customer & Site Info</h3>
+                    <div class="input-group">
+                        <label for="customer-name">Customer Name</label>
+                        <input type="text" id="customer-name" placeholder="John Doe">
+                    </div>
+                    <div class="input-group">
+                        <label for="customer-address">Property Address</label>
+                        <input type="text" id="customer-address" placeholder="123 Main St, City, State">
+                    </div>
+                </div>
+
+                <!-- Selection Details -->
+                <div class="sidebar-section active-selection-details">
+                    <h3>Selection Details</h3>
+                    <div id="no-selection-msg">
+                        <p class="empty-state">Select a room, sump pump, or discharge line to modify details.</p>
+                    </div>
+                    
+                    <!-- Room Edit Fields -->
+                    <div id="room-edit-fields" class="hidden">
+                        <div class="input-group">
+                            <label for="room-name-input">Room Name</label>
+                            <input type="text" id="room-name-input">
+                        </div>
+                        <div class="dimensions-grid">
+                            <div class="input-group">
+                                <label>Width (ft)</label>
+                                <input type="number" id="room-w-input" step="0.5" min="1">
+                            </div>
+                            <div class="input-group">
+                                <label>Length (ft)</label>
+                                <input type="number" id="room-l-input" step="0.5" min="1">
+                            </div>
+                            <div class="input-group">
+                                <label>Height (ft)</label>
+                                <input type="number" id="room-h-input" step="0.5" min="1">
+                            </div>
+                            <div class="input-group" id="room-steps-group">
+                                <label>Steps</label>
+                                <input type="number" id="room-steps-input" step="1" min="1" value="12">
+                            </div>
+                        </div>
+                        <button id="btn-delete-room" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Room</button>
+                    </div>
+
+                    <!-- Sump Pump Edit Fields -->
+                    <div id="sump-edit-fields" class="hidden">
+                        <div class="input-group">
+                            <label for="sump-name-input">Sump Pump Name</label>
+                            <input type="text" id="sump-name-input">
+                        </div>
+                        <button id="btn-delete-sump" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Sump Pump</button>
+                    </div>
+
+                    <!-- Discharge Line Edit Fields -->
+                    <div id="discharge-edit-fields" class="hidden">
+                        <div class="input-group">
+                            <label for="discharge-label-input">Label / Name</label>
+                            <input type="text" id="discharge-label-input">
+                        </div>
+                        <div class="input-group">
+                            <label for="discharge-len-input">Length (ft)</label>
+                            <input type="number" id="discharge-len-input" step="0.5" min="1">
+                        </div>
+                        <button id="btn-delete-discharge" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Line</button>
+                    </div>
+                </div>
+
+                <!-- Individual Room Estimation Calculations -->
+                <div class="sidebar-section estimation-details">
+                    <h3>Estimates (Selected Room)</h3>
+                    <div id="estimations-list" class="hidden">
+                        <div class="metric-row">
+                            <span class="metric-label">Floor Area</span>
+                            <span class="metric-value" id="metric-floor-area">0 sq ft</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Wall Area (Drywall/Paint)</span>
+                            <span class="metric-value" id="metric-wall-area">0 sq ft</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Ceiling Area</span>
+                            <span class="metric-value" id="metric-ceiling-area">0 sq ft</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Perimeter</span>
+                            <span class="metric-value" id="metric-perimeter">0 ft</span>
+                        </div>
+                        <div class="metric-row">
+                            <span class="metric-label">Volume</span>
+                            <span class="metric-value" id="metric-volume">0 cu ft</span>
+                        </div>
+                        <div class="sub-elements-list">
+                            <h4>Deductions & Openings</h4>
+                            <ul id="deductions-ul">
+                                <!-- Elements listed here -->
+                            </ul>
+                        </div>
+                    </div>
+                    <div id="no-estimates-msg">
+                        <p class="empty-state">No active room selected.</p>
+                    </div>
+                </div>
+
+                <!-- Project Totals Summary -->
+                <div class="sidebar-section totals-section">
+                    <h3>Project Totals</h3>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">Total Rooms</span>
+                        <span class="metric-value" id="total-rooms-count">0</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">Total Floor Area</span>
+                        <span class="metric-value" id="total-floor-area">0 sq ft</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">Total Wall Area</span>
+                        <span class="metric-value" id="total-wall-area">0 sq ft</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">Sump Pumps</span>
+                        <span class="metric-value" id="total-sumps-count">0</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">Discharge Lines</span>
+                        <span class="metric-value" id="total-discharge-length">0 ft</span>
+                    </div>
+                </div>
+            </aside>
+        </main>
+    </div>
+
+    <!-- Three.js Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <!-- Application Logic Scripts -->
+    <script src="app.js"></script>
+    <script src="renderer3d.js"></script>
+    <script src="ar-estimator.js"></script>
+</body>
+</html>

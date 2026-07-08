@@ -1,0 +1,267 @@
+// --- THREE.JS 3D RENDERER ---
+let scene, camera, renderer, controls;
+let roomMeshes = [];
+let showCeilings = false;
+const wallThickness = 0.4; // 5 inches in feet
+
+const container3d = document.getElementById('three-container');
+
+function init3D() {
+    // 1. Create Scene & Camera
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color('#0d111a');
+    
+    // Add Fog for professional depth
+    scene.fog = new THREE.FogExp2('#0d111a', 0.015);
+
+    camera = new THREE.PerspectiveCamera(45, container3d.clientWidth / container3d.clientHeight, 0.1, 1000);
+    camera.position.set(30, 40, 50);
+
+    // 2. WebGL Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container3d.clientWidth, container3d.clientHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container3d.appendChild(renderer.domElement);
+
+    // 3. Orbit Controls
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.maxPolarAngle = Math.PI / 2 - 0.05; // Don't go below floor level
+
+    // 4. Lighting Rig
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight1.position.set(20, 40, 20);
+    dirLight1.castShadow = true;
+    dirLight1.shadow.mapSize.width = 2048;
+    dirLight1.shadow.mapSize.height = 2048;
+    dirLight1.shadow.bias = -0.0001;
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0x3b82f6, 0.3); // Accent blue fill
+    dirLight2.position.set(-20, 20, -20);
+    scene.add(dirLight2);
+
+    // 5. Floor Grid Helper
+    const gridHelper = new THREE.GridHelper(100, 100, '#1e293b', '#111827');
+    gridHelper.position.y = -0.01;
+    scene.add(gridHelper);
+
+    // Start render loop
+    animate();
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    if (state.activeView === '3d') {
+        controls.update();
+        renderer.render(scene, camera);
+    }
+}
+
+// Resize Three.js container
+window.resizeRenderer = function() {
+    if (!renderer) return;
+    camera.aspect = container3d.clientWidth / container3d.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container3d.clientWidth, container3d.clientHeight);
+};
+
+// Rebuild the 3D meshes based on state
+window.sync3D = function() {
+    if (!scene) {
+        init3D();
+    }
+
+    // Clear old meshes
+    roomMeshes.forEach(mesh => scene.remove(mesh));
+    roomMeshes = [];
+
+    // Build 3D objects for each room
+    state.rooms.forEach(room => {
+        const roomGroup = new THREE.Group();
+        roomGroup.position.set(room.x, 0, room.y); // Canvas Y maps to 3D Z
+
+        if (room.type === 'staircase') {
+            const stepCount = room.steps || 12;
+            const riser = room.h / stepCount;
+            const tread = room.l / stepCount;
+            const stepMat = new THREE.MeshStandardMaterial({
+                color: room.color,
+                roughness: 0.75,
+                metalness: 0.1
+            });
+            for (let i = 0; i < stepCount; i++) {
+                const stepHeight = (i + 1) * riser;
+                const stepGeo = new THREE.BoxGeometry(room.w, stepHeight, tread);
+                const stepMesh = new THREE.Mesh(stepGeo, stepMat);
+                stepMesh.position.set(
+                    room.w / 2,
+                    stepHeight / 2,
+                    (i * tread) + (tread / 2)
+                );
+                stepMesh.castShadow = true;
+                stepMesh.receiveShadow = true;
+                roomGroup.add(stepMesh);
+            }
+        } else {
+            // 1. Floor Plane
+            const floorGeo = new THREE.PlaneGeometry(room.w, room.l);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: room.color,
+                roughness: 0.8,
+                metalness: 0.1,
+                side: THREE.DoubleSide
+            });
+            const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.position.set(room.w / 2, 0, room.l / 2);
+            floorMesh.receiveShadow = true;
+            roomGroup.add(floorMesh);
+
+            // 2. Ceiling Plane (if visible)
+            if (showCeilings) {
+                const ceilMesh = floorMesh.clone();
+                ceilMesh.position.y = room.h;
+                roomGroup.add(ceilMesh);
+            }
+
+            // 3. Walls construction (North, East, South, West)
+            const wallMat = new THREE.MeshStandardMaterial({
+                color: '#e2e8f0',
+                roughness: 0.9,
+                metalness: 0.05
+            });
+
+            // Filter openings by wall
+            const nOpenings = room.openings.filter(op => op.wall === 'n');
+            const sOpenings = room.openings.filter(op => op.wall === 's');
+            const eOpenings = room.openings.filter(op => op.wall === 'e');
+            const wOpenings = room.openings.filter(op => op.wall === 'w');
+
+            // North Wall: (0, 0) -> (W, 0)
+            build3DWall(0, 0, room.w, 0, room.h, nOpenings, roomGroup, wallMat);
+            // South Wall: (0, L) -> (W, L)
+            build3DWall(0, room.l, room.w, room.l, room.h, sOpenings, roomGroup, wallMat);
+            // West Wall: (0, 0) -> (0, L)
+            build3DWall(0, 0, 0, room.l, room.h, wOpenings, roomGroup, wallMat);
+            // East Wall: (W, 0) -> (W, L)
+            build3DWall(room.w, 0, room.w, room.l, room.h, eOpenings, roomGroup, wallMat);
+        }
+
+        scene.add(roomGroup);
+        roomMeshes.push(roomGroup);
+    });
+
+    // Auto-adjust camera focus point
+    if (state.rooms.length > 0) {
+        // Calculate bounding box of all rooms
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        state.rooms.forEach(r => {
+            minX = Math.min(minX, r.x);
+            maxX = Math.max(maxX, r.x + r.w);
+            minZ = Math.min(minZ, r.y);
+            maxZ = Math.max(maxZ, r.y + r.l);
+        });
+        const center = new THREE.Vector3((minX + maxX) / 2, 2, (minZ + maxZ) / 2);
+        controls.target.copy(center);
+    }
+};
+
+/**
+ * Builds a wall segmenting it around openings (doors/windows)
+ */
+function build3DWall(x1, z1, x2, z2, height, openings, group, material) {
+    const wallLength = Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
+    const angle = Math.atan2(z2 - z1, x2 - x1);
+
+    // Create a local sub-group for the wall
+    const wallGroup = new THREE.Group();
+    wallGroup.position.set(x1, 0, z1);
+    wallGroup.rotation.y = -angle; // Rotate wall alignment
+
+    // Sort openings by offset along the wall
+    openings.sort((a, b) => a.offset - b.offset);
+
+    let currentOffset = 0;
+
+    openings.forEach(op => {
+        const startOp = op.offset - op.w / 2;
+        const endOp = op.offset + op.w / 2;
+
+        // 1. Solid wall segment before opening
+        if (startOp > currentOffset) {
+            const segW = startOp - currentOffset;
+            const segGeo = new THREE.BoxGeometry(segW, height, wallThickness);
+            const segMesh = new THREE.Mesh(segGeo, material);
+            segMesh.position.set(currentOffset + segW / 2, height / 2, 0);
+            segMesh.castShadow = true;
+            segMesh.receiveShadow = true;
+            wallGroup.add(segMesh);
+        }
+
+        // 2. Vertical slices above/below the opening
+        if (op.type === 'door') {
+            // Door opening: Only wall segment above the lintel (header)
+            const headerH = height - op.h;
+            if (headerH > 0) {
+                const headerGeo = new THREE.BoxGeometry(op.w, headerH, wallThickness);
+                const headerMesh = new THREE.Mesh(headerGeo, material);
+                headerMesh.position.set(op.offset, op.h + headerH / 2, 0);
+                headerMesh.castShadow = true;
+                headerMesh.receiveShadow = true;
+                wallGroup.add(headerMesh);
+            }
+        } else if (op.type === 'window') {
+            // Window opening: Wall segment below sill, and wall segment above lintel
+            const sillH = 3.0; // standard sill height: 3ft
+            const headerH = height - (sillH + op.h);
+
+            // Sill (bottom part)
+            if (sillH > 0) {
+                const sillGeo = new THREE.BoxGeometry(op.w, sillH, wallThickness);
+                const sillMesh = new THREE.Mesh(sillGeo, material);
+                sillMesh.position.set(op.offset, sillH / 2, 0);
+                sillMesh.castShadow = true;
+                sillMesh.receiveShadow = true;
+                wallGroup.add(sillMesh);
+            }
+
+            // Lintel (top part)
+            if (headerH > 0) {
+                const headerGeo = new THREE.BoxGeometry(op.w, headerH, wallThickness);
+                const headerMesh = new THREE.Mesh(headerGeo, material);
+                headerMesh.position.set(op.offset, sillH + op.h + headerH / 2, 0);
+                headerMesh.castShadow = true;
+                headerMesh.receiveShadow = true;
+                wallGroup.add(headerMesh);
+            }
+        }
+
+        currentOffset = endOp;
+    });
+
+    // 3. Final solid segment after the last opening
+    if (wallLength > currentOffset) {
+        const segW = wallLength - currentOffset;
+        const segGeo = new THREE.BoxGeometry(segW, height, wallThickness);
+        const segMesh = new THREE.Mesh(segGeo, material);
+        segMesh.position.set(currentOffset + segW / 2, height / 2, 0);
+        segMesh.castShadow = true;
+        segMesh.receiveShadow = true;
+        wallGroup.add(segMesh);
+    }
+
+    group.add(wallGroup);
+}
+
+// 3D Specific UI Controls
+document.getElementById('btn-3d-roof').addEventListener('click', (e) => {
+    showCeilings = !showCeilings;
+    e.currentTarget.classList.toggle('active', showCeilings);
+    window.sync3D();
+});
