@@ -890,6 +890,32 @@ body {
 
 /* Responsive Media Queries */
 @media (max-width: 900px) {
+    .app-header {
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        padding: 0.5rem 1rem;
+    }
+    
+    .logo {
+        order: 1;
+    }
+    
+    .project-actions {
+        order: 2;
+    }
+    
+    .view-toggles {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+        margin-top: 0.15rem;
+    }
+    
+    .view-toggles button span,
+    #btn-export-pdf span {
+        display: none;
+    }
+    
     .mobile-floating-toggles {
         display: flex;
     }
