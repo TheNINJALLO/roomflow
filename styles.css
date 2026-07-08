@@ -826,3 +826,114 @@ body {
     outline: none;
     border-color: var(--accent-blue);
 }
+
+/* Mobile Floating Toggles (Desktop hidden) */
+.mobile-floating-toggles {
+    display: none;
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    right: 1rem;
+    justify-content: space-between;
+    z-index: 90;
+    pointer-events: none;
+}
+
+.floating-toggle-btn {
+    pointer-events: auto;
+    background: rgba(16, 22, 35, 0.85);
+    border: 1px solid var(--border-color);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    padding: 0.6rem 1rem;
+    border-radius: 50px;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    box-shadow: var(--shadow-lg);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.floating-toggle-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent-blue);
+}
+
+.floating-toggle-btn i {
+    width: 16px;
+    height: 16px;
+    color: var(--accent-blue);
+}
+
+.sidebar-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 99;
+    transition: opacity 0.3s ease;
+}
+
+.sidebar-backdrop.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Responsive Media Queries */
+@media (max-width: 900px) {
+    .mobile-floating-toggles {
+        display: flex;
+    }
+    
+    .sidebar {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        height: 100%;
+        width: 280px;
+        z-index: 100;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+    }
+    
+    #left-sidebar {
+        left: 0;
+        transform: translateX(-100%);
+        border-right: 1px solid var(--border-color);
+    }
+    
+    #left-sidebar.open {
+        transform: translateX(0);
+    }
+    
+    #right-sidebar {
+        right: 0;
+        transform: translateX(100%);
+        border-left: 1px solid var(--border-color);
+    }
+    
+    #right-sidebar.open {
+        transform: translateX(0);
+    }
+
+    /* Stack headers nicely on very small screens */
+    .app-header {
+        padding: 0.75rem 1rem;
+    }
+    .logo h1 {
+        font-size: 1.1rem;
+    }
+    .logo p {
+        font-size: 0.65rem;
+    }
+}
+

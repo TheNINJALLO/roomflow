@@ -1640,3 +1640,67 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 lucide.createIcons();
+
+// --- MOBILE RESPONSIVE DRAWERS & TOUCH EVENTS ---
+const leftSidebar = document.getElementById('left-sidebar');
+const rightSidebar = document.getElementById('right-sidebar');
+const backdrop = document.getElementById('mobile-sidebar-backdrop');
+const btnToggleTools = document.getElementById('mobile-toggle-tools');
+const btnToggleDetails = document.getElementById('mobile-toggle-details');
+
+function closeAllDrawers() {
+    leftSidebar.classList.remove('open');
+    rightSidebar.classList.remove('open');
+    backdrop.classList.add('hidden');
+}
+
+btnToggleTools.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = leftSidebar.classList.contains('open');
+    closeAllDrawers();
+    if (!isOpen) {
+        leftSidebar.classList.add('open');
+        backdrop.classList.remove('hidden');
+    }
+});
+
+btnToggleDetails.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isOpen = rightSidebar.classList.contains('open');
+    closeAllDrawers();
+    if (!isOpen) {
+        rightSidebar.classList.add('open');
+        backdrop.classList.remove('hidden');
+    }
+});
+
+backdrop.addEventListener('click', closeAllDrawers);
+
+// Touch support translation to canvas MouseEvents
+function mapTouchEvent(e, type) {
+    if (e.touches.length === 0 && type !== 'mouseup') return;
+    const touch = e.touches[0] || e.changedTouches[0];
+    const mouseEvt = new MouseEvent(type, {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        bubbles: true,
+        cancelable: true
+    });
+    canvas.dispatchEvent(mouseEvt);
+}
+
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    mapTouchEvent(e, 'mousedown');
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    mapTouchEvent(e, 'mousemove');
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    mapTouchEvent(e, 'mouseup');
+}, { passive: false });
+

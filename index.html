@@ -46,7 +46,7 @@
         <!-- Main Body Grid -->
         <main class="app-body">
             <!-- Left Sidebar: Toolbox -->
-            <aside class="sidebar toolbox">
+            <aside id="left-sidebar" class="sidebar toolbox">
                 <div class="sidebar-section">
                     <h3>Add Presets</h3>
                     <div class="preset-buttons">
@@ -116,6 +116,19 @@
 
             <!-- Center Viewport -->
             <section class="viewport-container">
+                <!-- Mobile Floating Toggles -->
+                <div class="mobile-floating-toggles">
+                    <button id="mobile-toggle-tools" class="floating-toggle-btn">
+                        <i data-lucide="menu"></i>
+                        <span>Tools</span>
+                    </button>
+                    <button id="mobile-toggle-details" class="floating-toggle-btn">
+                        <i data-lucide="sliders"></i>
+                        <span>Details</span>
+                    </button>
+                </div>
+                <div id="mobile-sidebar-backdrop" class="sidebar-backdrop hidden"></div>
+
                 <!-- 2D Sketch Board -->
                 <div id="canvas-container" class="viewport active">
                     <canvas id="sketch-canvas"></canvas>
@@ -167,7 +180,7 @@
             </section>
 
             <!-- Right Sidebar: Properties & Estimation -->
-            <aside class="sidebar metrics-panel">
+            <aside id="right-sidebar" class="sidebar metrics-panel">
                 <!-- Customer Details Section -->
                 <div class="sidebar-section">
                     <h3>Customer & Site Info</h3>
