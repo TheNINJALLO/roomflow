@@ -199,6 +199,72 @@ window.sync3D = function() {
             build3DWall(room.w, 0, room.w, room.l, room.h, eOpenings, roomGroup, wallMat);
         }
 
+        // --- Render Floor Joists if set ---
+        if (room.joists && room.joists !== 'none') {
+            const joistMat = new THREE.MeshStandardMaterial({
+                color: '#854d0e', // Wood brown
+                roughness: 0.8,
+                metalness: 0.1
+            });
+            const spacing = 1.333; // 16 inches spacing
+            const jThick = 0.15;   // 2 inches wide
+            const jHeight = 0.65;  // 8 inches deep
+            
+            if (room.type === 'custom' && room.vertices) {
+                // Find bounding box
+                let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+                room.vertices.forEach(v => {
+                    if (v.x < minX) minX = v.x;
+                    if (v.x > maxX) maxX = v.x;
+                    if (v.y < minY) minY = v.y;
+                    if (v.y > maxY) maxY = v.y;
+                });
+                
+                if (room.joists === 'ns') {
+                    for (let x = Math.ceil(minX / spacing) * spacing; x < maxX; x += spacing) {
+                        const len = maxY - minY;
+                        const joistGeo = new THREE.BoxGeometry(jThick, jHeight, len);
+                        const joistMesh = new THREE.Mesh(joistGeo, joistMat);
+                        joistMesh.position.set(x, room.h - jHeight/2, minY + len/2);
+                        joistMesh.castShadow = true;
+                        joistMesh.receiveShadow = true;
+                        roomGroup.add(joistMesh);
+                    }
+                } else {
+                    for (let y = Math.ceil(minY / spacing) * spacing; y < maxY; y += spacing) {
+                        const len = maxX - minX;
+                        const joistGeo = new THREE.BoxGeometry(len, jHeight, jThick);
+                        const joistMesh = new THREE.Mesh(joistGeo, joistMat);
+                        joistMesh.position.set(minX + len/2, room.h - jHeight/2, y);
+                        joistMesh.castShadow = true;
+                        joistMesh.receiveShadow = true;
+                        roomGroup.add(joistMesh);
+                    }
+                }
+            } else {
+                // Rectangular / staircase rooms
+                if (room.joists === 'ns') {
+                    for (let x = spacing; x < room.w; x += spacing) {
+                        const joistGeo = new THREE.BoxGeometry(jThick, jHeight, room.l);
+                        const joistMesh = new THREE.Mesh(joistGeo, joistMat);
+                        joistMesh.position.set(x, room.h - jHeight/2, room.l / 2);
+                        joistMesh.castShadow = true;
+                        joistMesh.receiveShadow = true;
+                        roomGroup.add(joistMesh);
+                    }
+                } else {
+                    for (let y = spacing; y < room.l; y += spacing) {
+                        const joistGeo = new THREE.BoxGeometry(room.w, jHeight, jThick);
+                        const joistMesh = new THREE.Mesh(joistGeo, joistMat);
+                        joistMesh.position.set(room.w / 2, room.h - jHeight/2, y);
+                        joistMesh.castShadow = true;
+                        joistMesh.receiveShadow = true;
+                        roomGroup.add(joistMesh);
+                    }
+                }
+            }
+        }
+
         scene.add(roomGroup);
         roomMeshes.push(roomGroup);
     });
@@ -262,6 +328,69 @@ window.sync3D = function() {
         // Route horizontal run at overhead ceiling height (room height - 0.5ft)
         const pipeY = elevation + (roomH - 0.5);
         build3DPipe(ip.x1, pipeY, ip.y1, ip.x2, pipeY, ip.y2, 0.08, '#f8fafc', scene);
+    });
+
+    // 4. Render Stanchions (support posts)
+    state.stanchions.forEach(st => {
+        const level = state.levels.find(l => l.id === st.levelId) || { elevation: 0, height: 8 };
+        const elevation = level.elevation || 0;
+        const room = getRoomAt(st.x, st.y, st.levelId);
+        const postH = room ? room.h : (level.height || 8);
+        
+        const geometry = st.type === 'square' 
+            ? new THREE.BoxGeometry(0.8, postH, 0.8) 
+            : new THREE.CylinderGeometry(0.4, 0.4, postH, 16);
+            
+        // Steel Lally column look (dark red-oxide paint)
+        const material = new THREE.MeshStandardMaterial({ 
+            color: '#b91c1c', 
+            metalness: 0.6, 
+            roughness: 0.3 
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(st.x, elevation + postH / 2, st.y);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        
+        scene.add(mesh);
+        roomMeshes.push(mesh);
+    });
+
+    // 5. Render Support Beams (timber wood or steel girders)
+    state.mainBeams.forEach(bm => {
+        const level = state.levels.find(l => l.id === bm.levelId) || { elevation: 0, height: 8 };
+        const elevation = level.elevation || 0;
+        const room = getRoomAt(bm.x1, bm.y1, bm.levelId);
+        const roomH = room ? room.h : (level.height || 8);
+        
+        const len = Math.sqrt((bm.x2 - bm.x1)**2 + (bm.y2 - bm.y1)**2);
+        if (len < 0.01) return;
+        
+        const bWidth = 0.6; // 7 inches wide
+        const bHeight = 0.9; // 11 inches deep
+        const geometry = new THREE.BoxGeometry(bWidth, bHeight, len);
+        
+        const material = bm.type === 'steel'
+            ? new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.8, roughness: 0.2 })
+            : new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9, metalness: 0.1 });
+            
+        const mesh = new THREE.Mesh(geometry, material);
+        
+        // Position midpoint
+        const mx = (bm.x1 + bm.x2) / 2;
+        const my = (bm.y1 + bm.y2) / 2;
+        const pipeY = elevation + roomH - bHeight / 2;
+        mesh.position.set(mx, pipeY, my);
+        
+        // Rotate Y to align along endpoints
+        const angle = Math.atan2(bm.y2 - bm.y1, bm.x2 - bm.x1);
+        mesh.rotation.y = -angle;
+        
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        
+        scene.add(mesh);
+        roomMeshes.push(mesh);
     });
 
     // Auto-adjust camera focus point

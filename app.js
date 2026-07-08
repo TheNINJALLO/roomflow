@@ -37,6 +37,12 @@ const state = {
     interiorPipes: [],
     selectedInteriorPipeId: null,
     draggedInteriorPipeHandle: null, // { id, point: 'p1' | 'p2' | 'move' }
+    stanchions: [],
+    selectedStanchionId: null,
+    draggedStanchionId: null,
+    mainBeams: [],
+    selectedMainBeamId: null,
+    draggedMainBeamHandle: null, // { id, point: 'p1' | 'p2' | 'move' }
     snapGridSize: 0.5,   // Snap to nearest 0.5 foot (6 inches)
     showGrid: true,
     initialMouseOffset: {}
@@ -184,6 +190,47 @@ function addInteriorPipe() {
     updateGlobalStats();
 }
 
+// Add Stanchion
+function addStanchion() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const cx = snap(toWorldX(canvas.width / 2));
+    const cy = snap(toWorldY(canvas.height / 2));
+    const newStanchion = {
+        id: generateId(),
+        levelId: state.currentLevelId,
+        name: `Stanchion ${state.stanchions.length + 1}`,
+        x: cx,
+        y: cy,
+        type: 'round' // 'round' or 'square'
+    };
+    state.stanchions.push(newStanchion);
+    selectItem('stanchion', newStanchion.id);
+    draw();
+    updateGlobalStats();
+}
+
+// Add Support Beam
+function addSupportBeam() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const cx = snap(toWorldX(canvas.width / 2));
+    const cy = snap(toWorldY(canvas.height / 2));
+    const newBeam = {
+        id: generateId(),
+        levelId: state.currentLevelId,
+        label: `Support Beam ${state.mainBeams.length + 1}`,
+        x1: cx - 3,
+        y1: cy,
+        x2: cx + 3,
+        y2: cy,
+        length: 6.0,
+        type: 'timber' // 'timber' or 'steel'
+    };
+    state.mainBeams.push(newBeam);
+    selectItem('beam', newBeam.id);
+    draw();
+    updateGlobalStats();
+}
+
 
 
 // Selection Manager
@@ -192,11 +239,15 @@ function selectItem(type, id) {
     state.selectedSumpPumpId = (type === 'sump') ? id : null;
     state.selectedDischargeLineId = (type === 'discharge') ? id : null;
     state.selectedInteriorPipeId = (type === 'interiorPipe') ? id : null;
+    state.selectedStanchionId = (type === 'stanchion') ? id : null;
+    state.selectedMainBeamId = (type === 'beam') ? id : null;
     
     const roomFields = document.getElementById('room-edit-fields');
     const sumpFields = document.getElementById('sump-edit-fields');
     const dischargeFields = document.getElementById('discharge-edit-fields');
     const interiorPipeFields = document.getElementById('interior-pipe-edit-fields');
+    const stanchionFields = document.getElementById('stanchion-edit-fields');
+    const beamFields = document.getElementById('beam-edit-fields');
     const noSel = document.getElementById('no-selection-msg');
     
     const btnAddDoor = document.getElementById('btn-add-door');
@@ -207,6 +258,8 @@ function selectItem(type, id) {
     sumpFields.classList.add('hidden');
     dischargeFields.classList.add('hidden');
     if (interiorPipeFields) interiorPipeFields.classList.add('hidden');
+    if (stanchionFields) stanchionFields.classList.add('hidden');
+    if (beamFields) beamFields.classList.add('hidden');
     noSel.classList.remove('hidden');
     btnAddDoor.disabled = true;
     btnAddWindow.disabled = true;
@@ -219,6 +272,9 @@ function selectItem(type, id) {
             
             document.getElementById('room-name-input').value = room.name;
             document.getElementById('room-h-input').value = room.h;
+            
+            const joistSelect = document.getElementById('room-joists-select');
+            if (joistSelect) joistSelect.value = room.joists || 'none';
             
             const rectInputs = document.getElementById('room-rect-inputs');
             const customInputs = document.getElementById('room-custom-walls-inputs');
@@ -295,6 +351,25 @@ function selectItem(type, id) {
             interiorPipeFields.classList.remove('hidden');
             document.getElementById('interior-pipe-label-input').value = ip.label;
             document.getElementById('interior-pipe-len-input').value = ip.length.toFixed(1);
+        }
+    } else if (type === 'stanchion' && id) {
+        const st = state.stanchions.find(p => p.id === id);
+        const stanchionFields = document.getElementById('stanchion-edit-fields');
+        if (st && stanchionFields) {
+            noSel.classList.add('hidden');
+            stanchionFields.classList.remove('hidden');
+            document.getElementById('stanchion-name-input').value = st.name;
+            document.getElementById('stanchion-type-select').value = st.type || 'round';
+        }
+    } else if (type === 'beam' && id) {
+        const bm = state.mainBeams.find(l => l.id === id);
+        const beamFields = document.getElementById('beam-edit-fields');
+        if (bm && beamFields) {
+            noSel.classList.add('hidden');
+            beamFields.classList.remove('hidden');
+            document.getElementById('beam-label-input').value = bm.label;
+            document.getElementById('beam-type-select').value = bm.type || 'timber';
+            document.getElementById('beam-len-input').value = bm.length.toFixed(1);
         }
     }
     
@@ -614,6 +689,26 @@ function deleteSelectedInteriorPipe() {
     if (window.sync3D) window.sync3D();
 }
 
+function deleteSelectedStanchion() {
+    if (!state.selectedStanchionId) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.stanchions = state.stanchions.filter(p => p.id !== state.selectedStanchionId);
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+}
+
+function deleteSelectedMainBeam() {
+    if (!state.selectedMainBeamId) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.mainBeams = state.mainBeams.filter(l => l.id !== state.selectedMainBeamId);
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+}
+
 // Helper: Distance from point to segment
 function getDistanceToSegment(px, py, x1, y1, x2, y2) {
     const l2 = (x2 - x1)**2 + (y2 - y1)**2;
@@ -866,6 +961,112 @@ function draw(isPrinting = false) {
         ctx.font = '600 9px var(--font-sans)';
         ctx.fillText(sp.name, cx, cy - radius - 6);
     });
+
+    // Draw Stanchions
+    state.stanchions.forEach(st => {
+        if (st.levelId && st.levelId !== state.currentLevelId) return;
+        const cx = toCanvasX(st.x);
+        const cy = toCanvasY(st.y);
+        const isSelected = st.id === state.selectedStanchionId;
+        const radius = 0.5 * state.scale; // 1ft diameter
+        
+        ctx.fillStyle = isSelected ? 'rgba(20, 184, 166, 0.2)' : '#475569';
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#94a3b8';
+        ctx.lineWidth = isSelected ? 3 : 2;
+        
+        ctx.beginPath();
+        if (st.type === 'square') {
+            ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
+        } else {
+            ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.stroke();
+        
+        // Internal Crosshair X
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        if (st.type === 'square') {
+            ctx.moveTo(cx - radius + 2, cy - radius + 2);
+            ctx.lineTo(cx + radius - 2, cy + radius - 2);
+            ctx.moveTo(cx + radius - 2, cy - radius + 2);
+            ctx.lineTo(cx - radius + 2, cy + radius - 2);
+        } else {
+            const offset = radius * 0.707;
+            ctx.moveTo(cx - offset, cy - offset);
+            ctx.lineTo(cx + offset, cy + offset);
+            ctx.moveTo(cx + offset, cy - offset);
+            ctx.lineTo(cx - offset, cy + offset);
+        }
+        ctx.stroke();
+        
+        // Floating label
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : varColor('--text-muted');
+        ctx.font = '600 9px var(--font-sans)';
+        ctx.textAlign = 'center';
+        ctx.fillText(st.name, cx, cy - radius - 6);
+    });
+
+    // Draw Support Beams
+    state.mainBeams.forEach(bm => {
+        if (bm.levelId && bm.levelId !== state.currentLevelId) return;
+        const x1 = toCanvasX(bm.x1);
+        const y1 = toCanvasY(bm.y1);
+        const x2 = toCanvasX(bm.x2);
+        const y2 = toCanvasY(bm.y2);
+        const isSelected = bm.id === state.selectedMainBeamId;
+        
+        const color = bm.type === 'steel' ? '#475569' : '#b45309';
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : color;
+        ctx.lineWidth = isSelected ? 8 : 6;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        
+        ctx.strokeStyle = bm.type === 'steel' ? '#94a3b8' : '#d97706';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        
+        // Draw endpoints if selected
+        if (isSelected) {
+            ctx.fillStyle = varColor('--accent-teal');
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.fillRect(x1 - 5, y1 - 5, 10, 10);
+            ctx.strokeRect(x1 - 5, y1 - 5, 10, 10);
+            ctx.fillRect(x2 - 5, y2 - 5, 10, 10);
+            ctx.strokeRect(x2 - 5, y2 - 5, 10, 10);
+        }
+        
+        // Label
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2;
+        const angle = Math.atan2(y2 - y1, x2 - x1);
+        
+        ctx.save();
+        ctx.translate(mx, my);
+        let textAngle = angle;
+        if (textAngle > Math.PI / 2 || textAngle < -Math.PI / 2) {
+            textAngle += Math.PI;
+        }
+        ctx.rotate(textAngle);
+        
+        const label = `${bm.label}: ${bm.length.toFixed(1)} ft`;
+        ctx.font = '600 10px var(--font-mono)';
+        const textWidth = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(10, 13, 20, 0.8)';
+        ctx.fillRect(-textWidth/2 - 4, -14, textWidth + 8, 14);
+        
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : '#ffffff';
+        ctx.textAlign = 'center';
+        ctx.fillText(label, 0, -4);
+        ctx.restore();
+    });
 }
 
 function drawGrid() {
@@ -895,6 +1096,71 @@ function drawGrid() {
     }
 }
 
+// Helper to render floor joists grid inside rooms
+function drawJoists(room) {
+    if (!room.joists || room.joists === 'none') return;
+    
+    ctx.save();
+    
+    // Set clip path to room bounds
+    ctx.beginPath();
+    if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        ctx.moveTo(toCanvasX(room.x + room.vertices[0].x), toCanvasY(room.y + room.vertices[0].y));
+        for (let i = 1; i < room.vertices.length; i++) {
+            ctx.lineTo(toCanvasX(room.x + room.vertices[i].x), toCanvasY(room.y + room.vertices[i].y));
+        }
+    } else {
+        const rx = toCanvasX(room.x);
+        const ry = toCanvasY(room.y);
+        const rw = room.w * state.scale;
+        const rl = room.l * state.scale;
+        ctx.rect(rx, ry, rw, rl);
+    }
+    ctx.clip();
+    
+    // Draw parallel joist lines
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    
+    let minX = room.x, maxX = room.x + (room.w || 0);
+    let minY = room.y, maxY = room.y + (room.l || 0);
+    if (room.type === 'custom' && room.vertices) {
+        minX = Infinity; maxX = -Infinity;
+        minY = Infinity; maxY = -Infinity;
+        room.vertices.forEach(v => {
+            const wx = room.x + v.x;
+            const wy = room.y + v.y;
+            if (wx < minX) minX = wx;
+            if (wx > maxX) maxX = wx;
+            if (wy < minY) minY = wy;
+            if (wy > maxY) maxY = wy;
+        });
+    }
+    
+    const spacing = 1.333; // 16 inches spacing
+    
+    if (room.joists === 'ns') {
+        for (let x = Math.ceil(minX / spacing) * spacing; x < maxX; x += spacing) {
+            const cx = toCanvasX(x);
+            ctx.beginPath();
+            ctx.moveTo(cx, toCanvasY(minY));
+            ctx.lineTo(cx, toCanvasY(maxY));
+            ctx.stroke();
+        }
+    } else if (room.joists === 'ew') {
+        for (let y = Math.ceil(minY / spacing) * spacing; y < maxY; y += spacing) {
+            const cy = toCanvasY(y);
+            ctx.beginPath();
+            ctx.moveTo(toCanvasX(minX), cy);
+            ctx.lineTo(toCanvasX(maxX), cy);
+            ctx.stroke();
+        }
+    }
+    
+    ctx.restore();
+}
+
 function drawRoom(room) {
     const rx = toCanvasX(room.x);
     const ry = toCanvasY(room.y);
@@ -912,6 +1178,7 @@ function drawRoom(room) {
         }
         ctx.closePath();
         ctx.fill();
+        drawJoists(room);
 
         ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(255, 255, 255, 0.3)';
         ctx.lineWidth = isSelected ? 3 : 1.5;
@@ -975,6 +1242,7 @@ function drawRoom(room) {
     // Room Body Fill
     ctx.fillStyle = room.color + '15';
     ctx.fillRect(rx, ry, rw, rl);
+    drawJoists(room);
 
     // Draw staircase steps
     if (room.type === 'staircase') {
@@ -1451,6 +1719,54 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
+    // Check Stanchions click
+    for (let i = state.stanchions.length - 1; i >= 0; i--) {
+        const st = state.stanchions[i];
+        if (st.levelId && st.levelId !== state.currentLevelId) continue;
+        const stcx = toCanvasX(st.x);
+        const stcy = toCanvasY(st.y);
+        const dist = Math.sqrt((mx - stcx)**2 + (my - stcy)**2);
+        if (dist < 12) {
+            selectItem('stanchion', st.id);
+            state.draggedStanchionId = st.id;
+            return;
+        }
+    }
+
+    // Check Support Beams click
+    for (let i = state.mainBeams.length - 1; i >= 0; i--) {
+        const bm = state.mainBeams[i];
+        if (bm.levelId && bm.levelId !== state.currentLevelId) continue;
+        const h1x = toCanvasX(bm.x1);
+        const h1y = toCanvasY(bm.y1);
+        const h2x = toCanvasX(bm.x2);
+        const h2y = toCanvasY(bm.y2);
+        
+        if (Math.sqrt((mx - h1x)**2 + (my - h1y)**2) < 10) {
+            selectItem('beam', bm.id);
+            state.draggedMainBeamHandle = { id: bm.id, point: 'p1' };
+            return;
+        }
+        if (Math.sqrt((mx - h2x)**2 + (my - h2y)**2) < 10) {
+            selectItem('beam', bm.id);
+            state.draggedMainBeamHandle = { id: bm.id, point: 'p2' };
+            return;
+        }
+        
+        const distToSegment = getDistanceToSegment(wx, wy, bm.x1, bm.y1, bm.x2, bm.y2);
+        if (distToSegment < 0.6) {
+            selectItem('beam', bm.id);
+            state.draggedMainBeamHandle = { id: bm.id, point: 'move' };
+            state.initialMouseOffset = {
+                x1: wx - bm.x1,
+                y1: wy - bm.y1,
+                x2: wx - bm.x2,
+                y2: wy - bm.y2
+            };
+            return;
+        }
+    }
+
     // 3. Check selected room handles
     if (state.selectedRoomId) {
         const room = state.rooms.find(r => r.id === state.selectedRoomId);
@@ -1634,6 +1950,59 @@ canvas.addEventListener('mousemove', (e) => {
             draw();
             updateGlobalStats();
         }
+    }
+
+    // Stanchion Dragging
+    if (state.draggedStanchionId) {
+        const st = state.stanchions.find(p => p.id === state.draggedStanchionId);
+        if (st) {
+            st.x = snap(wx);
+            st.y = snap(wy);
+            draw();
+        }
+        return;
+    }
+
+    // Support Beam Dragging
+    if (state.draggedMainBeamHandle) {
+        const bm = state.mainBeams.find(l => l.id === state.draggedMainBeamHandle.id);
+        if (bm) {
+            if (state.draggedMainBeamHandle.point === 'p1') {
+                const dx = bm.x2 - wx;
+                const dy = bm.y2 - wy;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const angle = Math.atan2(dy, dx);
+                const deg = angle * 180 / Math.PI;
+                const snappedDeg = Math.round(deg / 45) * 45;
+                const snappedRad = snappedDeg * Math.PI / 180;
+                bm.x1 = snap(bm.x2 - dist * Math.cos(snappedRad));
+                bm.y1 = snap(bm.y2 - dist * Math.sin(snappedRad));
+            } else if (state.draggedMainBeamHandle.point === 'p2') {
+                const dx = wx - bm.x1;
+                const dy = wy - bm.y1;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const angle = Math.atan2(dy, dx);
+                const deg = angle * 180 / Math.PI;
+                const snappedDeg = Math.round(deg / 45) * 45;
+                const snappedRad = snappedDeg * Math.PI / 180;
+                bm.x2 = snap(bm.x1 + dist * Math.cos(snappedRad));
+                bm.y2 = snap(bm.y1 + dist * Math.sin(snappedRad));
+            } else if (state.draggedMainBeamHandle.point === 'move') {
+                bm.x1 = snap(wx - state.initialMouseOffset.x1);
+                bm.y1 = snap(wy - state.initialMouseOffset.y1);
+                bm.x2 = snap(wx - state.initialMouseOffset.x2);
+                bm.y2 = snap(wy - state.initialMouseOffset.y2);
+            }
+            bm.length = Math.sqrt((bm.x2 - bm.x1)**2 + (bm.y2 - bm.y1)**2);
+            
+            // Sync length input in real-time
+            if (state.selectedMainBeamId === bm.id) {
+                const lenInput = document.getElementById('beam-len-input');
+                if (lenInput) lenInput.value = bm.length.toFixed(1);
+            }
+            draw();
+            updateGlobalStats();
+        }
         return;
     }
 
@@ -1791,19 +2160,23 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('mouseup', () => {
     // If elements were dragged, check if they actually moved and commit to history
-    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedDischargeHandle || state.draggedInteriorPipeHandle || state.draggedOpening || state.draggedVertex) {
+    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedDischargeHandle || state.draggedInteriorPipeHandle || state.draggedStanchionId || state.draggedMainBeamHandle || state.draggedOpening || state.draggedVertex) {
         if (state.dragSnapshot) {
             const currentStr = JSON.stringify({
                 rooms: state.rooms,
                 sumpPumps: state.sumpPumps,
                 dischargeLines: state.dischargeLines,
-                interiorPipes: state.interiorPipes
+                interiorPipes: state.interiorPipes,
+                stanchions: state.stanchions,
+                mainBeams: state.mainBeams
             });
             const snapStr = JSON.stringify({
                 rooms: state.dragSnapshot.rooms,
                 sumpPumps: state.dragSnapshot.sumpPumps,
                 dischargeLines: state.dragSnapshot.dischargeLines,
-                interiorPipes: state.dragSnapshot.interiorPipes
+                interiorPipes: state.dragSnapshot.interiorPipes,
+                stanchions: state.dragSnapshot.stanchions || [],
+                mainBeams: state.dragSnapshot.mainBeams || []
             });
             if (currentStr !== snapStr) {
                 state.undoStack.push(state.dragSnapshot);
@@ -1823,6 +2196,8 @@ canvas.addEventListener('mouseup', () => {
     state.draggedSumpPumpId = null;
     state.draggedDischargeHandle = null;
     state.draggedInteriorPipeHandle = null;
+    state.draggedStanchionId = null;
+    state.draggedMainBeamHandle = null;
     state.draggedOpening = null;
     state.draggedVertex = null;
     draw();
@@ -1957,8 +2332,83 @@ document.getElementById('interior-pipe-len-input').addEventListener('input', (e)
         draw();
         updateGlobalStats();
     }
+    }
 });
 document.getElementById('btn-delete-interior-pipe').addEventListener('click', deleteSelectedInteriorPipe);
+
+// Room Joists Direction change
+document.getElementById('room-joists-select').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.joists = e.target.value;
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+// Stanchion listeners
+document.getElementById('stanchion-name-input').addEventListener('input', (e) => {
+    if (!state.selectedStanchionId) return;
+    const st = state.stanchions.find(p => p.id === state.selectedStanchionId);
+    if (st) {
+        st.name = e.target.value;
+        draw();
+    }
+});
+document.getElementById('stanchion-type-select').addEventListener('change', (e) => {
+    if (!state.selectedStanchionId) return;
+    const st = state.stanchions.find(p => p.id === state.selectedStanchionId);
+    if (st) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        st.type = e.target.value;
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+document.getElementById('btn-delete-stanchion').addEventListener('click', deleteSelectedStanchion);
+
+// Support Beam listeners
+document.getElementById('beam-label-input').addEventListener('input', (e) => {
+    if (!state.selectedMainBeamId) return;
+    const bm = state.mainBeams.find(l => l.id === state.selectedMainBeamId);
+    if (bm) {
+        bm.label = e.target.value;
+        draw();
+    }
+});
+document.getElementById('beam-type-select').addEventListener('change', (e) => {
+    if (!state.selectedMainBeamId) return;
+    const bm = state.mainBeams.find(l => l.id === state.selectedMainBeamId);
+    if (bm) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        bm.type = e.target.value;
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+document.getElementById('beam-len-input').addEventListener('input', (e) => {
+    if (!state.selectedMainBeamId) return;
+    const bm = state.mainBeams.find(l => l.id === state.selectedMainBeamId);
+    const val = parseFloat(e.target.value);
+    if (bm && !isNaN(val) && val > 0.1) {
+        const dx = bm.x2 - bm.x1;
+        const dy = bm.y2 - bm.y1;
+        const currentLen = Math.sqrt(dx*dx + dy*dy);
+        if (currentLen > 0.05) {
+            bm.x2 = bm.x1 + (dx / currentLen) * val;
+            bm.y2 = bm.y1 + (dy / currentLen) * val;
+        } else {
+            bm.x2 = bm.x1 + val;
+        }
+        bm.length = val;
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+document.getElementById('btn-delete-beam').addEventListener('click', deleteSelectedMainBeam);
 
 // Trigger presets
 document.querySelectorAll('.add-room-btn').forEach(btn => {
@@ -1990,6 +2440,14 @@ document.getElementById('btn-add-discharge').addEventListener('click', () => {
 });
 document.getElementById('btn-add-interior-pipe').addEventListener('click', () => {
     addInteriorPipe();
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
+document.getElementById('btn-add-stanchion').addEventListener('click', () => {
+    addStanchion();
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
+document.getElementById('btn-add-beam').addEventListener('click', () => {
+    addSupportBeam();
     if (typeof closeAllDrawers === 'function') closeAllDrawers();
 });
 
@@ -2075,6 +2533,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
         sumpPumps: state.sumpPumps,
         dischargeLines: state.dischargeLines,
         interiorPipes: state.interiorPipes || [],
+        stanchions: state.stanchions || [],
+        mainBeams: state.mainBeams || [],
         currentLevelId: state.currentLevelId,
         capturedMeasurements: state.capturedMeasurements || []
     };
@@ -2112,6 +2572,8 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                 state.sumpPumps = data.sumpPumps || [];
                 state.dischargeLines = data.dischargeLines || [];
                 state.interiorPipes = data.interiorPipes || [];
+                state.stanchions = data.stanchions || [];
+                state.mainBeams = data.mainBeams || [];
                 state.currentLevelId = data.currentLevelId || 'basement';
                 state.capturedMeasurements = data.capturedMeasurements || [];
                 
@@ -2678,6 +3140,8 @@ function getHistorySnapshot() {
         sumpPumps: JSON.parse(JSON.stringify(state.sumpPumps)),
         dischargeLines: JSON.parse(JSON.stringify(state.dischargeLines)),
         interiorPipes: JSON.parse(JSON.stringify(state.interiorPipes)),
+        stanchions: JSON.parse(JSON.stringify(state.stanchions)),
+        mainBeams: JSON.parse(JSON.stringify(state.mainBeams)),
         currentLevelId: state.currentLevelId,
         // Save drawing mode variables
         drawMode: state.drawMode,
@@ -2742,6 +3206,8 @@ function undo() {
     state.sumpPumps = previous.sumpPumps;
     state.dischargeLines = previous.dischargeLines;
     state.interiorPipes = previous.interiorPipes || [];
+    state.stanchions = previous.stanchions || [];
+    state.mainBeams = previous.mainBeams || [];
     state.currentLevelId = previous.currentLevelId || 'basement';
     
     // Sync level select UI dropdown
@@ -2781,6 +3247,8 @@ function redo() {
     state.sumpPumps = nextState.sumpPumps;
     state.dischargeLines = nextState.dischargeLines;
     state.interiorPipes = nextState.interiorPipes || [];
+    state.stanchions = nextState.stanchions || [];
+    state.mainBeams = nextState.mainBeams || [];
     state.currentLevelId = nextState.currentLevelId || 'basement';
     
     // Sync level select UI dropdown

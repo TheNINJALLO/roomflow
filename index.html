@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=11">
+    <link rel="stylesheet" href="styles.css?v=12">
 </head>
 <body>
     <div id="app-container">
@@ -153,6 +153,12 @@
                         </button>
                         <button id="btn-add-interior-pipe" class="tool-btn">
                             <i data-lucide="git-branch"></i> Interior Pipe
+                        </button>
+                        <button id="btn-add-stanchion" class="tool-btn">
+                            <i data-lucide="circle"></i> Stanchion
+                        </button>
+                        <button id="btn-add-beam" class="tool-btn">
+                            <i data-lucide="minus"></i> Support Beam
                         </button>
                     </div>
                 </div>
@@ -320,6 +326,16 @@
                             </div>
                         </div>
                         
+                        <!-- Floor Joists Direction -->
+                        <div class="input-group" style="margin-top: 0.75rem;">
+                            <label for="room-joists-select">Floor Joists Direction</label>
+                            <select id="room-joists-select">
+                                <option value="none">None / Not Specified</option>
+                                <option value="ns">North-South (Vertical)</option>
+                                <option value="ew">East-West (Horizontal)</option>
+                            </select>
+                        </div>
+                        
                         <button id="btn-delete-room" class="btn-danger btn-full" style="margin-top: 1rem;"><i data-lucide="trash-2"></i> Delete Room</button>
                     </div>
 
@@ -356,6 +372,42 @@
                             <input type="number" id="interior-pipe-len-input" step="0.5" min="1">
                         </div>
                         <button id="btn-delete-interior-pipe" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Pipe</button>
+                    </div>
+
+                    <!-- Stanchion Edit Fields -->
+                    <div id="stanchion-edit-fields" class="hidden">
+                        <div class="input-group">
+                            <label for="stanchion-name-input">Stanchion Label</label>
+                            <input type="text" id="stanchion-name-input">
+                        </div>
+                        <div class="input-group">
+                            <label for="stanchion-type-select">Post Profile Shape</label>
+                            <select id="stanchion-type-select">
+                                <option value="round">Round Column</option>
+                                <option value="square">Square Pillar</option>
+                            </select>
+                        </div>
+                        <button id="btn-delete-stanchion" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Stanchion</button>
+                    </div>
+
+                    <!-- Support Beam Edit Fields -->
+                    <div id="beam-edit-fields" class="hidden">
+                        <div class="input-group">
+                            <label for="beam-label-input">Beam Label</label>
+                            <input type="text" id="beam-label-input">
+                        </div>
+                        <div class="input-group">
+                            <label for="beam-type-select">Material Type</label>
+                            <select id="beam-type-select">
+                                <option value="timber">Timber Wood Beam</option>
+                                <option value="steel">Steel Girder Beam</option>
+                            </select>
+                        </div>
+                        <div class="input-group">
+                            <label for="beam-len-input">Length (ft)</label>
+                            <input type="number" id="beam-len-input" step="0.5" min="1">
+                        </div>
+                        <button id="btn-delete-beam" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Support Beam</button>
                     </div>
                 </div>
 
@@ -432,8 +484,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=11"></script>
-    <script src="renderer3d.js?v=11"></script>
-    <script src="ar-estimator.js?v=11"></script>
+    <script src="app.js?v=12"></script>
+    <script src="renderer3d.js?v=12"></script>
+    <script src="ar-estimator.js?v=12"></script>
 </body>
 </html>
