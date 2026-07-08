@@ -829,11 +829,19 @@ function updateGlobalStats() {
     state.rooms.forEach(room => {
         if (room.foamBoard) {
             const extPerim = getRoomExteriorPerimeter(room);
-            const wallArea = extPerim * room.h;
+            let sheets = 0;
+            if (room.h <= 4) {
+                // Lay sheets horizontally (8' wide, 4' high)
+                sheets = extPerim / 8;
+            } else {
+                // Stand sheets vertically (4' wide, 8' high)
+                const columns = extPerim / 4;
+                const sheetsPerColumn = Math.ceil(room.h / 8);
+                sheets = columns * sheetsPerColumn;
+            }
             let deductions = 0;
-            room.openings.forEach(op => { deductions += op.w * op.h; });
-            const netWallArea = Math.max(0, wallArea - deductions);
-            totalXpsSheets += (netWallArea / 32);
+            room.openings.forEach(op => { deductions += (op.w * op.h) / 32; });
+            totalXpsSheets += Math.max(0, sheets - deductions);
         }
     });
 
@@ -3021,11 +3029,19 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     state.rooms.forEach(room => {
         if (room.foamBoard) {
             const extPerim = getRoomExteriorPerimeter(room);
-            const wallArea = extPerim * room.h;
+            let sheets = 0;
+            if (room.h <= 4) {
+                // Lay sheets horizontally (8' wide, 4' high)
+                sheets = extPerim / 8;
+            } else {
+                // Stand sheets vertically (4' wide, 8' high)
+                const columns = extPerim / 4;
+                const sheetsPerColumn = Math.ceil(room.h / 8);
+                sheets = columns * sheetsPerColumn;
+            }
             let deductions = 0;
-            room.openings.forEach(op => { deductions += op.w * op.h; });
-            const netWallArea = Math.max(0, wallArea - deductions);
-            totalXpsSheets += (netWallArea / 32);
+            room.openings.forEach(op => { deductions += (op.w * op.h) / 32; });
+            totalXpsSheets += Math.max(0, sheets - deductions);
         }
     });
 
