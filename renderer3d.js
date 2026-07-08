@@ -667,10 +667,46 @@ window.get3DScreenshot = function() {
     // Save original settings
     const origBg = scene.background;
     const origFog = scene.fog;
+    const origCamPos = camera.position.clone();
+    const origTarget = controls ? controls.target.clone() : new THREE.Vector3();
     
     // Temporarily swap to white print background and clear fog
     scene.background = new THREE.Color('#ffffff');
     scene.fog = null;
+    
+    // Auto-focus camera on structure tightly
+    const box = new THREE.Box3();
+    let hasObjects = false;
+    roomMeshes.forEach(mesh => {
+        box.expandByObject(mesh);
+        hasObjects = true;
+    });
+    
+    if (hasObjects && controls) {
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        
+        controls.target.copy(center);
+        
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const fov = camera.fov * (Math.PI / 180);
+        
+        // Zoom closer: 1.02 padding fills the screen tightly!
+        let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.02;
+        cameraZ = Math.max(10, cameraZ);
+        
+        // Tilt down angle (45 degrees isometric angle)
+        camera.position.set(
+            center.x + cameraZ * 0.7,
+            center.y + cameraZ * 0.7,
+            center.z + cameraZ * 0.9
+        );
+        
+        camera.lookAt(center);
+        controls.update();
+    }
     
     // Render and capture
     renderer.render(scene, camera);
@@ -679,6 +715,11 @@ window.get3DScreenshot = function() {
     // Restore settings
     scene.background = origBg;
     scene.fog = origFog;
+    camera.position.copy(origCamPos);
+    if (controls) {
+        controls.target.copy(origTarget);
+        controls.update();
+    }
     renderer.render(scene, camera);
     
     return dataUrl;
