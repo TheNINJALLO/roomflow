@@ -19,6 +19,11 @@ const state = {
     draggedSumpPumpId: null,
     draggedDischargeHandle: null, // { id, point: 'p1' | 'p2' | 'move' }
     draggedOpening: null,        // { roomId, openingId }
+    draggedVertex: null,         // { roomId, vertexIndex }
+    drawMode: null,              // 'custom' or null
+    sketchVertices: [],          // temporary drawing vertices
+    lastMouseWorldX: 0,          // live mouse positions for line previews
+    lastMouseWorldY: 0,
     snapGridSize: 0.5,   // Snap to nearest 0.5 foot (6 inches)
     showGrid: true,
     initialMouseOffset: {}
@@ -227,14 +232,47 @@ function addOpening(type) {
     const room = state.rooms.find(r => r.id === state.selectedRoomId);
     if (!room) return;
 
-    const walls = ['n', 'e', 's', 'w'];
-    const wallCounts = { n: 0, e: 0, s: 0, w: 0 };
-    room.openings.forEach(op => wallCounts[op.wall]++);
-    const bestWall = walls.reduce((a, b) => wallCounts[a] <= wallCounts[b] ? a : b);
+    let bestWall;
+    let maxOffset;
+
+    if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        // Custom room: Find the wall segment (index) with the fewest openings
+        const wallCounts = {};
+        for (let i = 0; i < room.vertices.length; i++) {
+            wallCounts[i] = 0;
+        }
+        room.openings.forEach(op => {
+            const idx = parseInt(op.wall);
+            if (!isNaN(idx) && idx in wallCounts) {
+                wallCounts[idx]++;
+            }
+        });
+        
+        let minCount = Infinity;
+        let selectedIdx = 0;
+        for (let i = 0; i < room.vertices.length; i++) {
+            if (wallCounts[i] < minCount) {
+                minCount = wallCounts[i];
+                selectedIdx = i;
+            }
+        }
+        bestWall = selectedIdx.toString();
+        
+        const v1 = room.vertices[selectedIdx];
+        const v2 = room.vertices[(selectedIdx + 1) % room.vertices.length];
+        const dx = v2.x - v1.x;
+        const dy = v2.y - v1.y;
+        maxOffset = Math.sqrt(dx*dx + dy*dy);
+    } else {
+        const walls = ['n', 'e', 's', 'w'];
+        const wallCounts = { n: 0, e: 0, s: 0, w: 0 };
+        room.openings.forEach(op => wallCounts[op.wall]++);
+        bestWall = walls.reduce((a, b) => wallCounts[a] <= wallCounts[b] ? a : b);
+        maxOffset = (bestWall === 'n' || bestWall === 's') ? room.w : room.l;
+    }
 
     const width = type === 'door' ? 3.0 : 4.0;
     const height = type === 'door' ? 6.8 : 4.0;
-    const maxOffset = (bestWall === 'n' || bestWall === 's') ? room.w : room.l;
     const offset = snap(maxOffset / 2);
 
     room.openings.push({
@@ -288,11 +326,41 @@ window.updateOpening = function(roomId, openingId, property, value) {
     if (window.sync3D) window.sync3D();
 };
 
+function getPolygonArea(vertices) {
+    if (!vertices || vertices.length < 3) return 0;
+    let area = 0;
+    for (let i = 0; i < vertices.length; i++) {
+        const v1 = vertices[i];
+        const v2 = vertices[(i + 1) % vertices.length];
+        area += v1.x * v2.y - v2.x * v1.y;
+    }
+    return Math.abs(area / 2);
+}
+
+function getPolygonPerimeter(vertices) {
+    if (!vertices || vertices.length < 2) return 0;
+    let perimeter = 0;
+    for (let i = 0; i < vertices.length; i++) {
+        const v1 = vertices[i];
+        const v2 = vertices[(i + 1) % vertices.length];
+        const dx = v2.x - v1.x;
+        const dy = v2.y - v1.y;
+        perimeter += Math.sqrt(dx*dx + dy*dy);
+    }
+    return perimeter;
+}
+
 // Calculate Estimates
 function updateRoomEstimates(room) {
-    const floorArea = room.w * room.l;
+    let floorArea, perimeter;
+    if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        floorArea = getPolygonArea(room.vertices);
+        perimeter = getPolygonPerimeter(room.vertices);
+    } else {
+        floorArea = room.w * room.l;
+        perimeter = 2 * (room.w + room.l);
+    }
     const ceilingArea = floorArea;
-    const perimeter = 2 * (room.w + room.l);
     const volume = room.type === 'staircase' ? 0.5 * floorArea * room.h : floorArea * room.h;
     
     // Gross Wall Area
@@ -365,13 +433,20 @@ function updateGlobalStats() {
     let totalWallArea = 0;
 
     state.rooms.forEach(room => {
-        totalFloorArea += room.w * room.l;
+        let floorArea, perimeter;
+        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+            floorArea = getPolygonArea(room.vertices);
+            perimeter = getPolygonPerimeter(room.vertices);
+        } else {
+            floorArea = room.w * room.l;
+            perimeter = 2 * (room.w + room.l);
+        }
+        totalFloorArea += floorArea;
         
         let grossWallArea;
         if (room.type === 'staircase') {
             grossWallArea = (room.l * room.h) + (room.w * room.h);
         } else {
-            const perimeter = 2 * (room.w + room.l);
             grossWallArea = perimeter * room.h;
         }
         let deductions = 0;
@@ -450,6 +525,53 @@ function draw(isPrinting = false) {
     state.rooms.forEach(room => {
         drawRoom(room);
     });
+
+    // Draw committed segments of current custom drawing in progress
+    if (state.drawMode === 'custom' && state.sketchVertices.length > 0) {
+        ctx.strokeStyle = '#a855f7'; // Purple sketch lines
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(state.sketchVertices[0].x), toCanvasY(state.sketchVertices[0].y));
+        for (let i = 1; i < state.sketchVertices.length; i++) {
+            ctx.lineTo(toCanvasX(state.sketchVertices[i].x), toCanvasY(state.sketchVertices[i].y));
+        }
+        ctx.stroke();
+
+        // Draw live preview segment from last vertex to current mouse position
+        const lastV = state.sketchVertices[state.sketchVertices.length - 1];
+        const previewX = toCanvasX(state.lastMouseWorldX);
+        const previewY = toCanvasY(state.lastMouseWorldY);
+
+        ctx.strokeStyle = 'rgba(168, 85, 247, 0.5)'; // Dashed preview line
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(lastV.x), toCanvasY(lastV.y));
+        ctx.lineTo(previewX, previewY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Show live length and angle next to preview segment
+        const dx = state.lastMouseWorldX - lastV.x;
+        const dy = state.lastMouseWorldY - lastV.y;
+        const liveDist = Math.sqrt(dx*dx + dy*dy);
+        let liveAngle = Math.round(Math.atan2(dy, dx) * 180 / Math.PI);
+        if (liveAngle < 0) liveAngle += 360;
+
+        ctx.fillStyle = '#a855f7';
+        ctx.font = '600 10px var(--font-mono)';
+        ctx.fillText(` ${liveDist.toFixed(1)} ft @ ${liveAngle}°`, previewX + 10, previewY - 5);
+
+        // Draw vertex nodes
+        state.sketchVertices.forEach(v => {
+            ctx.fillStyle = '#a855f7';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(toCanvasX(v.x), toCanvasY(v.y), 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        });
+    }
 
     // 2. Draw discharge lines
     state.dischargeLines.forEach(dl => {
@@ -594,6 +716,76 @@ function drawRoom(room) {
     const rl = room.l * state.scale;
     const isSelected = room.id === state.selectedRoomId;
 
+    if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        // --- Render Custom Polygon Room ---
+        ctx.fillStyle = room.color + '15';
+        ctx.beginPath();
+        ctx.moveTo(toCanvasX(room.x + room.vertices[0].x), toCanvasY(room.y + room.vertices[0].y));
+        for (let i = 1; i < room.vertices.length; i++) {
+            ctx.lineTo(toCanvasX(room.x + room.vertices[i].x), toCanvasY(room.y + room.vertices[i].y));
+        }
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = isSelected ? 3 : 1.5;
+        ctx.stroke();
+
+        // Calculate Average center for Room Name Label
+        let sumX = 0, sumY = 0;
+        room.vertices.forEach(v => { sumX += v.x; sumY += v.y; });
+        const avgX = room.x + sumX / room.vertices.length;
+        const avgY = room.y + sumY / room.vertices.length;
+
+        ctx.fillStyle = isSelected ? '#ffffff' : varColor('--text-muted');
+        ctx.font = `600 13px var(--font-sans)`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(room.name, toCanvasX(avgX), toCanvasY(avgY));
+
+        // Draw wall segment lengths
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.font = `500 9px var(--font-mono)`;
+        for (let i = 0; i < room.vertices.length; i++) {
+            const v1 = room.vertices[i];
+            const v2 = room.vertices[(i + 1) % room.vertices.length];
+            const mx = room.x + (v1.x + v2.x) / 2;
+            const my = room.y + (v1.y + v2.y) / 2;
+            const dx = v2.x - v1.x;
+            const dy = v2.y - v1.y;
+            const wallLength = Math.sqrt(dx*dx + dy*dy);
+
+            ctx.save();
+            ctx.translate(toCanvasX(mx), toCanvasY(my));
+            let textAng = Math.atan2(dy, dx);
+            if (textAng > Math.PI / 2 || textAng < -Math.PI / 2) textAng += Math.PI;
+            ctx.rotate(textAng);
+            ctx.fillText(`${wallLength.toFixed(1)} ft`, 0, -6);
+            ctx.restore();
+        }
+
+        // Draw openings
+        room.openings.forEach(op => {
+            drawOpeningOnWall(room, op);
+        });
+
+        // Draw vertex edit handles
+        if (isSelected) {
+            room.vertices.forEach((v, idx) => {
+                const vx = toCanvasX(room.x + v.x);
+                const vy = toCanvasY(room.y + v.y);
+                ctx.fillStyle = '#a855f7';
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.arc(vx, vy, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            });
+        }
+        return;
+    }
+
     // Room Body Fill
     ctx.fillStyle = room.color + '15';
     ctx.fillRect(rx, ry, rw, rl);
@@ -692,6 +884,31 @@ function drawOpeningOnWall(room, op) {
     let opX, opY, opW, opH;
     const widthPix = op.w * state.scale;
     const thickness = 6;
+
+    if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        const wallIdx = parseInt(op.wall);
+        if (isNaN(wallIdx) || wallIdx < 0 || wallIdx >= room.vertices.length) return;
+        
+        const v1 = room.vertices[wallIdx];
+        const v2 = room.vertices[(wallIdx + 1) % room.vertices.length];
+        
+        const angle = Math.atan2(v2.y - v1.y, v2.x - v1.x);
+        const wx = room.x + v1.x + op.offset * Math.cos(angle);
+        const wy = room.y + v1.y + op.offset * Math.sin(angle);
+        const cx = toCanvasX(wx);
+        const cy = toCanvasY(wy);
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.fillStyle = op.type === 'door' ? '#f59e0b' : '#06b6d4';
+        ctx.fillRect(-widthPix / 2, -thickness / 2, widthPix, thickness);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(-widthPix / 2, -thickness / 2, widthPix, thickness);
+        ctx.restore();
+        return;
+    }
 
     if (op.wall === 'n') {
         opX = rx + (op.offset * state.scale) - (widthPix / 2);
@@ -817,7 +1034,35 @@ function varColor(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+function isPointInPolygon(p, polygon) {
+    let isInside = false;
+    const minX = Math.min(...polygon.map(v => v.x));
+    const maxX = Math.max(...polygon.map(v => v.x));
+    const minY = Math.min(...polygon.map(v => v.y));
+    const maxY = Math.max(...polygon.map(v => v.y));
+    
+    if (p.x < minX || p.x > maxX || p.y < minY || p.y > maxY) {
+        return false;
+    }
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i].x, yi = polygon[i].y;
+        const xj = polygon[j].x, yj = polygon[j].y;
+        
+        const intersect = ((yi > p.y) !== (yj > p.y))
+            && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi);
+        if (intersect) isInside = !isInside;
+    }
+    return isInside;
+}
+
 function getHitHandle(room, worldX, worldY) {
+    if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        // For custom polygon rooms, checking polygon boundary hit
+        const inside = isPointInPolygon({ x: worldX - room.x, y: worldY - room.y }, room.vertices);
+        return inside ? 'move' : null;
+    }
+
     const tolerance = 8 / state.scale;
     const rx = room.x;
     const ry = room.y;
@@ -848,6 +1093,42 @@ canvas.addEventListener('mousedown', (e) => {
     const my = e.clientY - rect.top;
     const wx = toWorldX(mx);
     const wy = toWorldY(my);
+
+    // Sketching custom rooms mode mousedown handler
+    if (state.drawMode === 'custom') {
+        const snapX = snap(wx);
+        const snapY = snap(wy);
+        
+        if (state.sketchVertices.length >= 3) {
+            const first = state.sketchVertices[0];
+            const distToFirst = Math.sqrt((snapX - first.x)**2 + (snapY - first.y)**2);
+            if (distToFirst < 1.0) {
+                finishCustomRoomDrawing();
+                return;
+            }
+        }
+        
+        state.sketchVertices.push({ x: snapX, y: snapY });
+        draw();
+        return;
+    }
+
+    // Check custom room vertex handle clicks
+    if (state.selectedRoomId) {
+        const room = state.rooms.find(r => r.id === state.selectedRoomId);
+        if (room && room.type === 'custom' && room.vertices) {
+            for (let idx = 0; idx < room.vertices.length; idx++) {
+                const v = room.vertices[idx];
+                const avx = room.x + v.x;
+                const avy = room.y + v.y;
+                const dist = Math.sqrt((wx - avx)**2 + (wy - avy)**2);
+                if (dist < 0.8) {
+                    state.draggedVertex = { roomId: room.id, vertexIndex: idx };
+                    return;
+                }
+            }
+        }
+    }
 
     // 0. Check Door/Window Openings click first
     for (let i = state.rooms.length - 1; i >= 0; i--) {
@@ -982,6 +1263,52 @@ canvas.addEventListener('mousemove', (e) => {
     const my = e.clientY - rect.top;
     const wx = toWorldX(mx);
     const wy = toWorldY(my);
+
+    // Sketching custom rooms mode mousemove handler
+    if (state.drawMode === 'custom') {
+        state.lastMouseWorldX = snap(wx);
+        state.lastMouseWorldY = snap(wy);
+        canvas.style.cursor = 'crosshair';
+        draw();
+        return;
+    }
+
+    // Custom room vertex dragging handler
+    if (state.draggedVertex) {
+        const room = state.rooms.find(r => r.id === state.draggedVertex.roomId);
+        if (room && room.vertices) {
+            const v = room.vertices[state.draggedVertex.vertexIndex];
+            v.x = snap(wx - room.x);
+            v.y = snap(wy - room.y);
+
+            // Recompute room dimensions
+            const minX = Math.min(...room.vertices.map(v => v.x));
+            const maxX = Math.max(...room.vertices.map(v => v.x));
+            const minY = Math.min(...room.vertices.map(v => v.y));
+            const maxY = Math.max(...room.vertices.map(v => v.y));
+
+            // Shift origin to keep the bounding box aligned
+            if (minX !== 0 || minY !== 0) {
+                room.x += minX;
+                room.y += minY;
+                room.vertices.forEach(vt => {
+                    vt.x -= minX;
+                    vt.y -= minY;
+                });
+            }
+            room.w = maxX - minX;
+            room.l = maxY - minY;
+
+            updateRoomEstimates(room);
+            draw();
+            updateGlobalStats();
+            if (window.sync3D) window.sync3D();
+        }
+        return;
+    }
+
+    // Default cursor resetting
+    canvas.style.cursor = 'default';
 
     // Pan Canvas
     if (state.isDraggingCanvas) {
@@ -1187,6 +1514,7 @@ canvas.addEventListener('mouseup', () => {
     state.draggedSumpPumpId = null;
     state.draggedDischargeHandle = null;
     state.draggedOpening = null;
+    state.draggedVertex = null;
     draw();
     if (window.sync3D) window.sync3D();
 });
@@ -1465,9 +1793,15 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     let grandFloor = 0, grandWall = 0, grandCeiling = 0, grandVolume = 0;
     
     state.rooms.forEach(room => {
-        const floorArea = room.w * room.l;
+        let floorArea, perimeter;
+        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+            floorArea = getPolygonArea(room.vertices);
+            perimeter = getPolygonPerimeter(room.vertices);
+        } else {
+            floorArea = room.w * room.l;
+            perimeter = 2 * (room.w + room.l);
+        }
         const ceilingArea = floorArea;
-        const perimeter = 2 * (room.w + room.l);
         const volume = room.type === 'staircase' ? 0.5 * floorArea * room.h : floorArea * room.h;
         
         let grossWallArea;
@@ -1638,6 +1972,145 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     `;
     printWindow.document.write(htmlContent);
     printWindow.document.close();
+});
+
+// --- ANGLED WALL SKETCHER & DRAWING LOGIC ---
+function toggleDrawWallsMode() {
+    const drawWallsPanel = document.getElementById('custom-wall-drawer-panel');
+    if (state.drawMode === 'custom') {
+        state.drawMode = null;
+        state.sketchVertices = [];
+        drawWallsPanel.classList.add('hidden');
+        document.getElementById('btn-draw-walls-mode').classList.remove('active');
+        document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
+    } else {
+        // Clear active selections
+        selectItem(null);
+        state.drawMode = 'custom';
+        state.sketchVertices = [];
+        drawWallsPanel.classList.remove('hidden');
+        document.getElementById('btn-draw-walls-mode').classList.add('active');
+        document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(168, 85, 247, 0.2)'; // purple
+        
+        // Start sketching automatically at the center of the canvas if empty
+        const canvasCenterX = toWorldX(canvas.width / 2);
+        const canvasCenterY = toWorldY(canvas.height / 2);
+        state.sketchVertices = [{ x: snap(canvasCenterX), y: snap(canvasCenterY) }];
+        state.lastMouseWorldX = snap(canvasCenterX);
+        state.lastMouseWorldY = snap(canvasCenterY);
+    }
+    draw();
+}
+
+function finishCustomRoomDrawing() {
+    if (state.sketchVertices.length < 3) {
+        alert('An angled room requires at least 3 walls/corners to be closed.');
+        return;
+    }
+
+    // Bounding box calculations
+    const xs = state.sketchVertices.map(v => v.x);
+    const ys = state.sketchVertices.map(v => v.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+
+    const roomW = maxX - minX;
+    const roomL = maxY - minY;
+
+    // Relative vertices from room top-left origin
+    const relativeVertices = state.sketchVertices.map(v => ({
+        x: v.x - minX,
+        y: v.y - minY
+    }));
+
+    const newRoom = {
+        id: 'r_' + Date.now(),
+        name: 'Custom Angled Area',
+        type: 'custom',
+        x: minX,
+        y: minY,
+        w: roomW,
+        l: roomL,
+        h: 8, // Standard 8 ft height
+        color: '#a855f7', // Custom purple
+        openings: [],
+        vertices: relativeVertices
+    };
+
+    state.rooms.push(newRoom);
+    
+    // Select the new room
+    selectItem('room', newRoom.id);
+
+    // Reset sketch state
+    state.drawMode = null;
+    state.sketchVertices = [];
+    document.getElementById('custom-wall-drawer-panel').classList.add('hidden');
+    document.getElementById('btn-draw-walls-mode').classList.remove('active');
+    document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
+
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+}
+
+function addSketchWallSegment() {
+    if (state.sketchVertices.length === 0) {
+        const canvasCenterX = toWorldX(canvas.width / 2);
+        const canvasCenterY = toWorldY(canvas.height / 2);
+        state.sketchVertices.push({ x: snap(canvasCenterX), y: snap(canvasCenterY) });
+        draw();
+        return;
+    }
+
+    const length = parseFloat(document.getElementById('draw-wall-length').value);
+    const angleDegrees = parseFloat(document.getElementById('draw-wall-angle').value);
+
+    if (isNaN(length) || length <= 0) {
+        alert('Please enter a valid wall length.');
+        return;
+    }
+
+    const last = state.sketchVertices[state.sketchVertices.length - 1];
+    const angleRad = (angleDegrees * Math.PI) / 180;
+    
+    const nextX = last.x + length * Math.cos(angleRad);
+    const nextY = last.y + length * Math.sin(angleRad);
+
+    state.sketchVertices.push({ x: snap(nextX), y: snap(nextY) });
+    
+    state.lastMouseWorldX = snap(nextX);
+    state.lastMouseWorldY = snap(nextY);
+
+    draw();
+}
+
+function undoLastSketchWall() {
+    if (state.sketchVertices.length > 1) {
+        state.sketchVertices.pop();
+        const last = state.sketchVertices[state.sketchVertices.length - 1];
+        state.lastMouseWorldX = last.x;
+        state.lastMouseWorldY = last.y;
+    } else {
+        alert('Nothing to undo.');
+    }
+    draw();
+}
+
+// Bind sketch UI controls
+document.getElementById('btn-draw-walls-mode').addEventListener('click', toggleDrawWallsMode);
+document.getElementById('btn-draw-add-wall').addEventListener('click', addSketchWallSegment);
+document.getElementById('btn-draw-undo-wall').addEventListener('click', undoLastSketchWall);
+document.getElementById('btn-draw-finish-room').addEventListener('click', finishCustomRoomDrawing);
+document.getElementById('btn-draw-cancel').addEventListener('click', () => {
+    state.drawMode = null;
+    state.sketchVertices = [];
+    document.getElementById('custom-wall-drawer-panel').classList.add('hidden');
+    document.getElementById('btn-draw-walls-mode').classList.remove('active');
+    document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
+    draw();
 });
 
 // --- AR CAPTURED MEASUREMENTS MANAGEMENT ---

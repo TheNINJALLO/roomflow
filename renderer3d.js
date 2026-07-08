@@ -108,6 +108,50 @@ window.sync3D = function() {
                 stepMesh.receiveShadow = true;
                 roomGroup.add(stepMesh);
             }
+        } else if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+            // --- Custom Polygon Room (with custom-angled walls) ---
+            const wallMat = new THREE.MeshStandardMaterial({
+                color: '#e2e8f0',
+                roughness: 0.9,
+                metalness: 0.05
+            });
+
+            // 1. Draw floor plane using Shape Geometry
+            const shape = new THREE.Shape();
+            shape.moveTo(room.vertices[0].x, room.vertices[0].y);
+            for (let i = 1; i < room.vertices.length; i++) {
+                shape.lineTo(room.vertices[i].x, room.vertices[i].y);
+            }
+            shape.closePath();
+            
+            const floorGeo = new THREE.ShapeGeometry(shape);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: room.color,
+                roughness: 0.8,
+                metalness: 0.1,
+                side: THREE.DoubleSide
+            });
+            const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.receiveShadow = true;
+            roomGroup.add(floorMesh);
+
+            // 2. Ceiling Plane (if visible)
+            if (showCeilings) {
+                const ceilMesh = floorMesh.clone();
+                ceilMesh.position.y = room.h;
+                roomGroup.add(ceilMesh);
+            }
+
+            // 3. Walls Construction connecting vertices
+            for (let i = 0; i < room.vertices.length; i++) {
+                const v1 = room.vertices[i];
+                const v2 = room.vertices[(i + 1) % room.vertices.length];
+                
+                // Openings on custom walls filter by index number string
+                const segOpenings = room.openings.filter(op => op.wall === i.toString() || op.wall === i);
+                build3DWall(v1.x, v1.y, v2.x, v2.y, room.h, segOpenings, roomGroup, wallMat);
+            }
         } else {
             // 1. Floor Plane
             const floorGeo = new THREE.PlaneGeometry(room.w, room.l);
