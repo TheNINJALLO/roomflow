@@ -1861,6 +1861,86 @@ document.getElementById('file-input').addEventListener('change', (e) => {
     reader.readAsText(file);
 });
 
+// Auto-focus layout viewport to fit canvas perfectly for printing
+function fitLayoutToCanvas() {
+    if (state.rooms.length === 0 && state.sumpPumps.length === 0 && state.dischargeLines.length === 0) {
+        return { scale: state.scale, offsetX: state.offsetX, offsetY: state.offsetY };
+    }
+    
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    
+    // Compute bounds across all rooms
+    state.rooms.forEach(room => {
+        if (room.type === 'custom' && room.vertices) {
+            room.vertices.forEach(v => {
+                const wx = room.x + v.x;
+                const wy = room.y + v.y;
+                if (wx < minX) minX = wx;
+                if (wx > maxX) maxX = wx;
+                if (wy < minY) minY = wy;
+                if (wy > maxY) maxY = wy;
+            });
+        } else {
+            if (room.x < minX) minX = room.x;
+            if (room.x + room.w > maxX) maxX = room.x + room.w;
+            if (room.y < minY) minY = room.y;
+            if (room.y + room.l > maxY) maxY = room.y + room.l;
+        }
+    });
+    
+    // Compute bounds across all sump pumps
+    state.sumpPumps.forEach(pump => {
+        if (pump.x < minX) minX = pump.x;
+        if (pump.x > maxX) maxX = pump.x;
+        if (pump.y < minY) minY = pump.y;
+        if (pump.y > maxY) maxY = pump.y;
+    });
+    
+    // Compute bounds across all discharge lines
+    state.dischargeLines.forEach(line => {
+        if (line.x1 < minX) minX = line.x1;
+        if (line.x1 > maxX) maxX = line.x1;
+        if (line.x2 < minX) minX = line.x2;
+        if (line.x2 > maxX) maxX = line.x2;
+        
+        if (line.y1 < minY) minY = line.y1;
+        if (line.y1 > maxY) maxY = line.y1;
+        if (line.y2 < minY) minY = line.y2;
+        if (line.y2 > maxY) maxY = line.y2;
+    });
+    
+    const layoutW = maxX - minX;
+    const layoutH = maxY - minY;
+    
+    // Add a uniform margin of 3 grid units (3 feet) on each side
+    const padding = 3;
+    const boxX = minX - padding;
+    const boxY = minY - padding;
+    const boxW = layoutW + padding * 2;
+    const boxH = layoutH + padding * 2;
+    
+    const originalScale = state.scale;
+    const originalOffsetX = state.offsetX;
+    const originalOffsetY = state.offsetY;
+    
+    // Compute scale factor
+    const scaleX = canvas.width / boxW;
+    const scaleY = canvas.height / boxH;
+    const fitScale = Math.min(scaleX, scaleY);
+    
+    state.scale = Math.max(5, Math.min(45, fitScale));
+    
+    // Compute panning offset to center the layout box
+    const boxCenterX = boxX + boxW / 2;
+    const boxCenterY = boxY + boxH / 2;
+    
+    state.offsetX = canvas.width / 2 - boxCenterX * state.scale;
+    state.offsetY = canvas.height / 2 - boxCenterY * state.scale;
+    
+    return { scale: originalScale, offsetX: originalOffsetX, offsetY: originalOffsetY };
+}
+
 // PDF / HTML Print Layout
 document.getElementById('btn-export-pdf').addEventListener('click', () => {
     // Save current selections
@@ -1873,16 +1953,24 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     state.selectedSumpPumpId = null;
     state.selectedDischargeLineId = null;
     
+    // Automatically focus layout scale and center view on the canvas
+    const originalView = fitLayoutToCanvas();
+    
     // Draw with solid print background, then grab image URL
     draw(true);
     const layoutImage = canvas.toDataURL('image/png');
+    
+    // Restore original viewport settings
+    state.scale = originalView.scale;
+    state.offsetX = originalView.offsetX;
+    state.offsetY = originalView.offsetY;
     
     // Restore selections
     state.selectedRoomId = oldSelRoom;
     state.selectedSumpPumpId = oldSelSump;
     state.selectedDischargeLineId = oldSelDischarge;
     
-    // Redraw normal
+    // Redraw normal view
     draw(false);
 
     const cName = document.getElementById('customer-name').value || 'Not Specified';
