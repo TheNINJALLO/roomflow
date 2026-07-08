@@ -2110,6 +2110,9 @@ function finishCustomRoomDrawing() {
         return;
     }
 
+    // Save history BEFORE clearing sketch state, so undo restores sketch mode!
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+
     // Bounding box calculations
     const xs = state.sketchVertices.map(v => v.x);
     const ys = state.sketchVertices.map(v => v.y);
@@ -2308,8 +2311,31 @@ function getHistorySnapshot() {
     return {
         rooms: JSON.parse(JSON.stringify(state.rooms)),
         sumpPumps: JSON.parse(JSON.stringify(state.sumpPumps)),
-        dischargeLines: JSON.parse(JSON.stringify(state.dischargeLines))
+        dischargeLines: JSON.parse(JSON.stringify(state.dischargeLines)),
+        // Save drawing mode variables
+        drawMode: state.drawMode,
+        sketchVertices: JSON.parse(JSON.stringify(state.sketchVertices)),
+        sketchRedoVertices: JSON.parse(JSON.stringify(state.sketchRedoVertices))
     };
+}
+
+function updateDrawingPanelVisibility() {
+    const drawWallsPanel = document.getElementById('custom-wall-drawer-panel');
+    const btnDrawWalls = document.getElementById('btn-draw-walls-mode');
+    
+    if (state.drawMode === 'custom') {
+        if (drawWallsPanel) drawWallsPanel.classList.remove('hidden');
+        if (btnDrawWalls) {
+            btnDrawWalls.classList.add('active');
+            btnDrawWalls.style.backgroundColor = 'rgba(168, 85, 247, 0.2)'; // purple
+        }
+    } else {
+        if (drawWallsPanel) drawWallsPanel.classList.add('hidden');
+        if (btnDrawWalls) {
+            btnDrawWalls.classList.remove('active');
+            btnDrawWalls.style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
+        }
+    }
 }
 
 function saveHistoryState() {
@@ -2349,6 +2375,14 @@ function undo() {
     state.sumpPumps = previous.sumpPumps;
     state.dischargeLines = previous.dischargeLines;
     
+    // Restore drawing mode variables
+    state.drawMode = previous.drawMode || null;
+    state.sketchVertices = previous.sketchVertices || [];
+    state.sketchRedoVertices = previous.sketchRedoVertices || [];
+    
+    // Toggle drawing panel UI state
+    updateDrawingPanelVisibility();
+    
     selectItem(null);
     draw();
     updateGlobalStats();
@@ -2373,6 +2407,14 @@ function redo() {
     state.rooms = nextState.rooms;
     state.sumpPumps = nextState.sumpPumps;
     state.dischargeLines = nextState.dischargeLines;
+    
+    // Restore drawing mode variables
+    state.drawMode = nextState.drawMode || null;
+    state.sketchVertices = nextState.sketchVertices || [];
+    state.sketchRedoVertices = nextState.sketchRedoVertices || [];
+    
+    // Toggle drawing panel UI state
+    updateDrawingPanelVisibility();
     
     selectItem(null);
     draw();
