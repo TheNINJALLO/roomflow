@@ -389,11 +389,12 @@ window.sync3D = function() {
 
     // 3. Render Interior Plumbing (white PVC run overhead)
     state.interiorPipes.forEach(ip => {
-        const level = state.levels.find(l => l.id === ip.levelId) || { elevation: 0, height: 8 };
+        const ipLevelId = ip.levelId || 'basement';
+        const level = state.levels.find(l => l.id === ipLevelId) || { elevation: 0, height: 8 };
         const elevation = level.elevation || 0;
         
         // Find room containing start point
-        const containingRoom = getRoomAt(ip.x1, ip.y1, ip.levelId);
+        const containingRoom = getRoomAt(ip.x1, ip.y1, ipLevelId);
         const roomH = containingRoom ? containingRoom.h : (level.height || 8);
         
         // Route horizontal run at overhead ceiling height (room height - 0.5ft)
@@ -403,9 +404,10 @@ window.sync3D = function() {
 
     // 4. Render Stanchions (support posts)
     state.stanchions.forEach(st => {
-        const level = state.levels.find(l => l.id === st.levelId) || { elevation: 0, height: 8 };
+        const stLevelId = st.levelId || 'basement';
+        const level = state.levels.find(l => l.id === stLevelId) || { elevation: 0, height: 8 };
         const elevation = level.elevation || 0;
-        const room = getRoomAt(st.x, st.y, st.levelId);
+        const room = getRoomAt(st.x, st.y, stLevelId);
         const postH = room ? room.h : (level.height || 8);
         
         let geometry;
@@ -445,9 +447,10 @@ window.sync3D = function() {
 
     // 5. Render Support Beams (timber wood or steel girders)
     state.mainBeams.forEach(bm => {
-        const level = state.levels.find(l => l.id === bm.levelId) || { elevation: 0, height: 8 };
+        const bmLevelId = bm.levelId || 'basement';
+        const level = state.levels.find(l => l.id === bmLevelId) || { elevation: 0, height: 8 };
         const elevation = level.elevation || 0;
-        const room = getRoomAt(bm.x1, bm.y1, bm.levelId);
+        const room = getRoomAt(bm.x1, bm.y1, bmLevelId);
         const roomH = room ? room.h : (level.height || 8);
         
         const len = Math.sqrt((bm.x2 - bm.x1)**2 + (bm.y2 - bm.y1)**2);
@@ -455,7 +458,7 @@ window.sync3D = function() {
         
         const bWidth = 0.6; // 7 inches wide
         const bHeight = 0.9; // 11 inches deep
-        const geometry = new THREE.BoxGeometry(bWidth, bHeight, len);
+        const geometry = new THREE.BoxGeometry(len, bHeight, bWidth);
         
         const material = bm.type === 'steel'
             ? new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.8, roughness: 0.2 })
