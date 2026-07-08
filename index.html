@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=13">
+    <link rel="stylesheet" href="styles.css?v=14">
 </head>
 <body>
     <div id="app-container">
@@ -336,6 +336,12 @@
                             </select>
                         </div>
                         
+                        <!-- Exterior Foam Board (2" XPS) -->
+                        <div class="input-group-checkbox" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;">
+                            <input type="checkbox" id="room-foam-board-checkbox" style="width: auto; margin: 0;">
+                            <label for="room-foam-board-checkbox" style="margin-bottom: 0; font-weight: 500; font-size: 0.85rem; color: var(--text-color); cursor: pointer;">Exterior Foam Board (2" XPS)</label>
+                        </div>
+
                         <button id="btn-delete-room" class="btn-danger btn-full" style="margin-top: 1rem;"><i data-lucide="trash-2"></i> Delete Room</button>
                     </div>
 
@@ -385,6 +391,7 @@
                             <select id="stanchion-type-select">
                                 <option value="round">Round Column</option>
                                 <option value="square">Square Pillar</option>
+                                <option value="brick">Brick Pillar</option>
                             </select>
                         </div>
                         <button id="btn-delete-stanchion" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Stanchion</button>
@@ -474,6 +481,26 @@
                         <span class="metric-label">Interior Plumbing</span>
                         <span class="metric-value" id="total-interior-pipe-length">0 ft</span>
                     </div>
+                    <div class="metric-row summary-row" style="margin-top: 0.75rem; border-top: 1px solid var(--border-color); padding-top: 0.75rem;">
+                        <span class="metric-label" style="font-weight:700; color:var(--accent-teal);">2" XPS Foam Board</span>
+                        <span class="metric-value" id="total-foam-sheets" style="font-weight:700; color:var(--accent-teal);">0 sheets</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">10ft PVC Sticks</span>
+                        <span class="metric-value" id="total-pvc-sticks">0 sticks</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">90° PVC Elbows</span>
+                        <span class="metric-value" id="total-pvc-90s">0</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label">45° PVC Elbows</span>
+                        <span class="metric-value" id="total-pvc-45s">0</span>
+                    </div>
+                    <div class="metric-row summary-row" style="margin-top: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+                        <span class="metric-label" style="font-weight:700; color:#c084fc;">Vapor Barrier Liner</span>
+                        <span class="metric-value" id="total-barrier-liner" style="font-weight:700; color:#c084fc;">0 sq ft</span>
+                    </div>
                 </div>
             </aside>
         </main>
@@ -484,8 +511,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=13"></script>
-    <script src="renderer3d.js?v=13"></script>
-    <script src="ar-estimator.js?v=13"></script>
+    <script src="app.js?v=14"></script>
+    <script src="renderer3d.js?v=14"></script>
+    <script src="ar-estimator.js?v=14"></script>
 </body>
 </html>

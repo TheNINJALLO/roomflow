@@ -265,6 +265,77 @@ window.sync3D = function() {
             }
         }
 
+        // --- Render 3D pink XPS insulation foam boards on exterior walls ---
+        if (room.foamBoard) {
+            const segments = getRoomSegments(room);
+            const foamMat = new THREE.MeshStandardMaterial({
+                color: '#f472b6', // Owens Corning pink XPS board
+                roughness: 0.95,
+                metalness: 0.05
+            });
+            const fThick = 0.16; // 2 inches
+            
+            segments.forEach(seg => {
+                const mx = (seg.x1 + seg.x2) / 2;
+                const my = (seg.y1 + seg.y2) / 2;
+                
+                // Check if exterior wall
+                let isShared = false;
+                for (let i = 0; i < state.rooms.length; i++) {
+                    const other = state.rooms[i];
+                    if (other.id === room.id || other.levelId !== room.levelId) continue;
+                    
+                    const otherSegs = getRoomSegments(other);
+                    for (let j = 0; j < otherSegs.length; j++) {
+                        const oSeg = otherSegs[j];
+                        const dist = getDistanceToSegment(mx, my, oSeg.x1, oSeg.y1, oSeg.x2, oSeg.y2);
+                        if (dist < 0.25) {
+                            isShared = true;
+                            break;
+                        }
+                    }
+                    if (isShared) break;
+                }
+                
+                if (!isShared) {
+                    const len = Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
+                    if (len < 0.05) return;
+                    
+                    const geometry = new THREE.BoxGeometry(len, room.h, fThick);
+                    const mesh = new THREE.Mesh(geometry, foamMat);
+                    
+                    const dx = seg.x2 - seg.x1;
+                    const dy = seg.y2 - seg.y1;
+                    const nx = -dy / len;
+                    const ny = dx / len;
+                    
+                    // Outward normal check
+                    const testDist = 0.5;
+                    const testX = mx + nx * testDist;
+                    const testY = my + ny * testDist;
+                    const inRoom = getRoomAt(testX, testY, room.levelId);
+                    
+                    const mul = (inRoom && inRoom.id === room.id) ? -1 : 1;
+                    const offsetDist = 0.22;
+                    
+                    mesh.position.set(
+                        mx + nx * offsetDist * mul,
+                        elevation + room.h / 2,
+                        my + ny * offsetDist * mul
+                    );
+                    
+                    const angle = Math.atan2(dy, dx);
+                    mesh.rotation.y = -angle;
+                    
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    
+                    scene.add(mesh);
+                    roomMeshes.push(mesh);
+                }
+            });
+        }
+
         scene.add(roomGroup);
         roomMeshes.push(roomGroup);
     });
@@ -337,16 +408,32 @@ window.sync3D = function() {
         const room = getRoomAt(st.x, st.y, st.levelId);
         const postH = room ? room.h : (level.height || 8);
         
-        const geometry = st.type === 'square' 
-            ? new THREE.BoxGeometry(0.8, postH, 0.8) 
-            : new THREE.CylinderGeometry(0.4, 0.4, postH, 16);
-            
-        // Steel Lally column look (dark red-oxide paint)
-        const material = new THREE.MeshStandardMaterial({ 
-            color: '#b91c1c', 
-            metalness: 0.6, 
-            roughness: 0.3 
-        });
+        let geometry;
+        let material;
+        
+        if (st.type === 'brick') {
+            geometry = new THREE.BoxGeometry(1.0, postH, 1.0);
+            material = new THREE.MeshStandardMaterial({
+                color: '#c2410c', // brick red/orange
+                roughness: 0.95,
+                metalness: 0.05
+            });
+        } else if (st.type === 'square') {
+            geometry = new THREE.BoxGeometry(0.8, postH, 0.8);
+            material = new THREE.MeshStandardMaterial({ 
+                color: '#b91c1c', // red-oxide steel look
+                metalness: 0.6, 
+                roughness: 0.3 
+            });
+        } else { // round
+            geometry = new THREE.CylinderGeometry(0.4, 0.4, postH, 16);
+            material = new THREE.MeshStandardMaterial({ 
+                color: '#b91c1c', // red-oxide lally column
+                metalness: 0.6, 
+                roughness: 0.3 
+            });
+        }
+        
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(st.x, elevation + postH / 2, st.y);
         mesh.castShadow = true;

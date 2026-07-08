@@ -114,7 +114,8 @@ function addRoom(type) {
         x: snap(toWorldX(canvas.width / 2) - preset.w / 2),
         y: snap(toWorldY(canvas.height / 2) - preset.l / 2),
         color: preset.color,
-        openings: []
+        openings: [],
+        foamBoard: false
     };
     if (preset.steps) {
         newRoom.steps = preset.steps;
@@ -275,6 +276,9 @@ function selectItem(type, id) {
             
             const joistSelect = document.getElementById('room-joists-select');
             if (joistSelect) joistSelect.value = room.joists || 'none';
+
+            const foamCheckbox = document.getElementById('room-foam-board-checkbox');
+            if (foamCheckbox) foamCheckbox.checked = !!room.foamBoard;
             
             const rectInputs = document.getElementById('room-rect-inputs');
             const customInputs = document.getElementById('room-custom-walls-inputs');
@@ -605,6 +609,157 @@ function updateRoomEstimates(room) {
     updateGlobalStats();
 }
 
+// Helper to calculate the exterior wall perimeter of a room (excluding shared/touching walls on the same floor)
+function getRoomExteriorPerimeter(room) {
+    let extPerimeter = 0;
+    const segments = getRoomSegments(room);
+    
+    segments.forEach(seg => {
+        const mx = (seg.x1 + seg.x2) / 2;
+        const my = (seg.y1 + seg.y2) / 2;
+        
+        let isShared = false;
+        // Check other rooms
+        for (let i = 0; i < state.rooms.length; i++) {
+            const other = state.rooms[i];
+            if (other.id === room.id || other.levelId !== room.levelId) continue;
+            
+            const otherSegs = getRoomSegments(other);
+            for (let j = 0; j < otherSegs.length; j++) {
+                const oSeg = otherSegs[j];
+                const dist = getDistanceToSegment(mx, my, oSeg.x1, oSeg.y1, oSeg.x2, oSeg.y2);
+                if (dist < 0.25) { // within 3 inches
+                    isShared = true;
+                    break;
+                }
+            }
+            if (isShared) break;
+        }
+        
+        if (!isShared) {
+            extPerimeter += Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
+        }
+    });
+    
+    return extPerimeter;
+}
+
+// Helper to get all wall segments of a room
+function getRoomSegments(room) {
+    const segs = [];
+    if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        for (let i = 0; i < room.vertices.length; i++) {
+            const v1 = room.vertices[i];
+            const v2 = room.vertices[(i + 1) % room.vertices.length];
+            segs.push({
+                x1: room.x + v1.x,
+                y1: room.y + v1.y,
+                x2: room.x + v2.x,
+                y2: room.y + v2.y
+            });
+        }
+    } else {
+        const x = room.x;
+        const y = room.y;
+        const w = room.w;
+        const l = room.l;
+        segs.push({ x1: x, y1: y, x2: x + w, y2: y }); // North
+        segs.push({ x1: x + w, y1: y, x2: x + w, y2: y + l }); // East
+        segs.push({ x1: x, y1: y + l, x2: x + w, y2: y + l }); // South
+        segs.push({ x1: x, y1: y, x2: x, y2: y + l }); // West
+    }
+    return segs;
+}
+
+// Helper to estimate total PVC sticks and elbow fittings based on pipeline geometry
+function estimatePlumbingMaterials() {
+    let totalFootage = 0;
+    let elbow90 = 0;
+    let elbow45 = 0;
+    
+    // 1. Calculate PVC footage
+    state.dischargeLines.forEach(dl => { totalFootage += dl.length; });
+    state.interiorPipes.forEach(ip => { totalFootage += ip.length; });
+    state.sumpPumps.forEach(sp => {
+        const level = state.levels.find(l => l.id === sp.levelId) || { height: 8 };
+        const room = getRoomAt(sp.x, sp.y, sp.levelId);
+        const roomH = room ? room.h : (level.height || 8);
+        totalFootage += (roomH - 0.2);
+        
+        // 1 x 90-degree elbow for riser top to horizontal run
+        elbow90 += 1;
+    });
+    
+    // 2. Identify pipe-to-pipe connections
+    const pipes = [];
+    state.dischargeLines.forEach(dl => {
+        pipes.push({ x1: dl.x1, y1: dl.y1, x2: dl.x2, y2: dl.y2, levelId: dl.levelId });
+    });
+    state.interiorPipes.forEach(ip => {
+        pipes.push({ x1: ip.x1, y1: ip.y1, x2: ip.x2, y2: ip.y2, levelId: ip.levelId });
+    });
+    
+    const connectedPairs = new Set();
+    
+    for (let i = 0; i < pipes.length; i++) {
+        for (let j = i + 1; j < pipes.length; j++) {
+            const pA = pipes[i];
+            const pB = pipes[j];
+            if (pA.levelId !== pB.levelId) continue;
+            
+            let connected = false;
+            let ax, ay, bx, by;
+            
+            if (Math.sqrt((pA.x1 - pB.x1)**2 + (pA.y1 - pB.y1)**2) < 0.25) {
+                connected = true;
+                ax = pA.x2 - pA.x1; ay = pA.y2 - pA.y1;
+                bx = pB.x2 - pB.x1; by = pB.y2 - pB.y1;
+            }
+            else if (Math.sqrt((pA.x1 - pB.x2)**2 + (pA.y1 - pB.y2)**2) < 0.25) {
+                connected = true;
+                ax = pA.x2 - pA.x1; ay = pA.y2 - pA.y1;
+                bx = pB.x1 - pB.x2; by = pB.y1 - pB.y2;
+            }
+            else if (Math.sqrt((pA.x2 - pB.x1)**2 + (pA.y2 - pB.y1)**2) < 0.25) {
+                connected = true;
+                ax = pA.x1 - pA.x2; ay = pA.y1 - pA.y2;
+                bx = pB.x2 - pB.x1; by = pB.y2 - pB.y1;
+            }
+            else if (Math.sqrt((pA.x2 - pB.x2)**2 + (pA.y2 - pB.y2)**2) < 0.25) {
+                connected = true;
+                ax = pA.x1 - pA.x2; ay = pA.y1 - pA.y2;
+                bx = pB.x1 - pB.x2; by = pB.y1 - pB.y2;
+            }
+            
+            if (connected) {
+                const key = `${i}_${j}`;
+                if (!connectedPairs.has(key)) {
+                    connectedPairs.add(key);
+                    
+                    const dot = ax * bx + ay * by;
+                    const lenA = Math.sqrt(ax*ax + ay*ay);
+                    const lenB = Math.sqrt(bx*bx + by*by);
+                    if (lenA > 0.01 && lenB > 0.01) {
+                        const cosTheta = Math.max(-1, Math.min(1, dot / (lenA * lenB)));
+                        const rad = Math.acos(cosTheta);
+                        const deg = rad * 180 / Math.PI;
+                        const deflection = Math.abs(180 - deg);
+                        
+                        if (Math.abs(deflection - 90) <= 25) {
+                            elbow90 += 1;
+                        } else if (Math.abs(deflection - 45) <= 20) {
+                            elbow45 += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    const sticks = Math.ceil(totalFootage / 10);
+    return { sticks, elbow90, elbow45 };
+}
+
 function updateGlobalStats() {
     const totalRooms = state.rooms.length;
     let totalFloorArea = 0;
@@ -648,6 +803,78 @@ function updateGlobalStats() {
     document.getElementById('total-discharge-length').innerText = `${totalDischargeLen.toFixed(1)} ft`;
     const intPipeText = document.getElementById('total-interior-pipe-length');
     if (intPipeText) intPipeText.innerText = `${totalInteriorPipeLen.toFixed(1)} ft`;
+
+    // XPS Foam Board Sheets estimation
+    let totalXpsSheets = 0;
+    state.rooms.forEach(room => {
+        if (room.foamBoard) {
+            const extPerim = getRoomExteriorPerimeter(room);
+            const wallArea = extPerim * room.h;
+            let deductions = 0;
+            room.openings.forEach(op => { deductions += op.w * op.h; });
+            const netWallArea = Math.max(0, wallArea - deductions);
+            totalXpsSheets += (netWallArea / 32);
+        }
+    });
+
+    // Plumbing BOM (pvc sticks & fittings)
+    const plumbingEst = estimatePlumbingMaterials();
+
+    const xpsText = document.getElementById('total-foam-sheets');
+    if (xpsText) xpsText.innerText = `${Math.ceil(totalXpsSheets)} sheets`;
+
+    const sticksText = document.getElementById('total-pvc-sticks');
+    if (sticksText) sticksText.innerText = `${plumbingEst.sticks} sticks`;
+
+    const elbows90Text = document.getElementById('total-pvc-90s');
+    if (elbows90Text) elbows90Text.innerText = plumbingEst.elbow90;
+
+    const elbows45Text = document.getElementById('total-pvc-45s');
+    if (elbows45Text) elbows45Text.innerText = plumbingEst.elbow45;
+
+    // Vapor Barrier Liner calculation
+    let totalLinerArea = 0;
+    state.rooms.forEach(room => {
+        let floorArea, perimeter;
+        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+            floorArea = getPolygonArea(room.vertices);
+            perimeter = getPolygonPerimeter(room.vertices);
+        } else {
+            floorArea = room.w * room.l;
+            perimeter = 2 * (room.w + room.l);
+        }
+        
+        let grossWallArea;
+        if (room.type === 'staircase') {
+            grossWallArea = (room.l * room.h) + (room.w * room.h);
+        } else {
+            grossWallArea = perimeter * room.h;
+        }
+        let deductions = 0;
+        room.openings.forEach(op => { deductions += op.w * op.h; });
+        const netWallArea = Math.max(0, grossWallArea - deductions);
+        
+        totalLinerArea += floorArea + netWallArea;
+    });
+
+    state.stanchions.forEach(st => {
+        const level = state.levels.find(l => l.id === st.levelId) || { height: 8 };
+        const room = getRoomAt(st.x, st.y, st.levelId);
+        const postH = room ? room.h : (level.height || 8);
+        
+        let perim = 0;
+        if (st.type === 'round') {
+            perim = 2 * Math.PI * 0.4;
+        } else if (st.type === 'square') {
+            perim = 4 * 0.8;
+        } else if (st.type === 'brick') {
+            perim = 4 * 1.0;
+        }
+        totalLinerArea += perim * postH;
+    });
+
+    const linerText = document.getElementById('total-barrier-liner');
+    if (linerText) linerText.innerText = `${totalLinerArea.toFixed(0)} sq ft`;
 }
 
 // Delete Selected Items
@@ -970,12 +1197,17 @@ function draw(isPrinting = false) {
         const isSelected = st.id === state.selectedStanchionId;
         const radius = 0.5 * state.scale; // 1ft diameter
         
-        ctx.fillStyle = isSelected ? 'rgba(20, 184, 166, 0.2)' : '#475569';
-        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#94a3b8';
+        if (st.type === 'brick') {
+            ctx.fillStyle = isSelected ? 'rgba(194, 65, 12, 0.2)' : '#c2410c';
+            ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#ea580c';
+        } else {
+            ctx.fillStyle = isSelected ? 'rgba(20, 184, 166, 0.2)' : '#475569';
+            ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#94a3b8';
+        }
         ctx.lineWidth = isSelected ? 3 : 2;
         
         ctx.beginPath();
-        if (st.type === 'square') {
+        if (st.type === 'square' || st.type === 'brick') {
             ctx.rect(cx - radius, cy - radius, radius * 2, radius * 2);
         } else {
             ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -987,7 +1219,7 @@ function draw(isPrinting = false) {
         ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(255, 255, 255, 0.4)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        if (st.type === 'square') {
+        if (st.type === 'square' || st.type === 'brick') {
             ctx.moveTo(cx - radius + 2, cy - radius + 2);
             ctx.lineTo(cx + radius - 2, cy + radius - 2);
             ctx.moveTo(cx + radius - 2, cy - radius + 2);
@@ -1167,6 +1399,43 @@ function drawRoom(room) {
     const rw = room.w * state.scale;
     const rl = room.l * state.scale;
     const isSelected = room.id === state.selectedRoomId;
+
+    // Draw 2D XPS Foam Board insulation lines on exterior walls
+    if (room.foamBoard) {
+        const segments = getRoomSegments(room);
+        ctx.save();
+        ctx.strokeStyle = '#f472b6'; // Owens Corning Pink
+        ctx.lineWidth = 5; // Thick insulation line
+        segments.forEach(seg => {
+            const mx = (seg.x1 + seg.x2) / 2;
+            const my = (seg.y1 + seg.y2) / 2;
+            
+            let isShared = false;
+            for (let i = 0; i < state.rooms.length; i++) {
+                const other = state.rooms[i];
+                if (other.id === room.id || other.levelId !== room.levelId) continue;
+                
+                const otherSegs = getRoomSegments(other);
+                for (let j = 0; j < otherSegs.length; j++) {
+                    const oSeg = otherSegs[j];
+                    const dist = getDistanceToSegment(mx, my, oSeg.x1, oSeg.y1, oSeg.x2, oSeg.y2);
+                    if (dist < 0.25) {
+                        isShared = true;
+                        break;
+                    }
+                }
+                if (isShared) break;
+            }
+            
+            if (!isShared) {
+                ctx.beginPath();
+                ctx.moveTo(toCanvasX(seg.x1), toCanvasY(seg.y1));
+                ctx.lineTo(toCanvasX(seg.x2), toCanvasY(seg.y2));
+                ctx.stroke();
+            }
+        });
+        ctx.restore();
+    }
 
     if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
         // --- Render Custom Polygon Room ---
@@ -2347,6 +2616,19 @@ document.getElementById('room-joists-select').addEventListener('change', (e) => 
     }
 });
 
+// Room Exterior Foam Board change
+document.getElementById('room-foam-board-checkbox').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.foamBoard = e.target.checked;
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
 // Stanchion listeners
 document.getElementById('stanchion-name-input').addEventListener('input', (e) => {
     if (!state.selectedStanchionId) return;
@@ -2713,6 +2995,63 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     const cName = document.getElementById('customer-name').value || 'Not Specified';
     const cAddress = document.getElementById('customer-address').value || 'Not Specified';
 
+    // XPS Foam Board Sheets estimation
+    let totalXpsSheets = 0;
+    state.rooms.forEach(room => {
+        if (room.foamBoard) {
+            const extPerim = getRoomExteriorPerimeter(room);
+            const wallArea = extPerim * room.h;
+            let deductions = 0;
+            room.openings.forEach(op => { deductions += op.w * op.h; });
+            const netWallArea = Math.max(0, wallArea - deductions);
+            totalXpsSheets += (netWallArea / 32);
+        }
+    });
+
+    // Plumbing BOM (pvc sticks & fittings)
+    const plumbingEst = estimatePlumbingMaterials();
+
+    // Vapor Barrier Liner calculation
+    let totalLinerArea = 0;
+    state.rooms.forEach(room => {
+        let floorArea, perimeter;
+        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+            floorArea = getPolygonArea(room.vertices);
+            perimeter = getPolygonPerimeter(room.vertices);
+        } else {
+            floorArea = room.w * room.l;
+            perimeter = 2 * (room.w + room.l);
+        }
+        
+        let grossWallArea;
+        if (room.type === 'staircase') {
+            grossWallArea = (room.l * room.h) + (room.w * room.h);
+        } else {
+            grossWallArea = perimeter * room.h;
+        }
+        let deductions = 0;
+        room.openings.forEach(op => { deductions += op.w * op.h; });
+        const netWallArea = Math.max(0, grossWallArea - deductions);
+        
+        totalLinerArea += floorArea + netWallArea;
+    });
+
+    state.stanchions.forEach(st => {
+        const level = state.levels.find(l => l.id === st.levelId) || { height: 8 };
+        const room = getRoomAt(st.x, st.y, st.levelId);
+        const postH = room ? room.h : (level.height || 8);
+        
+        let perim = 0;
+        if (st.type === 'round') {
+            perim = 2 * Math.PI * 0.4;
+        } else if (st.type === 'square') {
+            perim = 4 * 0.8;
+        } else if (st.type === 'brick') {
+            perim = 4 * 1.0;
+        }
+        totalLinerArea += perim * postH;
+    });
+
     const printWindow = window.open('', '_blank');
     
     let roomRows = '';
@@ -2890,6 +3229,44 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </tbody>
             </table>
 
+            <h2>5. Project Bill of Materials (BOM) & Estimates</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Material Item</th>
+                        <th>Estimated Quantity</th>
+                        <th>Coverage / Spec Info</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>2" XPS Foam Board Sheets (4' x 8')</strong></td>
+                        <td>${Math.ceil(totalXpsSheets)} sheets</td>
+                        <td>Exposed exterior wall surfaces (minus openings)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>10ft PVC Pipe Sticks</strong></td>
+                        <td>${plumbingEst.sticks} sticks</td>
+                        <td>Discharge lines + Overhead run + Sump riser runs</td>
+                    </tr>
+                    <tr>
+                        <td><strong>90° PVC Elbow fittings</strong></td>
+                        <td>${plumbingEst.elbow90} pcs</td>
+                        <td>Orthogonal turns and Sump riser transitions</td>
+                    </tr>
+                    <tr>
+                        <td><strong>45° PVC Elbow fittings</strong></td>
+                        <td>${plumbingEst.elbow45} pcs</td>
+                        <td>Snapping offset angle connections</td>
+                    </tr>
+                    <tr class="totals">
+                        <td>Vapor Barrier Liner Area</td>
+                        <td>${totalLinerArea.toFixed(0)} sq ft</td>
+                        <td>Total floor, wall, and stanchion column surface coverage</td>
+                    </tr>
+                </tbody>
+            </table>
+
             <div class="footer">
                 Report generated via RoomFlow Sketcher. All measurements are estimates.
             </div>
@@ -2967,7 +3344,8 @@ function finishCustomRoomDrawing() {
         h: 8, // Standard 8 ft height
         color: '#a855f7', // Custom purple
         openings: [],
-        vertices: relativeVertices
+        vertices: relativeVertices,
+        foamBoard: false
     };
 
     state.rooms.push(newRoom);

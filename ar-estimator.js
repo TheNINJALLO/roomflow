@@ -289,7 +289,8 @@ finishBtn.addEventListener('click', () => {
             x: centerX,
             y: centerY,
             color: '#ec4899',
-            openings: []
+            openings: [],
+            foamBoard: false
         };
 
         state.rooms.push(newRoom);
