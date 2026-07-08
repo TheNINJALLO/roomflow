@@ -1175,6 +1175,7 @@ canvas.addEventListener('mousedown', (e) => {
         state.sketchRedoVertices = [];
         const btnRedoWall = document.getElementById('btn-draw-redo-wall');
         if (btnRedoWall) btnRedoWall.disabled = true;
+        updateHistoryButtons();
         draw();
         return;
     }
@@ -2099,6 +2100,7 @@ function toggleDrawWallsMode() {
         state.lastMouseWorldX = snap(canvasCenterX);
         state.lastMouseWorldY = snap(canvasCenterY);
     }
+    updateHistoryButtons();
     draw();
 }
 
@@ -2147,10 +2149,12 @@ function finishCustomRoomDrawing() {
     // Reset sketch state
     state.drawMode = null;
     state.sketchVertices = [];
+    state.sketchRedoVertices = [];
     document.getElementById('custom-wall-drawer-panel').classList.add('hidden');
     document.getElementById('btn-draw-walls-mode').classList.remove('active');
     document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
 
+    updateHistoryButtons();
     draw();
     updateGlobalStats();
     if (window.sync3D) window.sync3D();
@@ -2246,6 +2250,7 @@ function addSketchWallSegment() {
     state.lastMouseWorldX = snapX;
     state.lastMouseWorldY = snapY;
 
+    updateHistoryButtons();
     draw();
 }
 
@@ -2262,6 +2267,7 @@ function undoLastSketchWall() {
     } else {
         alert('Nothing to undo.');
     }
+    updateHistoryButtons();
     draw();
 }
 
@@ -2274,6 +2280,7 @@ function redoLastSketchWall() {
         
         const btnRedoWall = document.getElementById('btn-draw-redo-wall');
         if (btnRedoWall) btnRedoWall.disabled = (state.sketchRedoVertices.length === 0);
+        updateHistoryButtons();
         draw();
     }
 }
@@ -2318,11 +2325,20 @@ function saveHistoryState() {
 function updateHistoryButtons() {
     const btnUndo = document.getElementById('btn-undo');
     const btnRedo = document.getElementById('btn-redo');
-    if (btnUndo) btnUndo.disabled = (state.undoStack.length === 0);
-    if (btnRedo) btnRedo.disabled = (state.redoStack.length === 0);
+    if (state.drawMode === 'custom') {
+        if (btnUndo) btnUndo.disabled = (state.sketchVertices.length <= 1);
+        if (btnRedo) btnRedo.disabled = (state.sketchRedoVertices.length === 0);
+    } else {
+        if (btnUndo) btnUndo.disabled = (state.undoStack.length === 0);
+        if (btnRedo) btnRedo.disabled = (state.redoStack.length === 0);
+    }
 }
 
 function undo() {
+    if (state.drawMode === 'custom') {
+        undoLastSketchWall();
+        return;
+    }
     if (state.undoStack.length === 0) return;
     
     const current = getHistorySnapshot();
@@ -2344,6 +2360,10 @@ function undo() {
 window.undo = undo;
 
 function redo() {
+    if (state.drawMode === 'custom') {
+        redoLastSketchWall();
+        return;
+    }
     if (state.redoStack.length === 0) return;
     
     const current = getHistorySnapshot();
