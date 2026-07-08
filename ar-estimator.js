@@ -120,6 +120,11 @@ function updateARDisplay() {
         segmentDisplay.innerText = "0' 0\"";
         finishBtn.disabled = true;
     }
+
+    const angleEl = document.getElementById('ar-angle');
+    if (angleEl) {
+        angleEl.innerText = `${Math.round(deviceYaw)}°${isUsingManualYaw ? ' (M)' : ''}`;
+    }
 }
 
 // Calculate the 2D world coordinate of the current target point
@@ -136,12 +141,38 @@ function getTargetCoordinates() {
 
 // Tracking orientation yaw
 let deviceYaw = 0;
+let manualYaw = 0;
+let isUsingManualYaw = false;
+
 window.addEventListener('deviceorientation', (e) => {
     // alpha: rotation around z axis (0-360 compass direction)
-    if (e.alpha !== null) {
+    if (e.alpha !== null && !isUsingManualYaw) {
         deviceYaw = e.alpha;
+        updateARDisplay();
     }
 });
+
+// Swipe left/right on camera view to manually adjust direction if basement walls block the compass
+let touchStartX = 0;
+videoEl.addEventListener('touchstart', (e) => {
+    touchStartX = e.touches[0].clientX;
+}, { passive: true });
+
+videoEl.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 1) {
+        const touchX = e.touches[0].clientX;
+        const deltaX = touchX - touchStartX;
+        touchStartX = touchX;
+        
+        isUsingManualYaw = true;
+        // 1 pixel drag = 0.5 degrees rotation
+        manualYaw = (deviceYaw - deltaX * 0.5) % 360;
+        if (manualYaw < 0) manualYaw += 360;
+        deviceYaw = manualYaw;
+        
+        calculateDistance();
+    }
+}, { passive: true });
 
 // Mock simulation of rotation for desktop testing (holding shift + moving mouse rotates view)
 let mockAngle = 0;
