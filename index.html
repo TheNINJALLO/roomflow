@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=30">
+    <link rel="stylesheet" href="styles.css?v=31">
 </head>
 <body>
     <div id="app-container">
@@ -579,6 +579,35 @@
                         <span class="metric-label" style="font-weight:700; color:#facc15;">NB1 Coating</span>
                         <span class="metric-value" id="total-nb1-bags" style="font-weight:700; color:#facc15;">0 bags (0 sq ft)</span>
                     </div>
+                    
+                    <!-- Sump Installation Fittings Pack -->
+                    <div id="sump-fittings-group" class="hidden" style="margin-top: 0.75rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+                        <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--accent-teal); font-weight: 700; margin-bottom: 0.4rem; letter-spacing: 0.05em;">Sump Install Package</div>
+                        <div class="metric-row summary-row">
+                            <span class="metric-label">3" to 2" Bushing</span>
+                            <span class="metric-value" id="total-bushing-3-2">0</span>
+                        </div>
+                        <div class="metric-row summary-row">
+                            <span class="metric-label">3" x 3" x 2" T-Fitting</span>
+                            <span class="metric-value" id="total-tee-3-3-2">0</span>
+                        </div>
+                        <div class="metric-row summary-row">
+                            <span class="metric-label">3" 90° PVC Elbow</span>
+                            <span class="metric-value" id="total-elbow-3-90">0</span>
+                        </div>
+                        <div class="metric-row summary-row">
+                            <span class="metric-label">1-1/2" Screw Adapter</span>
+                            <span class="metric-value" id="total-screw-adapter">0</span>
+                        </div>
+                        <div class="metric-row summary-row">
+                            <span class="metric-label">2" PVC Check Valve</span>
+                            <span class="metric-value" id="total-check-valve">0</span>
+                        </div>
+                        <div class="metric-row summary-row">
+                            <span class="metric-label">2" PVC Y-Fitting</span>
+                            <span class="metric-value" id="total-y-fitting">0</span>
+                        </div>
+                    </div>
                 </div>
             </aside>
         </main>
@@ -614,8 +643,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=30"></script>
-    <script src="renderer3d.js?v=30"></script>
-    <script src="ar-estimator.js?v=30"></script>
+    <script src="app.js?v=31"></script>
+    <script src="renderer3d.js?v=31"></script>
+    <script src="ar-estimator.js?v=31"></script>
 </body>
 </html>

@@ -758,6 +758,21 @@ function estimatePlumbingMaterials() {
     let elbow90 = 0;
     let elbow45 = 0;
     
+    let sumpCount = state.sumpPumps.length;
+    let bushing3to2 = sumpCount * 1;
+    let tee3x3x2 = sumpCount * 1;
+    let elbow3in90 = sumpCount * 1;
+    let screwAdapter1_5 = sumpCount * 2;
+    let checkValve2 = sumpCount * 2;
+    let yFitting2 = sumpCount * 1;
+    
+    // Add sump pump specific 2" elbows and 45s:
+    // - 2 x 2" 90s from package
+    // - 1 x 2" 90 where pvc goes up out of the sump
+    // - 1 x 2" 45 from package
+    elbow90 += sumpCount * 3;
+    elbow45 += sumpCount * 1;
+    
     // 1. Calculate PVC and Drain Tile footage
     state.dischargeLines.forEach(dl => { totalDrainTile += dl.length; });
     state.interiorPipes.forEach(ip => { totalFootage += ip.length; });
@@ -768,7 +783,7 @@ function estimatePlumbingMaterials() {
         const roomH = room ? room.h : (level.height || 8);
         totalFootage += (roomH - 0.2);
         
-        // 1 x 90-degree elbow for riser top to horizontal run
+        // 1 x 90-degree elbow for riser top to horizontal run connection
         elbow90 += 1;
     });
     
@@ -836,7 +851,18 @@ function estimatePlumbingMaterials() {
     }
     
     const sticks = Math.ceil(totalFootage / 10);
-    return { sticks, elbow90, elbow45, drainTile: totalDrainTile };
+    return {
+        sticks,
+        elbow90,
+        elbow45,
+        drainTile: totalDrainTile,
+        bushing3to2,
+        tee3x3x2,
+        elbow3in90,
+        screwAdapter1_5,
+        checkValve2,
+        yFitting2
+    };
 }
 
 function updateGlobalStats() {
@@ -921,6 +947,30 @@ function updateGlobalStats() {
 
     const tileText = document.getElementById('total-drain-tile');
     if (tileText) tileText.innerText = `${plumbingEst.drainTile.toFixed(1)} ft`;
+
+    // Populate and show/hide Sump Install Fittings Package
+    const sumpFittingsGroup = document.getElementById('sump-fittings-group');
+    if (sumpFittingsGroup) {
+        if (state.sumpPumps.length > 0) {
+            sumpFittingsGroup.classList.remove('hidden');
+            
+            const bText = document.getElementById('total-bushing-3-2');
+            const tText = document.getElementById('total-tee-3-3-2');
+            const e3Text = document.getElementById('total-elbow-3-90');
+            const sText = document.getElementById('total-screw-adapter');
+            const cText = document.getElementById('total-check-valve');
+            const yText = document.getElementById('total-y-fitting');
+            
+            if (bText) bText.innerText = plumbingEst.bushing3to2;
+            if (tText) tText.innerText = plumbingEst.tee3x3x2;
+            if (e3Text) e3Text.innerText = plumbingEst.elbow3in90;
+            if (sText) sText.innerText = plumbingEst.screwAdapter1_5;
+            if (cText) cText.innerText = plumbingEst.checkValve2;
+            if (yText) yText.innerText = plumbingEst.yFitting2;
+        } else {
+            sumpFittingsGroup.classList.add('hidden');
+        }
+    }
 
     // Vapor Barrier Liner calculation
     let totalLinerArea = 0;
@@ -3872,6 +3922,48 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                         <td>${nb1BagsCount} bags (${totalNb1Area.toFixed(0)} sq ft)</td>
                         <td>Cementitious waterproofing/reinforcement wall coating (1 bag covers 8 sq ft)</td>
                     </tr>
+                    ${plumbingEst.bushing3to2 > 0 ? `
+                    <tr>
+                        <td><strong>3" to 2" Bushing</strong></td>
+                        <td>${plumbingEst.bushing3to2} pcs</td>
+                        <td>Sump pump discharge connection</td>
+                    </tr>
+                    ` : ''}
+                    ${plumbingEst.tee3x3x2 > 0 ? `
+                    <tr>
+                        <td><strong>3" x 3" x 2" T-Fitting</strong></td>
+                        <td>${plumbingEst.tee3x3x2} pcs</td>
+                        <td>Sump pump discharge connection</td>
+                    </tr>
+                    ` : ''}
+                    ${plumbingEst.elbow3in90 > 0 ? `
+                    <tr>
+                        <td><strong>3" 90° PVC Elbow</strong></td>
+                        <td>${plumbingEst.elbow3in90} pcs</td>
+                        <td>Sump pump discharge connection</td>
+                    </tr>
+                    ` : ''}
+                    ${plumbingEst.screwAdapter1_5 > 0 ? `
+                    <tr>
+                        <td><strong>1-1/2" Screw Adapter</strong></td>
+                        <td>${plumbingEst.screwAdapter1_5} pcs</td>
+                        <td>Sump pump connection adapter</td>
+                    </tr>
+                    ` : ''}
+                    ${plumbingEst.checkValve2 > 0 ? `
+                    <tr>
+                        <td><strong>2" PVC Check Valve</strong></td>
+                        <td>${plumbingEst.checkValve2} pcs</td>
+                        <td>Prevents backflow into the sump pump basin</td>
+                    </tr>
+                    ` : ''}
+                    ${plumbingEst.yFitting2 > 0 ? `
+                    <tr>
+                        <td><strong>2" PVC Y-Fitting</strong></td>
+                        <td>${plumbingEst.yFitting2} pcs</td>
+                        <td>Sump pump discharge assembly</td>
+                    </tr>
+                    ` : ''}
                     <tr class="totals">
                         <td>Vapor Barrier Liner Area</td>
                         <td>${totalLinerArea.toFixed(0)} sq ft</td>
