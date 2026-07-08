@@ -2197,8 +2197,8 @@ function fitLayoutToCanvas() {
     const boxCenterX = boxX + boxW / 2;
     const boxCenterY = boxY + boxH / 2;
     
-    state.offsetX = canvas.width / 2 - boxCenterX * state.scale;
-    state.offsetY = canvas.height / 2 - boxCenterY * state.scale;
+    state.offsetX = -boxCenterX * state.scale;
+    state.offsetY = -boxCenterY * state.scale;
     
     return { scale: originalScale, offsetX: originalOffsetX, offsetY: originalOffsetY };
 }
