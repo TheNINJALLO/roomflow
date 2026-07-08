@@ -1599,11 +1599,25 @@ canvas.addEventListener('mousemove', (e) => {
         const ip = state.interiorPipes.find(l => l.id === state.draggedInteriorPipeHandle.id);
         if (ip) {
             if (state.draggedInteriorPipeHandle.point === 'p1') {
-                ip.x1 = snap(wx);
-                ip.y1 = snap(wy);
+                const dx = ip.x2 - wx;
+                const dy = ip.y2 - wy;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const angle = Math.atan2(dy, dx);
+                const deg = angle * 180 / Math.PI;
+                const snappedDeg = Math.round(deg / 45) * 45;
+                const snappedRad = snappedDeg * Math.PI / 180;
+                ip.x1 = snap(ip.x2 - dist * Math.cos(snappedRad));
+                ip.y1 = snap(ip.y2 - dist * Math.sin(snappedRad));
             } else if (state.draggedInteriorPipeHandle.point === 'p2') {
-                ip.x2 = snap(wx);
-                ip.y2 = snap(wy);
+                const dx = wx - ip.x1;
+                const dy = wy - ip.y1;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                const angle = Math.atan2(dy, dx);
+                const deg = angle * 180 / Math.PI;
+                const snappedDeg = Math.round(deg / 45) * 45;
+                const snappedRad = snappedDeg * Math.PI / 180;
+                ip.x2 = snap(ip.x1 + dist * Math.cos(snappedRad));
+                ip.y2 = snap(ip.y1 + dist * Math.sin(snappedRad));
             } else if (state.draggedInteriorPipeHandle.point === 'move') {
                 ip.x1 = snap(wx - state.initialMouseOffset.x1);
                 ip.y1 = snap(wy - state.initialMouseOffset.y1);

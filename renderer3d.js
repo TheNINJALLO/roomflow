@@ -254,9 +254,12 @@ window.sync3D = function() {
     state.interiorPipes.forEach(ip => {
         const level = state.levels.find(l => l.id === ip.levelId) || { elevation: 0, height: 8 };
         const elevation = level.elevation || 0;
-        const roomH = level.height || 8;
         
-        // Route horizontal run at overhead ceiling height (height - 0.5ft)
+        // Find room containing start point
+        const containingRoom = getRoomAt(ip.x1, ip.y1, ip.levelId);
+        const roomH = containingRoom ? containingRoom.h : (level.height || 8);
+        
+        // Route horizontal run at overhead ceiling height (room height - 0.5ft)
         const pipeY = elevation + (roomH - 0.5);
         build3DPipe(ip.x1, pipeY, ip.y1, ip.x2, pipeY, ip.y2, 0.08, '#f8fafc', scene);
     });
@@ -389,6 +392,26 @@ function build3DPipe(x1, y1, z1, x2, y2, z2, radius, color, sceneGroup) {
     
     sceneGroup.add(mesh);
     roomMeshes.push(mesh);
+}
+
+// Helper: Checks which room a world coordinate is in (supports custom polygons)
+function getRoomAt(x, y, levelId) {
+    return state.rooms.find(room => {
+        if (room.levelId !== levelId) return false;
+        if (room.type === 'custom' && room.vertices) {
+            let inside = false;
+            for (let i = 0, j = room.vertices.length - 1; i < room.vertices.length; j = i++) {
+                const xi = room.x + room.vertices[i].x, yi = room.y + room.vertices[i].y;
+                const xj = room.x + room.vertices[j].x, yj = room.y + room.vertices[j].y;
+                const intersect = ((yi > y) !== (yj > y))
+                    && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+                if (intersect) inside = !inside;
+            }
+            return inside;
+        } else {
+            return x >= room.x && x <= room.x + room.w && y >= room.y && y <= room.y + room.l;
+        }
+    });
 }
 
 // 3D Specific UI Controls
