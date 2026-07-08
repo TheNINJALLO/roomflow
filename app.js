@@ -109,6 +109,11 @@ function getRoomAt(x, y, levelId) {
     });
 }
 
+// Print-safe color selector helper
+function c(darkColor, printColor) {
+    return state.isPrintingMode ? printColor : darkColor;
+}
+
 // Snap value to nearest grid size
 function snap(val) {
     return Math.round(val / state.snapGridSize) * state.snapGridSize;
@@ -139,6 +144,8 @@ function addRoom(type) {
     };
     if (preset.steps) {
         newRoom.steps = preset.steps;
+        newRoom.stairOrientation = 'N';
+        newRoom.stairDirection = 'up';
     }
     state.rooms.push(newRoom);
     selectItem('room', newRoom.id);
@@ -341,11 +348,20 @@ function selectItem(type, id) {
             }
             
             const stepsGroup = document.getElementById('room-steps-group');
+            const stairProperties = document.getElementById('room-staircase-properties');
             if (room.type === 'staircase') {
                 stepsGroup.classList.remove('hidden');
+                stairProperties.classList.remove('hidden');
                 document.getElementById('room-steps-input').value = room.steps || 12;
+                
+                if (!room.stairOrientation) room.stairOrientation = 'N';
+                if (!room.stairDirection) room.stairDirection = 'up';
+                
+                document.getElementById('stair-orientation-select').value = room.stairOrientation;
+                document.getElementById('stair-direction-select').value = room.stairDirection;
             } else {
                 stepsGroup.classList.add('hidden');
+                stairProperties.classList.add('hidden');
             }
             
             btnAddDoor.disabled = false;
@@ -993,14 +1009,15 @@ function getDistanceToSegment(px, py, x1, y1, x2, y2) {
 
 // --- DRAWING ENGINE ---
 function draw(isPrinting = false) {
+    state.isPrintingMode = isPrinting;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     if (isPrinting) {
-        ctx.fillStyle = '#0d111a';
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     
-    if (state.showGrid) {
+    if (state.showGrid && !isPrinting) {
         drawGrid();
     }
     
@@ -1200,7 +1217,7 @@ function draw(isPrinting = false) {
         }
         
         // Outer ring
-        ctx.fillStyle = 'rgba(16, 22, 35, 0.9)';
+        ctx.fillStyle = c('rgba(16, 22, 35, 0.9)', '#e2e8f0');
         ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#f59e0b';
         ctx.lineWidth = isSelected ? 3 : 2;
         ctx.beginPath();
@@ -1212,7 +1229,7 @@ function draw(isPrinting = false) {
         ctx.shadowBlur = 0;
         
         // Inner dotted ring
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.strokeStyle = c('rgba(255, 255, 255, 0.3)', 'rgba(0, 0, 0, 0.3)');
         ctx.lineWidth = 1;
         ctx.setLineDash([2, 2]);
         ctx.beginPath();
@@ -1221,14 +1238,14 @@ function draw(isPrinting = false) {
         ctx.setLineDash([]);
         
         // Label
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = c('#ffffff', '#0f172a');
         ctx.font = '700 8px var(--font-sans)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText('SP', cx, cy);
         
         // Floating label
-        ctx.fillStyle = isSelected ? varColor('--accent-teal') : varColor('--text-muted');
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : c(varColor('--text-muted'), '#475569');
         ctx.font = '600 9px var(--font-sans)';
         ctx.fillText(sp.name, cx, cy - radius - 6);
     });
@@ -1260,7 +1277,7 @@ function draw(isPrinting = false) {
         ctx.stroke();
         
         // Internal Crosshair X
-        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(255, 255, 255, 0.4)';
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : c('rgba(255, 255, 255, 0.4)', 'rgba(0, 0, 0, 0.4)');
         ctx.lineWidth = 1;
         ctx.beginPath();
         if (st.type === 'square' || st.type === 'brick') {
@@ -1278,7 +1295,7 @@ function draw(isPrinting = false) {
         ctx.stroke();
         
         // Floating label
-        ctx.fillStyle = isSelected ? varColor('--accent-teal') : varColor('--text-muted');
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : c(varColor('--text-muted'), '#475569');
         ctx.font = '600 9px var(--font-sans)';
         ctx.textAlign = 'center';
         ctx.fillText(st.name, cx, cy - radius - 6);
@@ -1335,10 +1352,10 @@ function draw(isPrinting = false) {
         const label = `${bm.label}: ${bm.length.toFixed(1)} ft`;
         ctx.font = '600 10px var(--font-mono)';
         const textWidth = ctx.measureText(label).width;
-        ctx.fillStyle = 'rgba(10, 13, 20, 0.8)';
+        ctx.fillStyle = c('rgba(10, 13, 20, 0.8)', '#ffffff');
         ctx.fillRect(-textWidth/2 - 4, -14, textWidth + 8, 14);
         
-        ctx.fillStyle = isSelected ? varColor('--accent-teal') : '#ffffff';
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : c('#ffffff', '#0f172a');
         ctx.textAlign = 'center';
         ctx.fillText(label, 0, -4);
         ctx.restore();
@@ -1395,7 +1412,7 @@ function drawJoists(room) {
     ctx.clip();
     
     // Draw parallel joist lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.strokeStyle = c('rgba(255, 255, 255, 0.08)', 'rgba(0, 0, 0, 0.15)');
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
     
@@ -1510,7 +1527,7 @@ function drawRoom(room) {
         ctx.fill();
         drawJoists(room);
 
-        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(255, 255, 255, 0.3)';
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : c('rgba(255, 255, 255, 0.3)', '#1e293b');
         ctx.lineWidth = isSelected ? 3 : 1.5;
         ctx.stroke();
 
@@ -1520,14 +1537,14 @@ function drawRoom(room) {
         const avgX = room.x + sumX / room.vertices.length;
         const avgY = room.y + sumY / room.vertices.length;
 
-        ctx.fillStyle = isSelected ? '#ffffff' : varColor('--text-muted');
+        ctx.fillStyle = isSelected ? c('#ffffff', '#0f172a') : c(varColor('--text-muted'), '#475569');
         ctx.font = `600 13px var(--font-sans)`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(room.name, toCanvasX(avgX), toCanvasY(avgY));
 
         // Draw wall segment lengths
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillStyle = c('rgba(255, 255, 255, 0.6)', '#334155');
         ctx.font = `500 9px var(--font-mono)`;
         for (let i = 0; i < room.vertices.length; i++) {
             const v1 = room.vertices[i];
@@ -1573,64 +1590,104 @@ function drawRoom(room) {
     ctx.fillStyle = room.color + '15';
     ctx.fillRect(rx, ry, rw, rl);
     drawJoists(room);
-
     // Draw staircase steps
     if (room.type === 'staircase') {
         const stepCount = room.steps || 12;
-        const stepSize = rl / stepCount;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+        const orient = room.stairOrientation || 'N';
+        const dirText = (room.stairDirection || 'up') === 'down' ? 'DN' : 'UP';
+        
+        ctx.strokeStyle = c('rgba(255, 255, 255, 0.15)', 'rgba(0, 0, 0, 0.25)');
         ctx.lineWidth = 1;
-        for (let i = 1; i < stepCount; i++) {
-            ctx.beginPath();
-            ctx.moveTo(rx, ry + i * stepSize);
-            ctx.lineTo(rx + rw, ry + i * stepSize);
-            ctx.stroke();
+        
+        if (orient === 'N' || orient === 'S') {
+            // Steps are horizontal
+            const stepSize = rl / stepCount;
+            for (let i = 1; i < stepCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(rx, ry + i * stepSize);
+                ctx.lineTo(rx + rw, ry + i * stepSize);
+                ctx.stroke();
+            }
+        } else {
+            // Steps are vertical
+            const stepSize = rw / stepCount;
+            for (let i = 1; i < stepCount; i++) {
+                ctx.beginPath();
+                ctx.moveTo(rx + i * stepSize, ry);
+                ctx.lineTo(rx + i * stepSize, ry + rl);
+                ctx.stroke();
+            }
         }
         
+        // Draw directional climb arrow
         ctx.strokeStyle = varColor('--accent-teal') || '#00ffd1';
         ctx.lineWidth = 2;
         ctx.fillStyle = varColor('--accent-teal') || '#00ffd1';
         
-        const arrowX = rx + rw / 2;
-        const arrowStart = ry + rl * 0.8;
-        const arrowEnd = ry + rl * 0.2;
+        let startX, startY, endX, endY, head1X, head1Y, head2X, head2Y, textX, textY;
+        
+        if (orient === 'N') {
+            startX = rx + rw / 2; startY = ry + rl * 0.8;
+            endX = rx + rw / 2; endY = ry + rl * 0.2;
+            head1X = endX - 5; head1Y = endY + 8;
+            head2X = endX + 5; head2Y = endY + 8;
+            textX = endX; textY = endY - 10;
+        } else if (orient === 'S') {
+            startX = rx + rw / 2; startY = ry + rl * 0.2;
+            endX = rx + rw / 2; endY = ry + rl * 0.8;
+            head1X = endX - 5; head1Y = endY - 8;
+            head2X = endX + 5; head2Y = endY - 8;
+            textX = endX; textY = endY + 12;
+        } else if (orient === 'E') {
+            startX = rx + rw * 0.2; startY = ry + rl / 2;
+            endX = rx + rw * 0.8; endY = ry + rl / 2;
+            head1X = endX - 8; head1Y = endY - 5;
+            head2X = endX - 8; head2Y = endY + 5;
+            textX = endX + 12; textY = endY;
+        } else { // 'W'
+            startX = rx + rw * 0.8; startY = ry + rl / 2;
+            endX = rx + rw * 0.2; endY = ry + rl / 2;
+            head1X = endX + 8; head1Y = endY - 5;
+            head2X = endX + 8; head2Y = endY + 5;
+            textX = endX - 12; textY = endY;
+        }
         
         ctx.beginPath();
-        ctx.moveTo(arrowX, arrowStart);
-        ctx.lineTo(arrowX, arrowEnd);
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
         ctx.stroke();
         
         ctx.beginPath();
-        ctx.moveTo(arrowX - 5, arrowEnd + 8);
-        ctx.lineTo(arrowX, arrowEnd);
-        ctx.lineTo(arrowX + 5, arrowEnd + 8);
+        ctx.moveTo(head1X, head1Y);
+        ctx.lineTo(endX, endY);
+        ctx.lineTo(head2X, head2Y);
         ctx.stroke();
-
-        ctx.fillStyle = varColor('--accent-teal') || '#00ffd1';
+        
         ctx.font = '600 9px var(--font-sans)';
         ctx.textAlign = 'center';
-        ctx.fillText('UP', arrowX, arrowEnd - 10);
-    }
+        ctx.textBaseline = 'middle';
+        ctx.fillText(dirText, textX, textY);
+    }}
 
     // Room Outline
-    ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(255, 255, 255, 0.3)';
+    ctx.strokeStyle = isSelected ? varColor('--accent-teal') : c('rgba(255, 255, 255, 0.3)', '#1e293b');
     ctx.lineWidth = isSelected ? 3 : 1.5;
     ctx.strokeRect(rx, ry, rw, rl);
 
     // Label
-    ctx.fillStyle = isSelected ? '#ffffff' : varColor('--text-muted');
+    ctx.fillStyle = isSelected ? c('#ffffff', '#0f172a') : c(varColor('--text-muted'), '#475569');
     ctx.font = `600 13px var(--font-sans)`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(room.name, rx + rw / 2, ry + rl / 2 - 8);
 
     // Sublabel
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.fillStyle = c('rgba(255, 255, 255, 0.5)', '#334155');
     ctx.font = `500 11px var(--font-mono)`;
     ctx.fillText(`${room.w}' x ${room.l}'`, rx + rw / 2, ry + rl / 2 + 10);
 
     // Wall measurements
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+    ctx.fillStyle = c('rgba(255, 255, 255, 0.6)', '#334155');
     ctx.font = `500 10px var(--font-mono)`;
     
     // North wall
@@ -2776,6 +2833,30 @@ document.getElementById('room-foam-board-checkbox').addEventListener('change', (
     }
 });
 
+// Staircase orientation change
+document.getElementById('stair-orientation-select').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room && room.type === 'staircase') {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.stairOrientation = e.target.value;
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+// Staircase slope type change
+document.getElementById('stair-direction-select').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room && room.type === 'staircase') {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.stairDirection = e.target.value;
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
 // Stanchion listeners
 document.getElementById('stanchion-name-input').addEventListener('input', (e) => {
     if (!state.selectedStanchionId) return;
@@ -3316,11 +3397,13 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
                 th { background-color: #f3f4f6; color: #1e3a8a; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
                 tr.totals { font-weight: 700; background-color: #eff6ff; }
-                .layout-preview { text-align: center; margin-bottom: 30px; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; background-color: #0d111a; }
-                .layout-preview img { max-width: 100%; max-height: 420px; object-fit: contain; }
+                .layout-preview { text-align: center; margin-bottom: 30px; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; background-color: #ffffff; }
+                .layout-preview img { max-width: 100%; max-height: 70vh; object-fit: contain; }
                 .footer { margin-top: 50px; text-align: center; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 20px; }
                 @media print {
                     button { display: none; }
+                    body { padding: 20px; }
+                    h2 { page-break-before: always; break-before: page; }
                 }
                 .print-btn { background-color: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; float: right; }
                 .print-btn:hover { background-color: #2563eb; }
@@ -3939,10 +4022,207 @@ window.deleteMeasurement = function(idx) {
 
 window.updateMeasurementsSidebar = updateMeasurementsSidebar;
 
+// --- JOB DATABASE ENGINE ---
+// Open/close jobs database
+document.getElementById('btn-jobs').addEventListener('click', () => {
+    document.getElementById('jobs-modal').classList.remove('hidden');
+    renderJobsList();
+});
+
+document.getElementById('btn-close-jobs').addEventListener('click', () => {
+    document.getElementById('jobs-modal').classList.add('hidden');
+});
+
+// Save job helper
+document.getElementById('btn-save-job-submit').addEventListener('click', () => {
+    const input = document.getElementById('job-name-input');
+    const name = input.value.trim();
+    if (!name) {
+        alert("Please enter a job name!");
+        return;
+    }
+    
+    const projectData = {
+        rooms: state.rooms,
+        sumpPumps: state.sumpPumps,
+        dischargeLines: state.dischargeLines,
+        interiorPipes: state.interiorPipes,
+        stanchions: state.stanchions,
+        mainBeams: state.mainBeams,
+        currentLevelId: state.currentLevelId,
+        capturedMeasurements: state.capturedMeasurements || []
+    };
+    
+    let jobs = {};
+    try {
+        const stored = localStorage.getItem('roomflow_jobs');
+        if (stored) jobs = JSON.parse(stored);
+    } catch(e) {
+        console.error(e);
+    }
+    
+    jobs[name] = projectData;
+    localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+    
+    input.value = '';
+    renderJobsList();
+});
+
+// Load job from project data structure
+function loadJobData(data) {
+    if (!data) return;
+    state.rooms = data.rooms || [];
+    state.sumpPumps = data.sumpPumps || [];
+    state.dischargeLines = data.dischargeLines || [];
+    state.interiorPipes = data.interiorPipes || [];
+    state.stanchions = data.stanchions || [];
+    state.mainBeams = data.mainBeams || [];
+    state.currentLevelId = data.currentLevelId || 'basement';
+    state.capturedMeasurements = data.capturedMeasurements || [];
+    
+    state.rooms.forEach(r => { if (!r.levelId) r.levelId = 'basement'; });
+    state.sumpPumps.forEach(sp => { if (!sp.levelId) sp.levelId = 'basement'; });
+    state.dischargeLines.forEach(dl => { if (!dl.levelId) dl.levelId = 'basement'; });
+    state.interiorPipes.forEach(ip => { if (!ip.levelId) ip.levelId = 'basement'; });
+    state.stanchions.forEach(st => { if (!st.levelId) st.levelId = 'basement'; });
+    state.mainBeams.forEach(bm => { if (!bm.levelId) bm.levelId = 'basement'; });
+    
+    const levelSelect = document.getElementById('level-select');
+    if (levelSelect) levelSelect.value = state.currentLevelId;
+    
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+    
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+}
+
+// Render jobs list helper
+function renderJobsList() {
+    const container = document.getElementById('jobs-list-container');
+    if (!container) return;
+    
+    let jobs = {};
+    try {
+        const stored = localStorage.getItem('roomflow_jobs');
+        if (stored) jobs = JSON.parse(stored);
+    } catch(e) {
+        console.error(e);
+    }
+    
+    const keys = Object.keys(jobs);
+    if (keys.length === 0) {
+        container.innerHTML = `<div style="text-align: center; padding: 1.5rem; color: #64748b; font-size: 0.85rem;">No jobs saved yet</div>`;
+        return;
+    }
+    
+    container.innerHTML = '';
+    keys.forEach(name => {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'center';
+        row.style.padding = '0.6rem 0.75rem';
+        row.style.borderBottom = '1px solid rgba(255, 255, 255, 0.05)';
+        row.style.fontSize = '0.85rem';
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = name;
+        nameSpan.style.fontWeight = '500';
+        nameSpan.style.color = '#f1f5f9';
+        nameSpan.style.overflow = 'hidden';
+        nameSpan.style.textOverflow = 'ellipsis';
+        nameSpan.style.whiteSpace = 'nowrap';
+        nameSpan.style.maxWidth = '180px';
+        row.appendChild(nameSpan);
+        
+        const actionsDiv = document.createElement('div');
+        actionsDiv.style.display = 'flex';
+        actionsDiv.style.gap = '0.4rem';
+        
+        const btnLoad = document.createElement('button');
+        btnLoad.innerHTML = `<i data-lucide="folder-open" style="width:14px; height:14px;"></i>`;
+        btnLoad.title = "Load Job";
+        btnLoad.style.padding = '0.3rem';
+        btnLoad.style.background = '#0ea5e9';
+        btnLoad.style.border = 'none';
+        btnLoad.style.borderRadius = '4px';
+        btnLoad.style.color = '#ffffff';
+        btnLoad.style.cursor = 'pointer';
+        btnLoad.addEventListener('click', () => {
+            loadJobData(jobs[name]);
+            document.getElementById('jobs-modal').classList.add('hidden');
+        });
+        actionsDiv.appendChild(btnLoad);
+        
+        const btnShare = document.createElement('button');
+        btnShare.innerHTML = `<i data-lucide="share-2" style="width:14px; height:14px;"></i>`;
+        btnShare.title = "Copy Shareable Link";
+        btnShare.style.padding = '0.3rem';
+        btnShare.style.background = '#10b981';
+        btnShare.style.border = 'none';
+        btnShare.style.borderRadius = '4px';
+        btnShare.style.color = '#ffffff';
+        btnShare.style.cursor = 'pointer';
+        btnShare.addEventListener('click', () => {
+            const jsonStr = JSON.stringify(jobs[name]);
+            const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+            const shareUrl = `${window.location.origin}${window.location.pathname}?job=${encodeURIComponent(base64)}`;
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                alert("Shareable job URL copied to clipboard!");
+            }).catch(err => {
+                console.error("Clipboard copy failed:", err);
+                alert("Share link: " + shareUrl);
+            });
+        });
+        actionsDiv.appendChild(btnShare);
+        
+        const btnDelete = document.createElement('button');
+        btnDelete.innerHTML = `<i data-lucide="trash-2" style="width:14px; height:14px;"></i>`;
+        btnDelete.title = "Delete Job";
+        btnDelete.style.padding = '0.3rem';
+        btnDelete.style.background = '#ef4444';
+        btnDelete.style.border = 'none';
+        btnDelete.style.borderRadius = '4px';
+        btnDelete.style.color = '#ffffff';
+        btnDelete.style.cursor = 'pointer';
+        btnDelete.addEventListener('click', () => {
+            if (confirm(`Are you sure you want to delete job "${name}"?`)) {
+                delete jobs[name];
+                localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+                renderJobsList();
+            }
+        });
+        actionsDiv.appendChild(btnDelete);
+        
+        row.appendChild(actionsDiv);
+        container.appendChild(row);
+    });
+    
+    lucide.createIcons();
+}
+
+// Auto Load job from URL parameter
+function checkUrlJobLoad() {
+    const base64 = new URLSearchParams(window.location.search).get('job');
+    if (base64) {
+        try {
+            const jsonStr = decodeURIComponent(escape(atob(base64)));
+            const data = JSON.parse(jsonStr);
+            loadJobData(data);
+            console.log("Successfully loaded job from URL query parameter!");
+        } catch(e) {
+            console.error("Error parsing job query string:", e);
+        }
+    }
+}
+
 // Initialization
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 lucide.createIcons();
+checkUrlJobLoad();
 
 // --- MOBILE RESPONSIVE DRAWERS & TOUCH EVENTS ---
 const leftSidebar = document.getElementById('left-sidebar');

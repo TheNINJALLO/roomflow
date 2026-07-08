@@ -91,21 +91,43 @@ window.sync3D = function() {
         if (room.type === 'staircase') {
             const stepCount = room.steps || 12;
             const riser = room.h / stepCount;
-            const tread = room.l / stepCount;
+            const orient = room.stairOrientation || 'N';
+            const slope = room.stairDirection || 'up';
+            
             const stepMat = new THREE.MeshStandardMaterial({
                 color: room.color,
                 roughness: 0.75,
                 metalness: 0.1
             });
+            
+            const isHorizontal = (orient === 'N' || orient === 'S');
+            
             for (let i = 0; i < stepCount; i++) {
-                const stepHeight = (i + 1) * riser;
-                const stepGeo = new THREE.BoxGeometry(room.w, stepHeight, tread);
-                const stepMesh = new THREE.Mesh(stepGeo, stepMat);
-                stepMesh.position.set(
-                    room.w / 2,
-                    stepHeight / 2,
-                    (i * tread) + (tread / 2)
-                );
+                let stepHeight;
+                if (slope === 'up') {
+                    stepHeight = (i + 1) * riser;
+                } else {
+                    stepHeight = (stepCount - i) * riser;
+                }
+                
+                let stepGeo, stepMesh;
+                
+                if (isHorizontal) {
+                    const tread = room.l / stepCount;
+                    stepGeo = new THREE.BoxGeometry(room.w, stepHeight, tread);
+                    stepMesh = new THREE.Mesh(stepGeo, stepMat);
+                    
+                    const stepZ = (orient === 'S') ? (i * tread + tread / 2) : ((stepCount - 1 - i) * tread + tread / 2);
+                    stepMesh.position.set(room.w / 2, stepHeight / 2, stepZ);
+                } else {
+                    const tread = room.w / stepCount;
+                    stepGeo = new THREE.BoxGeometry(tread, stepHeight, room.l);
+                    stepMesh = new THREE.Mesh(stepGeo, stepMat);
+                    
+                    const stepX = (orient === 'E') ? (i * tread + tread / 2) : ((stepCount - 1 - i) * tread + tread / 2);
+                    stepMesh.position.set(stepX, stepHeight / 2, room.l / 2);
+                }
+                
                 stepMesh.castShadow = true;
                 stepMesh.receiveShadow = true;
                 roomGroup.add(stepMesh);
@@ -641,6 +663,23 @@ document.getElementById('btn-3d-roof').addEventListener('click', (e) => {
 
 window.get3DScreenshot = function() {
     if (!renderer || !scene || !camera) return null;
+    
+    // Save original settings
+    const origBg = scene.background;
+    const origFog = scene.fog;
+    
+    // Temporarily swap to white print background and clear fog
+    scene.background = new THREE.Color('#ffffff');
+    scene.fog = null;
+    
+    // Render and capture
     renderer.render(scene, camera);
-    return renderer.domElement.toDataURL('image/png');
+    const dataUrl = renderer.domElement.toDataURL('image/png');
+    
+    // Restore settings
+    scene.background = origBg;
+    scene.fog = origFog;
+    renderer.render(scene, camera);
+    
+    return dataUrl;
 };
