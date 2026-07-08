@@ -184,7 +184,7 @@ document.addEventListener('mousemove', (e) => {
         const percentX = e.clientX / window.innerWidth;
         const percentY = e.clientY / window.innerHeight;
         
-        devicePitch = 15 + (1 - percentY) * 60; // 15 to 75 deg pitch
+        devicePitch = 15 + percentY * 60; // 15 to 75 deg pitch
         deviceYaw = percentX * 360; // 0 to 360 yaw
         
         calculateDistance();

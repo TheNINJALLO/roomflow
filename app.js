@@ -1667,7 +1667,7 @@ function drawRoom(room) {
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(dirText, textX, textY);
-    }}
+    }
 
     // Room Outline
     ctx.strokeStyle = isSelected ? varColor('--accent-teal') : c('rgba(255, 255, 255, 0.3)', '#1e293b');
