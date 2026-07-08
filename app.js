@@ -3,6 +3,7 @@ const state = {
     rooms: [],
     sumpPumps: [],
     dischargeLines: [],
+    capturedMeasurements: [],
     selectedRoomId: null,
     selectedSumpPumpId: null,
     selectedDischargeLineId: null,
@@ -1386,7 +1387,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
         customerAddress: document.getElementById('customer-address').value,
         rooms: state.rooms,
         sumpPumps: state.sumpPumps,
-        dischargeLines: state.dischargeLines
+        dischargeLines: state.dischargeLines,
+        capturedMeasurements: state.capturedMeasurements || []
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectData, null, 2));
     const dlAnchorElem = document.createElement('a');
@@ -1411,11 +1413,13 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                 state.rooms = Array.isArray(data) ? data : (data.rooms || []);
                 state.sumpPumps = data.sumpPumps || [];
                 state.dischargeLines = data.dischargeLines || [];
+                state.capturedMeasurements = data.capturedMeasurements || [];
                 document.getElementById('customer-name').value = data.customerName || '';
                 document.getElementById('customer-address').value = data.customerAddress || '';
                 selectItem(null);
                 draw();
                 updateGlobalStats();
+                updateMeasurementsSidebar();
                 if (window.sync3D) window.sync3D();
                 alert('Project loaded.');
             } else {
@@ -1635,6 +1639,91 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     printWindow.document.write(htmlContent);
     printWindow.document.close();
 });
+
+// --- AR CAPTURED MEASUREMENTS MANAGEMENT ---
+function updateMeasurementsSidebar() {
+    const listEl = document.getElementById('ar-measurements-list');
+    if (!listEl) return;
+    
+    if (!state.capturedMeasurements || state.capturedMeasurements.length === 0) {
+        listEl.innerHTML = `<p class="empty-state">No captured distances. Use 'Capture Dist' in camera mode.</p>`;
+        return;
+    }
+    
+    let html = '';
+    state.capturedMeasurements.forEach((val, idx) => {
+        const displayVal = val.toFixed(1);
+        html += `
+            <div class="ar-history-item">
+                <span class="ar-history-val">${displayVal} ft</span>
+                <div class="ar-history-actions">
+                    <button class="ar-history-btn" onclick="applyMeasurement(${val}, 'width')" title="Apply to Room Width">Width</button>
+                    <button class="ar-history-btn" onclick="applyMeasurement(${val}, 'length')" title="Apply to Room Length">Length</button>
+                    <button class="ar-history-btn" onclick="applyMeasurement(${val}, 'discharge')" title="Apply to Pipe">Pipe</button>
+                    <button class="ar-history-btn btn-delete" onclick="deleteMeasurement(${idx})" title="Delete Capture">Delete</button>
+                </div>
+            </div>
+        `;
+    });
+    listEl.innerHTML = html;
+}
+
+window.applyMeasurement = function(val, target) {
+    if (target === 'width') {
+        if (!state.selectedRoomId) {
+            alert('Please select a room on the canvas first!');
+            return;
+        }
+        const room = state.rooms.find(r => r.id === state.selectedRoomId);
+        if (room) {
+            room.w = snap(val);
+            updateRoomEstimates(room);
+            draw();
+            if (window.sync3D) window.sync3D();
+        }
+    } else if (target === 'length') {
+        if (!state.selectedRoomId) {
+            alert('Please select a room on the canvas first!');
+            return;
+        }
+        const room = state.rooms.find(r => r.id === state.selectedRoomId);
+        if (room) {
+            room.l = snap(val);
+            updateRoomEstimates(room);
+            draw();
+            if (window.sync3D) window.sync3D();
+        }
+    } else if (target === 'discharge') {
+        if (!state.selectedDischargeLineId) {
+            alert('Please select a discharge line on the canvas first!');
+            return;
+        }
+        const dl = state.dischargeLines.find(l => l.id === state.selectedDischargeLineId);
+        if (dl) {
+            const dx = dl.x2 - dl.x1;
+            const dy = dl.y2 - dl.y1;
+            const currentLength = Math.sqrt(dx * dx + dy * dy);
+            if (currentLength > 0.1) {
+                const angle = Math.atan2(dy, dx);
+                dl.x2 = dl.x1 + snap(val) * Math.cos(angle);
+                dl.y2 = dl.y1 + snap(val) * Math.sin(angle);
+                dl.length = snap(val);
+                
+                document.getElementById('discharge-len-input').value = dl.length.toFixed(1);
+                draw();
+                updateGlobalStats();
+            }
+        }
+    }
+};
+
+window.deleteMeasurement = function(idx) {
+    state.capturedMeasurements.splice(idx, 1);
+    updateMeasurementsSidebar();
+    if (window.updateARCapturesOverlay) window.updateARCapturesOverlay();
+};
+
+window.updateMeasurementsSidebar = updateMeasurementsSidebar;
 
 // Initialization
 window.addEventListener('resize', resizeCanvas);

@@ -937,3 +937,130 @@ body {
     }
 }
 
+/* AR Captures & Saved Measures Log */
+.ar-captures-container {
+    margin-top: 0.75rem;
+    text-align: center;
+    background-color: rgba(16, 22, 35, 0.75);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 0.4rem 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    backdrop-filter: var(--glass-blur);
+    width: 100%;
+}
+
+.ar-captures-container label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
+.ar-captures-pills {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    flex: 1;
+    padding-left: 0.5rem;
+    align-items: center;
+}
+
+.ar-captures-pills::-webkit-scrollbar {
+    height: 3px;
+}
+
+.ar-captures-pills::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+}
+
+.ar-capture-pill {
+    background-color: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #10b981;
+    padding: 0.2rem 0.5rem;
+    border-radius: 20px;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.empty-pills {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ar-history-container {
+    max-height: 180px;
+    overflow-y: auto;
+    margin-top: 0.5rem;
+    padding-right: 0.25rem;
+}
+
+.ar-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(0, 0, 0, 0.15);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 0.4rem 0.5rem;
+    margin-bottom: 0.4rem;
+    transition: all 0.2s ease;
+}
+
+.ar-history-item:hover {
+    border-color: rgba(59, 130, 246, 0.3);
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.ar-history-val {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--accent-teal);
+}
+
+.ar-history-actions {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.ar-history-btn {
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 0.2rem 0.35rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ar-history-btn:hover {
+    background-color: var(--accent-blue);
+    color: white;
+    border-color: var(--accent-blue);
+}
+
+.ar-history-btn.btn-delete {
+    color: var(--text-muted);
+}
+
+.ar-history-btn.btn-delete:hover {
+    background-color: #ef4444;
+    border-color: #ef4444;
+    color: white;
+}
+
+

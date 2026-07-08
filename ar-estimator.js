@@ -204,9 +204,58 @@ pinBtn.addEventListener('click', () => {
     updateARDisplay();
 });
 
+// Capture Dist Button
+const captureBtn = document.getElementById('btn-ar-capture');
+captureBtn.addEventListener('click', () => {
+    if (activeDistance > 0.1) {
+        if (!state.capturedMeasurements) {
+            state.capturedMeasurements = [];
+        }
+        state.capturedMeasurements.push(activeDistance);
+        
+        // Green feedback blink
+        const originalBg = captureBtn.style.backgroundColor;
+        captureBtn.style.backgroundColor = '#10b981';
+        setTimeout(() => {
+            captureBtn.style.backgroundColor = originalBg;
+        }, 150);
+        
+        updateARDisplay();
+        updateARCapturesOverlay();
+        if (window.updateMeasurementsSidebar) window.updateMeasurementsSidebar();
+    } else {
+        alert('Aim at a floor point first to calculate distance.');
+    }
+});
+
+// Render pills overlay on AR screen
+function updateARCapturesOverlay() {
+    const listEl = document.getElementById('ar-captures-list');
+    if (!listEl) return;
+    
+    if (!state.capturedMeasurements || state.capturedMeasurements.length === 0) {
+        listEl.innerHTML = `<span class="empty-pills">No captures yet</span>`;
+        return;
+    }
+    
+    let html = '';
+    state.capturedMeasurements.forEach(val => {
+        html += `<span class="ar-capture-pill">${val.toFixed(1)} ft</span>`;
+    });
+    listEl.innerHTML = html;
+}
+
+window.updateARCapturesOverlay = updateARCapturesOverlay;
+
 resetBtn.addEventListener('click', () => {
     pinnedPoints = [];
+    if (!state.capturedMeasurements) {
+        state.capturedMeasurements = [];
+    }
+    state.capturedMeasurements = [];
     updateARDisplay();
+    updateARCapturesOverlay();
+    if (window.updateMeasurementsSidebar) window.updateMeasurementsSidebar();
 });
 
 finishBtn.addEventListener('click', () => {
