@@ -18,7 +18,7 @@ function init3D() {
     camera.position.set(30, 40, 50);
 
     // 2. WebGL Renderer
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(container3d.clientWidth, container3d.clientHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -315,8 +315,8 @@ window.sync3D = function() {
                     const testY = my + ny * testDist;
                     const inRoom = getRoomAt(testX, testY, room.levelId);
                     
-                    const mul = (inRoom && inRoom.id === room.id) ? -1 : 1;
-                    const offsetDist = 0.22;
+                    const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                    const offsetDist = 0.12;
                     
                     mesh.position.set(
                         mx + nx * offsetDist * mul,
@@ -343,9 +343,11 @@ window.sync3D = function() {
     // --- UTILITIES & PIPING 3D RENDERING ---
     // 1. Render Sump Pumps
     state.sumpPumps.forEach(sp => {
-        const level = state.levels.find(l => l.id === sp.levelId) || { elevation: 0, height: 8 };
+        const spLevelId = sp.levelId || 'basement';
+        const level = state.levels.find(l => l.id === spLevelId) || { elevation: 0, height: 8 };
         const elevation = level.elevation || 0;
-        const roomH = level.height || 8;
+        const room = getRoomAt(sp.x, sp.y, spLevelId);
+        const roomH = room ? room.h : (level.height || 8);
         
         const sumpGroup = new THREE.Group();
         sumpGroup.position.set(sp.x, elevation, sp.y);
@@ -636,3 +638,9 @@ document.getElementById('btn-3d-roof').addEventListener('click', (e) => {
     e.currentTarget.classList.toggle('active', showCeilings);
     window.sync3D();
 });
+
+window.get3DScreenshot = function() {
+    if (!renderer || !scene || !camera) return null;
+    renderer.render(scene, camera);
+    return renderer.domElement.toDataURL('image/png');
+};

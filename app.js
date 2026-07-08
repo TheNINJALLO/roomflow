@@ -694,15 +694,17 @@ function getRoomSegments(room) {
 // Helper to estimate total PVC sticks and elbow fittings based on pipeline geometry
 function estimatePlumbingMaterials() {
     let totalFootage = 0;
+    let totalDrainTile = 0;
     let elbow90 = 0;
     let elbow45 = 0;
     
-    // 1. Calculate PVC footage
-    state.dischargeLines.forEach(dl => { totalFootage += dl.length; });
+    // 1. Calculate PVC and Drain Tile footage
+    state.dischargeLines.forEach(dl => { totalDrainTile += dl.length; });
     state.interiorPipes.forEach(ip => { totalFootage += ip.length; });
     state.sumpPumps.forEach(sp => {
-        const level = state.levels.find(l => l.id === sp.levelId) || { height: 8 };
-        const room = getRoomAt(sp.x, sp.y, sp.levelId);
+        const spLevelId = sp.levelId || 'basement';
+        const level = state.levels.find(l => l.id === spLevelId) || { height: 8 };
+        const room = getRoomAt(sp.x, sp.y, spLevelId);
         const roomH = room ? room.h : (level.height || 8);
         totalFootage += (roomH - 0.2);
         
@@ -710,13 +712,10 @@ function estimatePlumbingMaterials() {
         elbow90 += 1;
     });
     
-    // 2. Identify pipe-to-pipe connections
+    // 2. Identify pipe-to-pipe connections (only for PVC interior pipes)
     const pipes = [];
-    state.dischargeLines.forEach(dl => {
-        pipes.push({ x1: dl.x1, y1: dl.y1, x2: dl.x2, y2: dl.y2, levelId: dl.levelId });
-    });
     state.interiorPipes.forEach(ip => {
-        pipes.push({ x1: ip.x1, y1: ip.y1, x2: ip.x2, y2: ip.y2, levelId: ip.levelId });
+        pipes.push({ x1: ip.x1, y1: ip.y1, x2: ip.x2, y2: ip.y2, levelId: ip.levelId || 'basement' });
     });
     
     const connectedPairs = new Set();
@@ -777,7 +776,7 @@ function estimatePlumbingMaterials() {
     }
     
     const sticks = Math.ceil(totalFootage / 10);
-    return { sticks, elbow90, elbow45 };
+    return { sticks, elbow90, elbow45, drainTile: totalDrainTile };
 }
 
 function updateGlobalStats() {
@@ -859,6 +858,9 @@ function updateGlobalStats() {
 
     const elbows45Text = document.getElementById('total-pvc-45s');
     if (elbows45Text) elbows45Text.innerText = plumbingEst.elbow45;
+
+    const tileText = document.getElementById('total-drain-tile');
+    if (tileText) tileText.innerText = `${plumbingEst.drainTile.toFixed(1)} ft`;
 
     // Vapor Barrier Liner calculation
     let totalLinerArea = 0;
@@ -1470,10 +1472,27 @@ function drawRoom(room) {
             }
             
             if (!isShared) {
-                ctx.beginPath();
-                ctx.moveTo(toCanvasX(seg.x1), toCanvasY(seg.y1));
-                ctx.lineTo(toCanvasX(seg.x2), toCanvasY(seg.y2));
-                ctx.stroke();
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                const len = Math.sqrt(dx*dx + dy*dy);
+                if (len > 0.05) {
+                    const nx = -dy / len;
+                    const ny = dx / len;
+                    const testDist = 0.5;
+                    const testX = mx + nx * testDist;
+                    const testY = my + ny * testDist;
+                    const inRoom = getRoomAt(testX, testY, room.levelId);
+                    
+                    const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                    const offsetDist = 0.15; // Offset inside room in feet
+                    const ox = nx * offsetDist * mul;
+                    const oy = ny * offsetDist * mul;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(toCanvasX(seg.x1 + ox), toCanvasY(seg.y1 + oy));
+                    ctx.lineTo(toCanvasX(seg.x2 + ox), toCanvasY(seg.y2 + oy));
+                    ctx.stroke();
+                }
             }
         });
         ctx.restore();
@@ -3022,6 +3041,9 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     draw(true);
     const layoutImage = canvas.toDataURL('image/png');
     
+    // Grab 3D screenshot
+    const screenshot3D = (typeof window.get3DScreenshot === 'function') ? window.get3DScreenshot() : null;
+    
     // Restore original viewport settings
     state.scale = originalView.scale;
     state.offsetX = originalView.offsetX;
@@ -3234,7 +3256,14 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 <img src="${layoutImage}" alt="2D Layout Blueprint">
             </div>
 
-            <h2>2. Rooms & Structural Elements</h2>
+            ${screenshot3D ? `
+            <h2>2. 3D Model Render Preview</h2>
+            <div class="layout-preview">
+                <img src="${screenshot3D}" alt="3D Model Render Preview">
+            </div>
+            ` : ''}
+
+            <h2>3. Rooms & Structural Elements</h2>
             <table>
                 <thead>
                     <tr>
@@ -3259,7 +3288,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </tbody>
             </table>
 
-            <h2>3. Utility Sump Pumps</h2>
+            <h2>4. Utility Sump Pumps</h2>
             <table>
                 <thead>
                     <tr>
@@ -3273,7 +3302,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </tbody>
             </table>
 
-            <h2>4. Utility Discharge Lines</h2>
+            <h2>5. Utility Discharge Lines (Drain Tile)</h2>
             <table>
                 <thead>
                     <tr>
@@ -3294,7 +3323,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </tbody>
             </table>
 
-            <h2>5. Project Bill of Materials (BOM) & Estimates</h2>
+            <h2>6. Project Bill of Materials (BOM) & Estimates</h2>
             <table>
                 <thead>
                     <tr>
@@ -3312,7 +3341,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                     <tr>
                         <td><strong>10ft PVC Pipe Sticks</strong></td>
                         <td>${plumbingEst.sticks} sticks</td>
-                        <td>Discharge lines + Overhead run + Sump riser runs</td>
+                        <td>Overhead run + Sump riser runs (excludes discharge drain tile)</td>
                     </tr>
                     <tr>
                         <td><strong>90° PVC Elbow fittings</strong></td>
@@ -3323,6 +3352,11 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                         <td><strong>45° PVC Elbow fittings</strong></td>
                         <td>${plumbingEst.elbow45} pcs</td>
                         <td>Snapping offset angle connections</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Drain Tile (Discharge)</strong></td>
+                        <td>${plumbingEst.drainTile.toFixed(1)} ft</td>
+                        <td>Flexible drain tile used for horizontal discharge lines</td>
                     </tr>
                     <tr class="totals">
                         <td>Vapor Barrier Liner Area</td>
