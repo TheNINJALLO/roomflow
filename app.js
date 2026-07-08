@@ -264,6 +264,27 @@ function addSupportBeam() {
 
 
 
+function updateToolboxReinforcementLabels(room) {
+    const strapLabel = document.getElementById('btn-add-strap-label');
+    const perimLabel = document.getElementById('btn-add-perimeter-strap-label');
+    const nb1Label = document.getElementById('btn-add-nb1-label');
+    
+    if (room) {
+        const straps = room.carbonStraps || 0;
+        const hasPerim = !!room.floorPerimeterStrap;
+        const nb1Val = room.nb1Height || 'none';
+        const nb1HeightLabels = { 'none': 'None', '2ft': '2 ft', '4ft': '4 ft', 'full': 'Full' };
+        
+        if (strapLabel) strapLabel.innerText = `Vertical Strap (${straps})`;
+        if (perimLabel) perimLabel.innerText = `Perimeter: ${hasPerim ? 'ON' : 'OFF'}`;
+        if (nb1Label) nb1Label.innerText = `NB1: ${nb1HeightLabels[nb1Val]}`;
+    } else {
+        if (strapLabel) strapLabel.innerText = 'Vertical Strap (+1)';
+        if (perimLabel) perimLabel.innerText = 'Floor Perimeter';
+        if (nb1Label) nb1Label.innerText = 'NB1 Coating (Cycle)';
+    }
+}
+
 // Selection Manager
 function selectItem(type, id) {
     state.selectedRoomId = (type === 'room') ? id : null;
@@ -300,6 +321,7 @@ function selectItem(type, id) {
     if (btnAddStrap) btnAddStrap.disabled = true;
     if (btnAddPerim) btnAddPerim.disabled = true;
     if (btnAddNb1) btnAddNb1.disabled = true;
+    updateToolboxReinforcementLabels(null);
     
     if (type === 'room' && id) {
         const room = state.rooms.find(r => r.id === id);
@@ -387,6 +409,7 @@ function selectItem(type, id) {
             if (btnAddStrap) btnAddStrap.disabled = false;
             if (btnAddPerim) btnAddPerim.disabled = false;
             if (btnAddNb1) btnAddNb1.disabled = false;
+            updateToolboxReinforcementLabels(room);
             updateRoomEstimates(room);
         }
     } else if (type === 'sump' && id) {
@@ -3010,6 +3033,7 @@ document.getElementById('room-carbon-straps-input').addEventListener('input', (e
         room.carbonStraps = Math.max(0, val);
         draw();
         updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
         if (window.sync3D) window.sync3D();
     }
 });
@@ -3023,6 +3047,7 @@ document.getElementById('room-floor-perimeter-strap-checkbox').addEventListener(
         room.floorPerimeterStrap = e.target.checked;
         draw();
         updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
         if (window.sync3D) window.sync3D();
     }
 });
@@ -3036,6 +3061,7 @@ document.getElementById('room-nb1-select').addEventListener('change', (e) => {
         room.nb1Height = e.target.value;
         draw();
         updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
         if (window.sync3D) window.sync3D();
     }
 });
@@ -3157,6 +3183,7 @@ document.getElementById('btn-add-strap').addEventListener('click', () => {
         
         draw();
         updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
         if (window.sync3D) window.sync3D();
     }
 });
@@ -3173,6 +3200,7 @@ document.getElementById('btn-add-perimeter-strap').addEventListener('click', () 
         
         draw();
         updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
         if (window.sync3D) window.sync3D();
     }
 });
@@ -3190,6 +3218,7 @@ document.getElementById('btn-add-nb1').addEventListener('click', () => {
         
         draw();
         updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
         if (window.sync3D) window.sync3D();
     }
 });

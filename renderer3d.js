@@ -438,7 +438,7 @@ window.sync3D = function() {
                 const inRoom = getRoomAt(testX, testY, room.levelId);
                 const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
                 
-                const offsetDist = 0.015;
+                const offsetDist = 0.03;
                 mesh.position.set(
                     mx + nx * offsetDist * mul,
                     elevation + pHeight / 2,
@@ -510,7 +510,7 @@ window.sync3D = function() {
                     const geometry = new THREE.BoxGeometry(sWidth, room.h, sThick);
                     const mesh = new THREE.Mesh(geometry, cfMat);
                     
-                    const offsetDist = 0.02;
+                    const offsetDist = 0.055;
                     mesh.position.set(
                         px + nx * offsetDist * mul,
                         elevation + room.h / 2,

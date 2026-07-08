@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=28">
+    <link rel="stylesheet" href="styles.css?v=29">
 </head>
 <body>
     <div id="app-container">
@@ -147,15 +147,15 @@
                     <p class="section-hint">Select a room first, then click below to add reinforcements.</p>
                     <div class="element-buttons" style="display: flex; flex-direction: column; gap: 0.5rem; width: 100%;">
                         <div style="display: flex; gap: 0.5rem; width: 100%;">
-                            <button id="btn-add-strap" class="tool-btn" disabled style="flex: 1; text-align: left; padding: 0.55rem 0.75rem;">
-                                <i data-lucide="align-justify"></i> Vertical Strap (+1)
+                            <button id="btn-add-strap" class="tool-btn" disabled style="flex: 1; text-align: left; padding: 0.55rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-direction: row; justify-content: flex-start;">
+                                <i data-lucide="align-justify" style="flex-shrink: 0;"></i> <span id="btn-add-strap-label" style="font-size: 0.75rem;">Vertical Strap (+1)</span>
                             </button>
-                            <button id="btn-add-perimeter-strap" class="tool-btn" disabled style="flex: 1; text-align: left; padding: 0.55rem 0.75rem;">
-                                <i data-lucide="square"></i> Floor Perimeter
+                            <button id="btn-add-perimeter-strap" class="tool-btn" disabled style="flex: 1; text-align: left; padding: 0.55rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-direction: row; justify-content: flex-start;">
+                                <i data-lucide="square" style="flex-shrink: 0;"></i> <span id="btn-add-perimeter-strap-label" style="font-size: 0.75rem;">Floor Perimeter</span>
                             </button>
                         </div>
-                        <button id="btn-add-nb1" class="tool-btn" disabled style="width: 100%; text-align: left; padding: 0.55rem 0.75rem;">
-                            <i data-lucide="layers"></i> NB1 Coating (Cycle Height)
+                        <button id="btn-add-nb1" class="tool-btn" disabled style="width: 100%; text-align: left; padding: 0.55rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-direction: row; justify-content: flex-start;">
+                            <i data-lucide="layers" style="flex-shrink: 0;"></i> <span id="btn-add-nb1-label" style="font-size: 0.75rem;">NB1 Coating (Cycle Height)</span>
                         </button>
                     </div>
                 </div>
@@ -614,8 +614,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=28"></script>
-    <script src="renderer3d.js?v=28"></script>
-    <script src="ar-estimator.js?v=28"></script>
+    <script src="app.js?v=29"></script>
+    <script src="renderer3d.js?v=29"></script>
+    <script src="ar-estimator.js?v=29"></script>
 </body>
 </html>
