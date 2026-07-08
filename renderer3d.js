@@ -610,25 +610,7 @@ function build3DPipe(x1, y1, z1, x2, y2, z2, radius, color, sceneGroup) {
     roomMeshes.push(mesh);
 }
 
-// Helper: Checks which room a world coordinate is in (supports custom polygons)
-function getRoomAt(x, y, levelId) {
-    return state.rooms.find(room => {
-        if (room.levelId !== levelId) return false;
-        if (room.type === 'custom' && room.vertices) {
-            let inside = false;
-            for (let i = 0, j = room.vertices.length - 1; i < room.vertices.length; j = i++) {
-                const xi = room.x + room.vertices[i].x, yi = room.y + room.vertices[i].y;
-                const xj = room.x + room.vertices[j].x, yj = room.y + room.vertices[j].y;
-                const intersect = ((yi > y) !== (yj > y))
-                    && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-                if (intersect) inside = !inside;
-            }
-            return inside;
-        } else {
-            return x >= room.x && x <= room.x + room.w && y >= room.y && y <= room.y + room.l;
-        }
-    });
-}
+
 
 // 3D Specific UI Controls
 document.getElementById('btn-3d-roof').addEventListener('click', (e) => {
