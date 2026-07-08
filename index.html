@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=26">
+    <link rel="stylesheet" href="styles.css?v=27">
 </head>
 <body>
     <div id="app-container">
@@ -342,6 +342,29 @@
                             <input type="checkbox" id="room-foam-board-checkbox" style="width: auto; margin: 0;">
                             <label for="room-foam-board-checkbox" style="margin-bottom: 0; font-weight: 500; font-size: 0.85rem; color: var(--text-color); cursor: pointer;">Perimeter Foam Board (2" XPS)</label>
                         </div>
+
+                        <!-- Carbon Fiber Straps (Vertical) -->
+                        <div class="input-group" style="margin-top: 0.75rem;">
+                            <label for="room-carbon-straps-input">Carbon Fiber Straps (Qty)</label>
+                            <input type="number" id="room-carbon-straps-input" min="0" step="1" value="0">
+                        </div>
+
+                        <!-- Floor Perimeter Carbon Fiber -->
+                        <div class="input-group-checkbox" style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;">
+                            <input type="checkbox" id="room-floor-perimeter-strap-checkbox" style="width: auto; margin: 0;">
+                            <label for="room-floor-perimeter-strap-checkbox" style="margin-bottom: 0; font-weight: 500; font-size: 0.85rem; color: var(--text-color); cursor: pointer;">Floor Perimeter Carbon Fiber</label>
+                        </div>
+
+                        <!-- NB1 Wall Coating -->
+                        <div class="input-group" style="margin-top: 0.75rem;">
+                            <label for="room-nb1-select">NB1 Wall Coating</label>
+                            <select id="room-nb1-select">
+                                <option value="none">None / Not Applied</option>
+                                <option value="2ft">2 ft high</option>
+                                <option value="4ft">4 ft high</option>
+                                <option value="full">Floor to Ceiling</option>
+                            </select>
+                        </div>
                         
                         <!-- Staircase Properties -->
                         <div id="room-staircase-properties" class="hidden" style="border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
@@ -530,6 +553,14 @@
                         <span class="metric-label" style="font-weight:700; color:#c084fc;">Vapor Barrier Liner</span>
                         <span class="metric-value" id="total-barrier-liner" style="font-weight:700; color:#c084fc;">0 sq ft</span>
                     </div>
+                    <div class="metric-row summary-row" style="margin-top: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+                        <span class="metric-label" style="font-weight:700; color:#38bdf8;">Carbon Fiber Straps</span>
+                        <span class="metric-value" id="total-carbon-fiber" style="font-weight:700; color:#38bdf8;">0 ft</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label" style="font-weight:700; color:#facc15;">NB1 Coating</span>
+                        <span class="metric-value" id="total-nb1-bags" style="font-weight:700; color:#facc15;">0 bags (0 sq ft)</span>
+                    </div>
                 </div>
             </aside>
         </main>
@@ -565,8 +596,8 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
-    <script src="app.js?v=26"></script>
-    <script src="renderer3d.js?v=26"></script>
-    <script src="ar-estimator.js?v=26"></script>
+    <script src="app.js?v=27"></script>
+    <script src="renderer3d.js?v=27"></script>
+    <script src="ar-estimator.js?v=27"></script>
 </body>
 </html>

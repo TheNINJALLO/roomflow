@@ -292,7 +292,10 @@ finishBtn.addEventListener('click', () => {
             y: centerY,
             color: '#ec4899',
             openings: [],
-            foamBoard: false
+            foamBoard: false,
+            carbonStraps: 0,
+            floorPerimeterStrap: false,
+            nb1Height: 'none'
         };
 
         state.rooms.push(newRoom);

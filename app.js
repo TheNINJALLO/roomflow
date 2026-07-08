@@ -140,7 +140,10 @@ function addRoom(type) {
         y: snap(toWorldY(canvas.height / 2) - preset.l / 2),
         color: preset.color,
         openings: [],
-        foamBoard: false
+        foamBoard: false,
+        carbonStraps: 0,
+        floorPerimeterStrap: false,
+        nb1Height: 'none'
     };
     if (preset.steps) {
         newRoom.steps = preset.steps;
@@ -306,6 +309,15 @@ function selectItem(type, id) {
 
             const foamCheckbox = document.getElementById('room-foam-board-checkbox');
             if (foamCheckbox) foamCheckbox.checked = !!room.foamBoard;
+
+            const strapsInput = document.getElementById('room-carbon-straps-input');
+            if (strapsInput) strapsInput.value = room.carbonStraps || 0;
+
+            const floorStrapCheckbox = document.getElementById('room-floor-perimeter-strap-checkbox');
+            if (floorStrapCheckbox) floorStrapCheckbox.checked = !!room.floorPerimeterStrap;
+
+            const nb1Select = document.getElementById('room-nb1-select');
+            if (nb1Select) nb1Select.value = room.nb1Height || 'none';
             
             const rectInputs = document.getElementById('room-rect-inputs');
             const customInputs = document.getElementById('room-custom-walls-inputs');
@@ -935,6 +947,54 @@ function updateGlobalStats() {
 
     const linerText = document.getElementById('total-barrier-liner');
     if (linerText) linerText.innerText = `${totalLinerArea.toFixed(0)} sq ft`;
+
+    // Carbon Fiber and NB1 calculations
+    let totalCarbonFiberLen = 0;
+    let totalNb1Area = 0;
+    
+    state.rooms.forEach(room => {
+        let perimeter;
+        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+            perimeter = getPolygonPerimeter(room.vertices);
+        } else {
+            perimeter = 2 * (room.w + room.l);
+        }
+        
+        // Vertical straps
+        if (room.carbonStraps > 0) {
+            totalCarbonFiberLen += room.carbonStraps * room.h;
+        }
+        
+        // Floor perimeter strap
+        if (room.floorPerimeterStrap) {
+            totalCarbonFiberLen += perimeter;
+        }
+        
+        // NB1 Coating Area
+        if (room.nb1Height === '2ft') {
+            totalNb1Area += perimeter * 2;
+        } else if (room.nb1Height === '4ft') {
+            totalNb1Area += perimeter * 4;
+        } else if (room.nb1Height === 'full') {
+            // Use net wall area
+            let grossWallArea;
+            if (room.type === 'staircase') {
+                grossWallArea = (room.l * room.h) + (room.w * room.h);
+            } else {
+                grossWallArea = perimeter * room.h;
+            }
+            let deductions = 0;
+            room.openings.forEach(op => { deductions += op.w * op.h; });
+            totalNb1Area += Math.max(0, grossWallArea - deductions);
+        }
+    });
+    
+    const carbonText = document.getElementById('total-carbon-fiber');
+    if (carbonText) carbonText.innerText = `${totalCarbonFiberLen.toFixed(1)} ft`;
+    
+    const nb1Bags = Math.ceil(totalNb1Area / 8);
+    const nb1Text = document.getElementById('total-nb1-bags');
+    if (nb1Text) nb1Text.innerText = `${nb1Bags} bags (${totalNb1Area.toFixed(0)} sq ft)`;
 }
 
 // Delete Selected Items
@@ -1513,6 +1573,104 @@ function drawRoom(room) {
             }
         });
         ctx.restore();
+    }
+
+    // Draw 2D Floor Perimeter Carbon Fiber Strap
+    if (room.floorPerimeterStrap) {
+        const segments = getRoomSegments(room);
+        ctx.save();
+        ctx.strokeStyle = '#38bdf8'; // Sky blue to match sidebar totals
+        ctx.lineWidth = 2.5;
+        segments.forEach(seg => {
+            const dx = seg.x2 - seg.x1;
+            const dy = seg.y2 - seg.y1;
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len > 0.05) {
+                const nx = -dy / len;
+                const ny = dx / len;
+                const testDist = 0.5;
+                const mx = (seg.x1 + seg.x2) / 2;
+                const my = (seg.y1 + seg.y2) / 2;
+                const testX = mx + nx * testDist;
+                const testY = my + ny * testDist;
+                const inRoom = getRoomAt(testX, testY, room.levelId);
+                
+                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                const offsetDist = 0.1; // Offset slightly inside
+                const ox = nx * offsetDist * mul;
+                const oy = ny * offsetDist * mul;
+                
+                ctx.beginPath();
+                ctx.moveTo(toCanvasX(seg.x1 + ox), toCanvasY(seg.y1 + oy));
+                ctx.lineTo(toCanvasX(seg.x2 + ox), toCanvasY(seg.y2 + oy));
+                ctx.stroke();
+            }
+        });
+        ctx.restore();
+    }
+
+    // Draw 2D Carbon Fiber Straps (Vertical tick marks)
+    if (room.carbonStraps > 0) {
+        const segments = getRoomSegments(room);
+        let totalPerim = 0;
+        const segData = [];
+        segments.forEach(seg => {
+            const dx = seg.x2 - seg.x1;
+            const dy = seg.y2 - seg.y1;
+            const len = Math.sqrt(dx*dx + dy*dy);
+            if (len > 0.05) {
+                totalPerim += len;
+                segData.push({ seg, len, dx, dy });
+            }
+        });
+        
+        if (totalPerim > 0 && segData.length > 0) {
+            const N = room.carbonStraps;
+            const spacing = totalPerim / N;
+            
+            ctx.save();
+            ctx.strokeStyle = '#0f172a'; // Deep charcoal/black
+            ctx.lineWidth = 3;
+            
+            let currentDist = spacing / 2;
+            let currentSegIdx = 0;
+            let accumulatedDist = 0;
+            
+            for (let i = 0; i < N; i++) {
+                while (currentSegIdx < segData.length && accumulatedDist + segData[currentSegIdx].len < currentDist) {
+                    accumulatedDist += segData[currentSegIdx].len;
+                    currentSegIdx++;
+                }
+                if (currentSegIdx >= segData.length) break;
+                
+                const s = segData[currentSegIdx];
+                const distInSeg = currentDist - accumulatedDist;
+                const ratio = distInSeg / s.len;
+                
+                const px = s.seg.x1 + s.dx * ratio;
+                const py = s.seg.y1 + s.dy * ratio;
+                
+                const nx = -s.dy / s.len;
+                const ny = s.dx / s.len;
+                const testDist = 0.5;
+                const testX = px + nx * testDist;
+                const testY = py + ny * testDist;
+                const inRoom = getRoomAt(testX, testY, room.levelId);
+                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                
+                const tickLen = 0.35;
+                const ox = nx * mul;
+                const oy = ny * mul;
+                
+                ctx.beginPath();
+                ctx.moveTo(toCanvasX(px), toCanvasY(py));
+                ctx.lineTo(toCanvasX(px + ox * tickLen), toCanvasY(py + oy * tickLen));
+                ctx.stroke();
+                
+                currentDist += spacing;
+            }
+            ctx.restore();
+        }
     }
 
     if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
@@ -2833,6 +2991,46 @@ document.getElementById('room-foam-board-checkbox').addEventListener('change', (
     }
 });
 
+// Room Carbon Fiber Straps Qty change
+document.getElementById('room-carbon-straps-input').addEventListener('input', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        const val = parseInt(e.target.value) || 0;
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.carbonStraps = Math.max(0, val);
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+// Room Floor Perimeter Carbon Fiber change
+document.getElementById('room-floor-perimeter-strap-checkbox').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.floorPerimeterStrap = e.target.checked;
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+// Room NB1 Wall Coating change
+document.getElementById('room-nb1-select').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.nb1Height = e.target.value;
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
 // Staircase orientation change
 document.getElementById('stair-orientation-select').addEventListener('change', (e) => {
     if (!state.selectedRoomId) return;
@@ -3087,6 +3285,13 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                 state.currentLevelId = data.currentLevelId || 'basement';
                 state.capturedMeasurements = data.capturedMeasurements || [];
                 
+                state.rooms.forEach(r => {
+                    if (!r.levelId) r.levelId = 'basement';
+                    if (r.carbonStraps === undefined) r.carbonStraps = 0;
+                    if (r.floorPerimeterStrap === undefined) r.floorPerimeterStrap = false;
+                    if (r.nb1Height === undefined) r.nb1Height = 'none';
+                });
+                
                 // Sync UI level select dropdown
                 const lvlSelect = document.getElementById('level-select');
                 if (lvlSelect) lvlSelect.value = state.currentLevelId;
@@ -3305,6 +3510,48 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
         }
         totalLinerArea += perim * postH;
     });
+
+    // Carbon Fiber and NB1 calculations for export
+    let totalCarbonFiberLen = 0;
+    let totalNb1Area = 0;
+    
+    state.rooms.forEach(room => {
+        let perimeter;
+        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+            perimeter = getPolygonPerimeter(room.vertices);
+        } else {
+            perimeter = 2 * (room.w + room.l);
+        }
+        
+        // Vertical straps
+        if (room.carbonStraps > 0) {
+            totalCarbonFiberLen += room.carbonStraps * room.h;
+        }
+        
+        // Floor perimeter strap
+        if (room.floorPerimeterStrap) {
+            totalCarbonFiberLen += perimeter;
+        }
+        
+        // NB1 Coating Area
+        if (room.nb1Height === '2ft') {
+            totalNb1Area += perimeter * 2;
+        } else if (room.nb1Height === '4ft') {
+            totalNb1Area += perimeter * 4;
+        } else if (room.nb1Height === 'full') {
+            let grossWallArea;
+            if (room.type === 'staircase') {
+                grossWallArea = (room.l * room.h) + (room.w * room.h);
+            } else {
+                grossWallArea = perimeter * room.h;
+            }
+            let deductions = 0;
+            room.openings.forEach(op => { deductions += op.w * op.h; });
+            totalNb1Area += Math.max(0, grossWallArea - deductions);
+        }
+    });
+    
+    const nb1BagsCount = Math.ceil(totalNb1Area / 8);
 
     const printWindow = window.open('', '_blank');
     
@@ -3527,6 +3774,16 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                         <td>${plumbingEst.drainTile.toFixed(1)} ft</td>
                         <td>Flexible drain tile used for horizontal discharge lines</td>
                     </tr>
+                    <tr>
+                        <td><strong>Carbon Fiber Straps</strong></td>
+                        <td>${totalCarbonFiberLen.toFixed(1)} ft</td>
+                        <td>Vertical reinforcement and/or floor perimeter reinforcement</td>
+                    </tr>
+                    <tr>
+                        <td><strong>NB1 Wall Coating</strong></td>
+                        <td>${nb1BagsCount} bags (${totalNb1Area.toFixed(0)} sq ft)</td>
+                        <td>Cementitious waterproofing/reinforcement wall coating (1 bag covers 8 sq ft)</td>
+                    </tr>
                     <tr class="totals">
                         <td>Vapor Barrier Liner Area</td>
                         <td>${totalLinerArea.toFixed(0)} sq ft</td>
@@ -3613,7 +3870,10 @@ function finishCustomRoomDrawing() {
         color: '#a855f7', // Custom purple
         openings: [],
         vertices: relativeVertices,
-        foamBoard: false
+        foamBoard: false,
+        carbonStraps: 0,
+        floorPerimeterStrap: false,
+        nb1Height: 'none'
     };
 
     state.rooms.push(newRoom);
@@ -4080,7 +4340,12 @@ function loadJobData(data) {
     state.currentLevelId = data.currentLevelId || 'basement';
     state.capturedMeasurements = data.capturedMeasurements || [];
     
-    state.rooms.forEach(r => { if (!r.levelId) r.levelId = 'basement'; });
+    state.rooms.forEach(r => {
+        if (!r.levelId) r.levelId = 'basement';
+        if (r.carbonStraps === undefined) r.carbonStraps = 0;
+        if (r.floorPerimeterStrap === undefined) r.floorPerimeterStrap = false;
+        if (r.nb1Height === undefined) r.nb1Height = 'none';
+    });
     state.sumpPumps.forEach(sp => { if (!sp.levelId) sp.levelId = 'basement'; });
     state.dischargeLines.forEach(dl => { if (!dl.levelId) dl.levelId = 'basement'; });
     state.interiorPipes.forEach(ip => { if (!ip.levelId) ip.levelId = 'basement'; });
