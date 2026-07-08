@@ -174,9 +174,47 @@ function selectItem(type, id) {
             roomFields.classList.remove('hidden');
             
             document.getElementById('room-name-input').value = room.name;
-            document.getElementById('room-w-input').value = room.w;
-            document.getElementById('room-l-input').value = room.l;
             document.getElementById('room-h-input').value = room.h;
+            
+            const rectInputs = document.getElementById('room-rect-inputs');
+            const customInputs = document.getElementById('room-custom-walls-inputs');
+            
+            if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+                rectInputs.classList.add('hidden');
+                customInputs.classList.remove('hidden');
+                
+                const container = document.getElementById('custom-walls-list-container');
+                container.innerHTML = '';
+                for (let i = 0; i < room.vertices.length; i++) {
+                    const v1 = room.vertices[i];
+                    const v2 = room.vertices[(i + 1) % room.vertices.length];
+                    const dx = v2.x - v1.x;
+                    const dy = v2.y - v1.y;
+                    const currentLength = Math.sqrt(dx*dx + dy*dy);
+                    
+                    const div = document.createElement('div');
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.style.alignItems = 'center';
+                    div.style.marginBottom = '0.3rem';
+                    div.style.padding = '0.2rem 0.5rem';
+                    div.style.background = 'rgba(255,255,255,0.02)';
+                    div.style.border = '1px solid var(--border-color)';
+                    div.style.borderRadius = '6px';
+                    div.innerHTML = `
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">Wall ${i + 1}</span>
+                        <input type="number" step="0.5" min="0.5" value="${currentLength.toFixed(1)}" 
+                            style="width: 75px; padding: 0.15rem 0.35rem; font-family: var(--font-mono); font-weight:600; font-size: 0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:4px; color:var(--accent-teal); text-align:right;"
+                            onchange="changeCustomWallLength('${room.id}', ${i}, this.value)">
+                    `;
+                    container.appendChild(div);
+                }
+            } else {
+                rectInputs.classList.remove('hidden');
+                customInputs.classList.add('hidden');
+                document.getElementById('room-w-input').value = room.w;
+                document.getElementById('room-l-input').value = room.l;
+            }
             
             const stepsGroup = document.getElementById('room-steps-group');
             if (room.type === 'staircase') {
@@ -2077,6 +2115,62 @@ function finishCustomRoomDrawing() {
     updateGlobalStats();
     if (window.sync3D) window.sync3D();
 }
+
+window.changeCustomWallLength = function(roomId, wallIndex, newValueRaw) {
+    const room = state.rooms.find(r => r.id === roomId);
+    if (!room || !room.vertices) return;
+
+    const newLen = parseFloat(newValueRaw);
+    if (isNaN(newLen) || newLen <= 0.1) return;
+
+    const V = room.vertices;
+    const i = wallIndex;
+    const ip1 = (i + 1) % V.length;
+
+    const dx = V[ip1].x - V[i].x;
+    const dy = V[ip1].y - V[i].y;
+    const currentLen = Math.sqrt(dx*dx + dy*dy);
+    if (currentLen < 0.01) return;
+
+    const cosTheta = dx / currentLen;
+    const sinTheta = dy / currentLen;
+
+    const newV_ip1_x = V[i].x + newLen * cosTheta;
+    const newV_ip1_y = V[i].y + newLen * sinTheta;
+
+    const deltaX = newV_ip1_x - V[ip1].x;
+    const deltaY = newV_ip1_y - V[ip1].y;
+
+    // Shift all subsequent vertices to pull/push the loop
+    for (let j = i + 1; j < V.length; j++) {
+        V[j].x += deltaX;
+        V[j].y += deltaY;
+    }
+
+    // Recompute bounding box and shift origin if needed
+    const minX = Math.min(...V.map(v => v.x));
+    const maxX = Math.max(...V.map(v => v.x));
+    const minY = Math.min(...V.map(v => v.y));
+    const maxY = Math.max(...V.map(v => v.y));
+
+    if (minX !== 0 || minY !== 0) {
+        room.x += minX;
+        room.y += minY;
+        V.forEach(vt => {
+            vt.x -= minX;
+            vt.y -= minY;
+        });
+    }
+    room.w = maxX - minX;
+    room.l = maxY - minY;
+
+    // Refresh display
+    updateRoomEstimates(room);
+    draw();
+    updateGlobalStats();
+    if (window.sync3D) window.sync3D();
+    selectItem('room', room.id);
+};
 
 function addSketchWallSegment() {
     if (state.sketchVertices.length === 0) {
