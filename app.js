@@ -2645,6 +2645,7 @@ document.getElementById('stanchion-type-select').addEventListener('change', (e) 
         if (typeof saveHistoryState === 'function') saveHistoryState();
         st.type = e.target.value;
         draw();
+        updateGlobalStats();
         if (window.sync3D) window.sync3D();
     }
 });
