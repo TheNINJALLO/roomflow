@@ -335,6 +335,7 @@ window.stopCamera = function() {
         if (videoStream) {
             videoStream.getTracks().forEach(track => track.stop());
             videoStream = null;
+        }
         videoEl.srcObject = null;
     }
 };
