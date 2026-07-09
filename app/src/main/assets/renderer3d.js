@@ -834,7 +834,7 @@ function build3DWall(x1, z1, x2, z2, height, openings, group, material) {
             wallGroup.add(segMesh);
         }
 
-        // 2. Vertical slices above/below the opening
+        // 2. Vertical slices above/below the opening, and the door/window visual models
         if (op.type === 'door' || op.type === 'crawl_door') {
             // Door opening: Only wall segment above the lintel (header)
             const headerH = height - op.h;
@@ -846,6 +846,47 @@ function build3DWall(x1, z1, x2, z2, height, openings, group, material) {
                 headerMesh.receiveShadow = true;
                 wallGroup.add(headerMesh);
             }
+
+            // Draw visual door frame
+            const frameColor = op.type === 'crawl_door' ? '#475569' : '#57534e';
+            const frameMat = new THREE.MeshStandardMaterial({ color: frameColor, roughness: 0.6 });
+            
+            // Left jamb
+            const leftJambGeo = new THREE.BoxGeometry(0.15, op.h, wallThickness + 0.02);
+            const leftJamb = new THREE.Mesh(leftJambGeo, frameMat);
+            leftJamb.position.set(op.offset - op.w / 2 + 0.075, op.h / 2, 0);
+            wallGroup.add(leftJamb);
+
+            // Right jamb
+            const rightJambGeo = new THREE.BoxGeometry(0.15, op.h, wallThickness + 0.02);
+            const rightJamb = new THREE.Mesh(rightJambGeo, frameMat);
+            rightJamb.position.set(op.offset + op.w / 2 - 0.075, op.h / 2, 0);
+            wallGroup.add(rightJamb);
+
+            // Head jamb (top frame)
+            const headJambGeo = new THREE.BoxGeometry(op.w, 0.15, wallThickness + 0.02);
+            const headJamb = new THREE.Mesh(headJambGeo, frameMat);
+            headJamb.position.set(op.offset, op.h - 0.075, 0);
+            wallGroup.add(headJamb);
+
+            // Door panel group for hinge rotation (hinge pivot at left jamb)
+            const doorPanelGroup = new THREE.Group();
+            doorPanelGroup.position.set(op.offset - op.w / 2 + 0.15, 0, 0);
+            
+            const doorPanelW = op.w - 0.3;
+            const doorPanelH = op.h - 0.15;
+            const doorPanelGeo = new THREE.BoxGeometry(doorPanelW, doorPanelH, 0.1);
+            const doorPanelColor = op.type === 'crawl_door' ? '#64748b' : '#b45309';
+            const doorPanelMat = new THREE.MeshStandardMaterial({ color: doorPanelColor, roughness: 0.7 });
+            const doorPanelMesh = new THREE.Mesh(doorPanelGeo, doorPanelMat);
+            doorPanelMesh.position.set(doorPanelW / 2, doorPanelH / 2, 0);
+            doorPanelMesh.castShadow = true;
+            doorPanelGroup.add(doorPanelMesh);
+            
+            // Rotate door slightly open (45 degrees inwards)
+            doorPanelGroup.rotation.y = Math.PI / 4; 
+            wallGroup.add(doorPanelGroup);
+
         } else if (op.type === 'window') {
             // Window opening: Wall segment below sill, and wall segment above lintel
             const sillH = 3.0; // standard sill height: 3ft
@@ -870,6 +911,45 @@ function build3DWall(x1, z1, x2, z2, height, openings, group, material) {
                 headerMesh.receiveShadow = true;
                 wallGroup.add(headerMesh);
             }
+
+            // Draw visual window frame & glass
+            const frameMat = new THREE.MeshStandardMaterial({ color: '#f1f5f9', roughness: 0.5 });
+            const borderSize = 0.1;
+            
+            // Top frame border
+            const fTop = new THREE.Mesh(new THREE.BoxGeometry(op.w, borderSize, wallThickness + 0.02), frameMat);
+            fTop.position.set(op.offset, sillH + op.h - borderSize/2, 0);
+            wallGroup.add(fTop);
+
+            // Bottom frame border
+            const fBot = new THREE.Mesh(new THREE.BoxGeometry(op.w, borderSize, wallThickness + 0.02), frameMat);
+            fBot.position.set(op.offset, sillH + borderSize/2, 0);
+            wallGroup.add(fBot);
+
+            // Left frame border
+            const fLeft = new THREE.Mesh(new THREE.BoxGeometry(borderSize, op.h - borderSize*2, wallThickness + 0.02), frameMat);
+            fLeft.position.set(op.offset - op.w/2 + borderSize/2, sillH + op.h/2, 0);
+            wallGroup.add(fLeft);
+
+            // Right frame border
+            const fRight = new THREE.Mesh(new THREE.BoxGeometry(borderSize, op.h - borderSize*2, wallThickness + 0.02), frameMat);
+            fRight.position.set(op.offset + op.w/2 - borderSize/2, sillH + op.h/2, 0);
+            wallGroup.add(fRight);
+
+            // Transparent glass panel
+            const glassW = op.w - borderSize * 2;
+            const glassH = op.h - borderSize * 2;
+            const glassGeo = new THREE.BoxGeometry(glassW, glassH, 0.03);
+            const glassMat = new THREE.MeshStandardMaterial({
+                color: '#bae6fd',
+                transparent: true,
+                opacity: 0.35,
+                roughness: 0.1,
+                metalness: 0.9
+            });
+            const glassMesh = new THREE.Mesh(glassGeo, glassMat);
+            glassMesh.position.set(op.offset, sillH + op.h / 2, 0);
+            wallGroup.add(glassMesh);
         }
 
         currentOffset = endOp;
