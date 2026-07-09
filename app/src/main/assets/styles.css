@@ -386,6 +386,7 @@ html, body {
     transition: opacity 0.3s ease;
     overflow: hidden;
     touch-action: none;
+    display: none;
 }
 
 .viewport canvas {
@@ -395,6 +396,7 @@ html, body {
 .viewport.active {
     opacity: 1;
     pointer-events: auto;
+    display: block;
 }
 
 /* 2D Canvas */
