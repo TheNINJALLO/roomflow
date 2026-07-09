@@ -4627,6 +4627,34 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
             </div>
             ` : ''}
 
+            <h2>Blueprint Symbol & Material Legend</h2>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 15px; margin-bottom: 30px; font-size: 0.85rem; line-height: 1.4; color: #334155;">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #0f172a; border-radius: 2px; flex-shrink: 0;"></span>
+                    <div><strong>Vertical Carbon Fiber Straps:</strong> Black tick marks along wall edges indicating vertical reinforcement strap points.</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #38bdf8; border-radius: 2px; flex-shrink: 0;"></span>
+                    <div><strong>Floor Perimeter Strap:</strong> Sky blue lines indicating horizontal stabilization carbon strap.</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #f472b6; border-radius: 2px; flex-shrink: 0;"></span>
+                    <div><strong>XPS Foam Board (Insulation):</strong> Pink line highlights indicating wall insulation sheets on exterior walls.</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #a855f7; border-radius: 2px; flex-shrink: 0;"></span>
+                    <div><strong>NB1 Wall Coating:</strong> Purple highlighting in 3D representing waterproofing and structural cementitious wall coating.</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #10b981; border-radius: 50%; flex-shrink: 0;"></span>
+                    <div><strong>Sump Pump Basin:</strong> Green circular icons indicating plotted sump pump water extraction locations.</div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <span style="display: inline-block; width: 30px; height: 3px; background-color: #94a3b8; border: 1px dashed #64748b; border-radius: 1px; flex-shrink: 0;"></span>
+                    <div><strong>Utility Discharge Lines:</strong> Dashed grey lines showing drain tile pipe routing.</div>
+                </div>
+            </div>
+
             <h2>3. Rooms & Structural Elements</h2>
             <table>
                 <thead>
