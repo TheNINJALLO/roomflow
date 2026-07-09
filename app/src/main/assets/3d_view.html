@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { margin: 0; overflow: hidden; background: #0d111a; }
+        #three-container { width: 100vw; height: 100vh; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="three-container"></div>
+
+    <!-- We'll reuse the existing renderer logic but mock the global 'state' -->
+    <script>
+        const state = {
+            rooms: [], sumpPumps: [], dischargeLines: [],
+            levels: [
+                { id: 'crawlspace', name: 'Crawl Space', height: 4, elevation: 0 },
+                { id: 'basement', name: 'Basement', height: 8, elevation: 0 },
+                { id: 'main', name: 'Main Floor', height: 9, elevation: 8 },
+                { id: 'second', name: '2nd Floor', height: 8, elevation: 17 }
+            ],
+            activeView: '3d'
+        };
+
+        window.syncProject = function(newState) {
+            state.rooms = newState.rooms;
+            state.sumpPumps = newState.sumpPumps;
+            state.dischargeLines = newState.dischargeLines;
+            if (window.sync3D) window.sync3D();
+        };
+    </script>
+    <script src="renderer3d.js"></script>
+    <script>
+        // Init renderer immediately
+        if (window.init3D) init3D();
+    </script>
+</body>
+</html>

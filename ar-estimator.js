@@ -1,9 +1,26 @@
-// --- WEBAR CAMERA TAPE MEASURE ESTIMATOR ---
+// --- WEBAR CAMERA SPATIAL ESTIMATOR ENGINE ---
+const METERS_TO_FEET = 3.280839895013123;
+
 let videoStream = null;
 let devicePitch = 45; // Degrees tilt down from horizontal
-let pinnedPoints = []; // Array of { x, y } in world coordinates (feet) relative to initial point
-let activeDistance = 0; // Estimated distance to aim point (feet)
+let deviceYaw = 0;
+let manualYaw = 0;
+let isUsingManualYaw = false;
 
+// Standardized Spatial Points model:
+// Stores raw high-precision metrics in meters
+let spatialPoints = []; 
+let pinnedPoints = []; // Computed relative layout points (feet) from first pinned point
+let activeDistance = 0; // Active estimated distance to aim point (feet)
+
+// Tracking Platform Tier State
+let activeTier = 'CAMERA_ESTIMATE';
+let appleCapabilities = null;
+let webxrSession = null;
+let webxrHitTestSource = null;
+let webxrRefSpace = null;
+
+// DOM Elements
 const videoEl = document.getElementById('ar-video');
 const distanceDisplay = document.getElementById('ar-distance');
 const segmentDisplay = document.getElementById('ar-segment');
@@ -11,47 +28,363 @@ const pinBtn = document.getElementById('btn-ar-pin');
 const finishBtn = document.getElementById('btn-ar-finish');
 const resetBtn = document.getElementById('btn-ar-reset');
 const cameraHeightInput = document.getElementById('ar-camera-height');
+const tierBadge = document.getElementById('ar-tier-badge');
+const qualityBadge = document.getElementById('ar-quality-badge');
 
-// Request Camera access
+// Create temporary WebGL canvas for WebXR rendering if needed
+let xrCanvas = document.getElementById('xr-canvas');
+if (!xrCanvas) {
+    xrCanvas = document.createElement('canvas');
+    xrCanvas.id = 'xr-canvas';
+    xrCanvas.className = 'hidden';
+    xrCanvas.style.position = 'absolute';
+    xrCanvas.style.top = '0';
+    xrCanvas.style.left = '0';
+    xrCanvas.style.width = '100%';
+    xrCanvas.style.height = '100%';
+    xrCanvas.style.zIndex = '1';
+    if (videoEl && videoEl.parentNode) {
+        videoEl.parentNode.insertBefore(xrCanvas, videoEl);
+    }
+}
+
+// Check Platform capabilities on script load
+detectSpatialCapabilities();
+
+function detectSpatialCapabilities() {
+    // 1. Detect Apple Native WebView Bridge
+    const isAppleNative = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.RoomFlowNativeBridge);
+    
+    if (isAppleNative) {
+        activeTier = 'APPLE_ARKIT';
+        if (tierBadge) tierBadge.innerText = 'Apple Spatial AR';
+        if (qualityBadge) qualityBadge.innerText = 'ARKit Active';
+        
+        // Request actual device capabilities from native wrapper
+        window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
+            version: 1,
+            type: 'checkAppleSpatialCapabilities'
+        }));
+    } else if (navigator.xr) {
+        // 2. Detect Android WebXR immersive-ar support
+        navigator.xr.isSessionSupported('immersive-ar')
+            .then(supported => {
+                if (supported) {
+                    activeTier = 'WEBXR_SPATIAL';
+                    if (tierBadge) tierBadge.innerText = 'SPATIAL AR';
+                    if (qualityBadge) qualityBadge.innerText = 'WebXR Available';
+                } else {
+                    fallbackToCameraEstimate();
+                }
+            })
+            .catch(() => {
+                fallbackToCameraEstimate();
+            });
+    } else {
+        fallbackToCameraEstimate();
+    }
+}
+
+function fallbackToCameraEstimate() {
+    activeTier = 'CAMERA_ESTIMATE';
+    if (tierBadge) tierBadge.innerText = 'CAMERA ESTIMATE';
+    if (qualityBadge) qualityBadge.innerText = 'Orientation Only';
+}
+
+function updateAppleCapabilities(caps) {
+    appleCapabilities = caps;
+    if (caps.lidarSupported) {
+        activeTier = 'APPLE_LIDAR';
+        if (tierBadge) {
+            tierBadge.innerText = 'APPLE LiDAR';
+            tierBadge.style.background = 'rgba(16, 185, 129, 0.85)'; // Green badge for LiDAR
+        }
+        if (qualityBadge) qualityBadge.innerText = 'LiDAR depth active';
+    } else {
+        activeTier = 'APPLE_ARKIT';
+        if (tierBadge) {
+            tierBadge.innerText = 'APPLE ARKIT';
+            tierBadge.style.background = 'rgba(59, 130, 246, 0.85)';
+        }
+        if (qualityBadge) qualityBadge.innerText = caps.sceneReconstructionSupported ? 'ARKit mesh building' : 'ARKit depth active';
+    }
+}
+
+function updateTrackingState(state) {
+    if (!qualityBadge) return;
+    const states = {
+        'Initializing': 'Initializing tracking...',
+        'Tracking': activeTier === 'APPLE_LIDAR' ? 'LiDAR depth active' : 'Spatial tracking active',
+        'Limited': 'Limited tracking - Move slowly',
+        'Lost': 'Tracking lost - Return to scanned area',
+        'Relocalizing': 'Relocalizing position...'
+    };
+    qualityBadge.innerText = states[state] || state;
+}
+
+// Native Apple Bridge Message Handlers (callbacks from Swift)
+window.RoomFlowNativeBridge = {
+    spatialCapabilities: function(payloadStr) {
+        try {
+            const data = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
+            updateAppleCapabilities(data.payload || data);
+        } catch (e) {
+            console.error('Error parsing spatialCapabilities:', e);
+        }
+    },
+    trackingStateChanged: function(payloadStr) {
+        try {
+            const data = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
+            const payload = data.payload || data;
+            updateTrackingState(payload.state);
+        } catch (e) {
+            console.error('Error parsing trackingStateChanged:', e);
+        }
+    },
+    reticlePoseChanged: function(payloadStr) {
+        try {
+            const data = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
+            const payload = data.payload || data;
+            activeDistance = payload.distanceFeet;
+            
+            // Check if native payload has raw meter coordinates for live aiming segment visualization
+            if (payload.xMeters !== undefined && spatialPoints.length > 0) {
+                const first = spatialPoints[0];
+                const dx = (payload.xMeters - first.xMeters) * METERS_TO_FEET;
+                const dy = (payload.zMeters - first.zMeters) * METERS_TO_FEET;
+                const segmentDist = Math.sqrt(dx*dx + dy*dy);
+                if (segmentDisplay) segmentDisplay.innerText = formatFeetInches(segmentDist);
+            }
+            if (distanceDisplay) distanceDisplay.innerText = formatFeetInches(activeDistance);
+        } catch (e) {
+            console.error('Error parsing reticlePoseChanged:', e);
+        }
+    },
+    pointPinned: function(payloadStr) {
+        try {
+            const data = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
+            const payload = data.payload || data;
+            
+            // Push standardized coordinate format
+            addSpatialPoint({
+                id: payload.id || 'pt_' + Date.now(),
+                xMeters: payload.xMeters,
+                yMeters: payload.yMeters,
+                zMeters: payload.zMeters,
+                source: payload.source || (activeTier === 'APPLE_LIDAR' ? 'arkit-lidar' : 'arkit'),
+                timestamp: payload.timestamp || new Date().toISOString(),
+                levelId: state.currentLevelId,
+                trackingState: 'Tracking',
+                depthValidated: payload.depthValidated !== false
+            });
+        } catch (e) {
+            console.error('Error parsing pointPinned:', e);
+        }
+    },
+    heightMeasured: function(payloadStr) {
+        try {
+            const data = typeof payloadStr === 'string' ? JSON.parse(payloadStr) : payloadStr;
+            const payload = data.payload || data;
+            updateHeightMeasurement(payload.heightFeet);
+        } catch (e) {
+            console.error('Error parsing heightMeasured:', e);
+        }
+    },
+    sessionError: function(payloadStr) {
+        alert('Apple Spatial Session Error. Falling back to Camera Estimate.');
+        fallbackToCameraEstimate();
+    }
+};
+
+function addSpatialPoint(pt) {
+    spatialPoints.push(pt);
+    
+    // Convert meters to layout feet coordinate system relative to the first pinned point.
+    // In ARKit & WebXR coordinate frames, X is horizontal right, Z is horizontal depth (forward/back).
+    const first = spatialPoints[0];
+    pinnedPoints = spatialPoints.map(p => ({
+        x: (p.xMeters - first.xMeters) * METERS_TO_FEET,
+        y: (p.zMeters - first.zMeters) * METERS_TO_FEET
+    }));
+    
+    updateARDisplay();
+}
+
+function updateHeightMeasurement(heightFeet) {
+    const selectedRoom = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (selectedRoom) {
+        selectedRoom.h = Math.max(4, Math.round(heightFeet));
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+        alert(`Measured Ceiling Height: ${heightFeet.toFixed(1)} ft. Applied to ${selectedRoom.name}.`);
+    } else {
+        alert(`Measured Ceiling Height: ${heightFeet.toFixed(1)} ft. Select a room to apply this height.`);
+    }
+}
+
+// Request Camera access / Initialize active mode session
 window.startCamera = function() {
+    spatialPoints = [];
     pinnedPoints = [];
     updateARDisplay();
 
-    // Standard constraints
-    const constraints = {
-        video: {
-            facingMode: 'environment',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-        },
-        audio: false
-    };
+    if (activeTier === 'APPLE_LIDAR' || activeTier === 'APPLE_ARKIT') {
+        // Hide standard video element as iOS shell renders camera overlay natively
+        if (videoEl) videoEl.style.opacity = '0';
+        
+        window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
+            version: 1,
+            type: 'startAppleSpatialSession',
+            payload: {
+                levelId: state.currentLevelId
+            }
+        }));
+    } else if (activeTier === 'WEBXR_SPATIAL') {
+        startWebXRSession();
+    } else {
+        // TIER C: Camera orientation estimate fallback
+        if (videoEl) {
+            videoEl.style.opacity = '1';
+            videoEl.style.backgroundColor = 'transparent';
+        }
+        
+        const constraints = {
+            video: {
+                facingMode: 'environment',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            },
+            audio: false
+        };
 
-    navigator.mediaDevices.getUserMedia(constraints)
-        .then(stream => {
-            videoStream = stream;
-            videoEl.srcObject = stream;
-            videoEl.play();
-            requestOrientationPermission();
+        navigator.mediaDevices.getUserMedia(constraints)
+            .then(stream => {
+                videoStream = stream;
+                videoEl.srcObject = stream;
+                videoEl.play();
+                requestOrientationPermission();
+            })
+            .catch(err => {
+                console.error('Camera access failed:', err);
+                alert('Unable to access camera. Showing simulation overlay.');
+                videoEl.style.backgroundColor = '#1e293b';
+            });
+    }
+};
+
+// Stop Active AR Session
+window.stopCamera = function() {
+    if (activeTier === 'APPLE_LIDAR' || activeTier === 'APPLE_ARKIT') {
+        window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
+            version: 1,
+            type: 'stopAppleSpatialSession'
+        }));
+    } else if (webxrSession) {
+        webxrSession.end();
+    } else {
+        if (videoStream) {
+            videoStream.getTracks().forEach(track => track.stop());
+            videoStream = null;
+        }
+        videoEl.srcObject = null;
+    }
+};
+
+// Android WebXR spatial session initializer
+function startWebXRSession() {
+    if (videoEl) videoEl.style.opacity = '0';
+    if (xrCanvas) xrCanvas.classList.remove('hidden');
+    
+    const sessionOptions = {
+        requiredFeatures: ['local-floor', 'hit-test']
+    };
+    
+    navigator.xr.requestSession('immersive-ar', sessionOptions)
+        .then(session => {
+            webxrSession = session;
+            
+            // Configure WebGL compatibility
+            const gl = xrCanvas.getContext('webgl', { xrCompatible: true });
+            session.updateRenderState({
+                baseLayer: new XRWebGLLayer(session, gl)
+            });
+            
+            session.requestReferenceSpace('local-floor')
+                .then(refSpace => {
+                    webxrRefSpace = refSpace;
+                    return session.requestHitTestSource({ space: session.viewerSpace });
+                })
+                .then(hitTestSource => {
+                    webxrHitTestSource = hitTestSource;
+                    session.requestAnimationFrame(onXRFrame);
+                });
+                
+            session.addEventListener('end', () => {
+                webxrSession = null;
+                webxrHitTestSource = null;
+                webxrRefSpace = null;
+                if (xrCanvas) xrCanvas.classList.add('hidden');
+                if (videoEl) videoEl.style.opacity = '1';
+                fallbackToCameraEstimate();
+            });
         })
         .catch(err => {
-            console.error('Camera access failed:', err);
-            alert('Unable to access camera. Showing simulation overlay.');
-            // Simulate video stream for desktops/dev testing
-            videoEl.style.backgroundColor = '#1e293b';
+            console.error('WebXR session failed:', err);
+            alert('Could not start Spatial AR. Falling back to Camera Estimate.');
+            fallbackToCameraEstimate();
+            window.startCamera();
         });
-};
+}
 
-// Stop Camera
-window.stopCamera = function() {
-    if (videoStream) {
-        videoStream.getTracks().forEach(track => track.stop());
-        videoStream = null;
+function onXRFrame(time, frame) {
+    if (!webxrSession) return;
+    
+    webxrSession.requestAnimationFrame(onXRFrame);
+    
+    const pose = frame.getViewerPose(webxrRefSpace);
+    if (!pose || !webxrHitTestSource) return;
+    
+    const hitTestResults = frame.getHitTestResults(webxrHitTestSource);
+    if (hitTestResults.length > 0) {
+        const hit = hitTestResults[0];
+        const hitPose = hit.getPose(webxrRefSpace);
+        
+        if (hitPose) {
+            // Compute real spatial distance in meters from viewer position to hit point
+            const camPos = pose.transform.position;
+            const hitPos = hitPose.transform.position;
+            const dx = hitPos.x - camPos.x;
+            const dy = hitPos.y - camPos.y;
+            const dz = hitPos.z - camPos.z;
+            
+            // Standardize coordinates
+            activeXRHitPoint = {
+                xMeters: hitPos.x,
+                yMeters: hitPos.y,
+                zMeters: hitPos.z
+            };
+            
+            activeDistance = Math.sqrt(dx*dx + dy*dy + dz*dz) * METERS_TO_FEET;
+            distanceDisplay.innerText = formatFeetInches(activeDistance);
+            
+            // Update active aiming segment display
+            if (spatialPoints.length > 0) {
+                const first = spatialPoints[0];
+                const segX = (hitPos.x - first.xMeters) * METERS_TO_FEET;
+                const segZ = (hitPos.z - first.zMeters) * METERS_TO_FEET;
+                const segmentDist = Math.sqrt(segX*segX + segZ*segZ);
+                segmentDisplay.innerText = formatFeetInches(segmentDist);
+            }
+            if (qualityBadge) qualityBadge.innerText = 'Spatial tracking active';
+        }
+    } else {
+        if (qualityBadge) qualityBadge.innerText = 'Scan surface...';
     }
-    videoEl.srcObject = null;
-};
+}
 
-// Request Device Orientation Permissions (iOS specific requirement)
+let activeXRHitPoint = null;
+
+// Orientation permissions and trackers (Tier C fallback)
 function requestOrientationPermission() {
     if (typeof DeviceOrientationEvent !== 'undefined' && 
         typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -64,41 +397,27 @@ function requestOrientationPermission() {
             })
             .catch(console.error);
     } else {
-        // Android and desktop non-iOS browsers
         window.addEventListener('deviceorientation', handleOrientation);
     }
 }
 
 function handleOrientation(e) {
-    // beta: front-back tilt (-180 to 180). 
-    // Typically holding the phone upright (vertical) beta is ~80-90.
-    // Tilted forward (looking at floor) beta goes down towards 30-40.
+    if (activeTier !== 'CAMERA_ESTIMATE') return;
     let beta = e.beta || 90;
-    
-    // Clamp values
     beta = Math.max(15, Math.min(85, beta));
-    
-    // Pitch is the angle down from horizontal
     devicePitch = 90 - beta;
     calculateDistance();
 }
 
-// Distance Calculation via Trigonometry
 function calculateDistance() {
-    // Camera height in feet
+    // Trigonometry distance calculation (Tier C)
     const camHeightFeet = parseFloat(cameraHeightInput.value) / 12;
-    
-    // Angle from vertical is 90 - devicePitch (which is equal to beta)
-    // Looking horizontal (devicePitch near 0) -> distance goes to infinity
-    // Looking down (devicePitch near 90) -> distance goes to 0
     const thetaDeg = 90 - devicePitch;
     const thetaRad = (thetaDeg * Math.PI) / 180;
     activeDistance = camHeightFeet * Math.tan(thetaRad);
-
     updateARDisplay();
 }
 
-// Convert active distance to visual feet-inches
 function formatFeetInches(feetVal) {
     const totalInches = Math.round(feetVal * 12);
     const feet = Math.floor(totalInches / 12);
@@ -107,20 +426,29 @@ function formatFeetInches(feetVal) {
 }
 
 function updateARDisplay() {
-    distanceDisplay.innerText = formatFeetInches(activeDistance);
+    if (distanceDisplay) distanceDisplay.innerText = formatFeetInches(activeDistance);
     
     if (pinnedPoints.length > 0) {
-        // Calculate segment from last pinned point
-        const currentPos = getTargetCoordinates();
+        let currentPos;
+        if (activeTier === 'WEBXR_SPATIAL' && activeXRHitPoint) {
+            const first = spatialPoints[0];
+            currentPos = {
+                x: (activeXRHitPoint.xMeters - first.xMeters) * METERS_TO_FEET,
+                y: (activeXRHitPoint.zMeters - first.zMeters) * METERS_TO_FEET
+            };
+        } else {
+            currentPos = getTargetCoordinates();
+        }
+        
         const lastPoint = pinnedPoints[pinnedPoints.length - 1];
         const dx = currentPos.x - lastPoint.x;
         const dy = currentPos.y - lastPoint.y;
         const segmentDist = Math.sqrt(dx*dx + dy*dy);
-        segmentDisplay.innerText = formatFeetInches(segmentDist);
-        finishBtn.disabled = pinnedPoints.length < 3;
+        if (segmentDisplay) segmentDisplay.innerText = formatFeetInches(segmentDist);
+        if (finishBtn) finishBtn.disabled = pinnedPoints.length < 3;
     } else {
-        segmentDisplay.innerText = "0' 0\"";
-        finishBtn.disabled = true;
+        if (segmentDisplay) segmentDisplay.innerText = "0' 0\"";
+        if (finishBtn) finishBtn.disabled = true;
     }
 
     const angleEl = document.getElementById('ar-angle');
@@ -129,11 +457,7 @@ function updateARDisplay() {
     }
 }
 
-// Calculate the 2D world coordinate of the current target point
 function getTargetCoordinates() {
-    // Get direction vector based on device compass (alpha/yaw) or assume straight ahead for simple shapes
-    // For simplicity, we assume user rotates in place. We map points using distance & trigonometry.
-    // If orientation compass isn't highly reliable, we simulate angles based on point progression.
     const angleRad = (deviceYaw * Math.PI) / 180;
     return {
         x: activeDistance * Math.cos(angleRad),
@@ -141,72 +465,100 @@ function getTargetCoordinates() {
     };
 }
 
-// Tracking orientation yaw
-let deviceYaw = 0;
-let manualYaw = 0;
-let isUsingManualYaw = false;
-
 window.addEventListener('deviceorientation', (e) => {
-    // alpha: rotation around z axis (0-360 compass direction)
     if (e.alpha !== null && !isUsingManualYaw) {
         deviceYaw = e.alpha;
         updateARDisplay();
     }
 });
 
-// Swipe left/right on camera view to manually adjust direction if basement walls block the compass
+// Swipe to adjust manual yaw on camera overlay
 let touchStartX = 0;
-videoEl.addEventListener('touchstart', (e) => {
-    touchStartX = e.touches[0].clientX;
-}, { passive: true });
+if (videoEl) {
+    videoEl.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+    }, { passive: true });
 
-videoEl.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1) {
-        const touchX = e.touches[0].clientX;
-        const deltaX = touchX - touchStartX;
-        touchStartX = touchX;
-        
-        isUsingManualYaw = true;
-        // 1 pixel drag = 0.5 degrees rotation
-        manualYaw = (deviceYaw - deltaX * 0.5) % 360;
-        if (manualYaw < 0) manualYaw += 360;
-        deviceYaw = manualYaw;
-        
-        calculateDistance();
-    }
-}, { passive: true });
+    videoEl.addEventListener('touchmove', (e) => {
+        if (activeTier !== 'CAMERA_ESTIMATE') return;
+        if (e.touches.length === 1) {
+            const touchX = e.touches[0].clientX;
+            const deltaX = touchX - touchStartX;
+            touchStartX = touchX;
+            
+            isUsingManualYaw = true;
+            manualYaw = (deviceYaw - deltaX * 0.5) % 360;
+            if (manualYaw < 0) manualYaw += 360;
+            deviceYaw = manualYaw;
+            
+            calculateDistance();
+        }
+    }, { passive: true });
+}
 
-// Mock simulation of rotation for desktop testing (holding shift + moving mouse rotates view)
-let mockAngle = 0;
+// Mouse simulated controls for local desktop development tests
 document.addEventListener('mousemove', (e) => {
-    if (!videoStream && state.activeView === 'ar') {
-        // Simulate pitch/yaw on desktop via mouse coordinates
+    if (!videoStream && state.activeView === 'ar' && activeTier === 'CAMERA_ESTIMATE') {
         const percentX = e.clientX / window.innerWidth;
         const percentY = e.clientY / window.innerHeight;
         
-        devicePitch = 15 + percentY * 60; // 15 to 75 deg pitch
-        deviceYaw = percentX * 360; // 0 to 360 yaw
+        devicePitch = 15 + percentY * 60;
+        deviceYaw = percentX * 360;
         
         calculateDistance();
     }
 });
 
-// Button Controls
+// Button Click Event Listeners
 pinBtn.addEventListener('click', () => {
-    const coords = getTargetCoordinates();
-    pinnedPoints.push(coords);
+    if (activeTier === 'APPLE_LIDAR' || activeTier === 'APPLE_ARKIT') {
+        // Send pin command to Apple native session
+        window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
+            version: 1,
+            type: 'pinPoint'
+        }));
+    } else if (activeTier === 'WEBXR_SPATIAL') {
+        if (activeXRHitPoint) {
+            addSpatialPoint({
+                id: 'xr_' + Date.now(),
+                xMeters: activeXRHitPoint.xMeters,
+                yMeters: activeXRHitPoint.yMeters,
+                zMeters: activeXRHitPoint.zMeters,
+                source: 'webxr',
+                timestamp: new Date().toISOString(),
+                levelId: state.currentLevelId,
+                trackingState: 'Tracking',
+                depthValidated: true
+            });
+        } else {
+            alert('Cannot pin corner: Pointing at invalid surface.');
+        }
+    } else {
+        // TIER C orientation fallback coords
+        const coords = getTargetCoordinates();
+        const firstPoint = spatialPoints[0];
+        
+        // Convert feet layout points back to canonical meters structure
+        const metersPt = {
+            id: 'cam_' + Date.now(),
+            xMeters: firstPoint ? (firstPoint.xMeters + coords.x / METERS_TO_FEET) : (coords.x / METERS_TO_FEET),
+            yMeters: 0,
+            zMeters: firstPoint ? (firstPoint.zMeters + coords.y / METERS_TO_FEET) : (coords.y / METERS_TO_FEET),
+            source: 'camera',
+            timestamp: new Date().toISOString(),
+            levelId: state.currentLevelId,
+            trackingState: 'Tracking',
+            depthValidated: false
+        };
+        addSpatialPoint(metersPt);
+    }
     
-    // Feedback effect (temporary green indicator or logging)
+    // Action visual feedback animation
     const originalBg = pinBtn.style.backgroundColor;
     pinBtn.style.backgroundColor = '#10b981';
-    setTimeout(() => {
-        pinBtn.style.backgroundColor = originalBg;
-    }, 150);
-
-    updateARDisplay();
+    setTimeout(() => { pinBtn.style.backgroundColor = originalBg; }, 150);
 });
 
-// Capture Dist Button
 const captureBtn = document.getElementById('btn-ar-capture');
 captureBtn.addEventListener('click', () => {
     if (activeDistance > 0.1) {
@@ -215,22 +567,18 @@ captureBtn.addEventListener('click', () => {
         }
         state.capturedMeasurements.push(activeDistance);
         
-        // Green feedback blink
         const originalBg = captureBtn.style.backgroundColor;
         captureBtn.style.backgroundColor = '#10b981';
-        setTimeout(() => {
-            captureBtn.style.backgroundColor = originalBg;
-        }, 150);
+        setTimeout(() => { captureBtn.style.backgroundColor = originalBg; }, 150);
         
         updateARDisplay();
         updateARCapturesOverlay();
         if (window.updateMeasurementsSidebar) window.updateMeasurementsSidebar();
     } else {
-        alert('Aim at a floor point first to calculate distance.');
+        alert('Aim at a layout target point first.');
     }
 });
 
-// Render pills overlay on AR screen
 function updateARCapturesOverlay() {
     const listEl = document.getElementById('ar-captures-list');
     if (!listEl) return;
@@ -246,15 +594,20 @@ function updateARCapturesOverlay() {
     });
     listEl.innerHTML = html;
 }
-
 window.updateARCapturesOverlay = updateARCapturesOverlay;
 
 resetBtn.addEventListener('click', () => {
-    pinnedPoints = [];
-    if (!state.capturedMeasurements) {
-        state.capturedMeasurements = [];
+    if (activeTier === 'APPLE_LIDAR' || activeTier === 'APPLE_ARKIT') {
+        window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
+            version: 1,
+            type: 'resetScan'
+        }));
     }
+    
+    spatialPoints = [];
+    pinnedPoints = [];
     state.capturedMeasurements = [];
+    
     updateARDisplay();
     updateARCapturesOverlay();
     if (window.updateMeasurementsSidebar) window.updateMeasurementsSidebar();
@@ -263,7 +616,14 @@ resetBtn.addEventListener('click', () => {
 finishBtn.addEventListener('click', () => {
     if (pinnedPoints.length < 3) return;
 
-    // Calculate Bounding Box of the pinned points to create a rectangular room
+    if (activeTier === 'APPLE_LIDAR' || activeTier === 'APPLE_ARKIT') {
+        window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
+            version: 1,
+            type: 'finishRoomScan'
+        }));
+    }
+
+    // Normalized room polygon builder
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     pinnedPoints.forEach(p => {
         minX = Math.min(minX, p.x);
@@ -272,40 +632,58 @@ finishBtn.addEventListener('click', () => {
         maxY = Math.max(maxY, p.y);
     });
 
-    const w = snap(maxX - minX);
-    const l = snap(maxY - minY);
+    const roomW = snap(maxX - minX);
+    const roomL = snap(maxY - minY);
 
-    if (w >= 2 && l >= 2) {
-        // Place room at the center of the active canvas viewport
-        const centerX = snap(toWorldX(canvas.width / 2) - w / 2);
-        const centerY = snap(toWorldY(canvas.height / 2) - l / 2);
+    if (roomW >= 2 && roomL >= 2) {
+        const centerX = snap(toWorldX(canvas.width / 2) - roomW / 2);
+        const centerY = snap(toWorldY(canvas.height / 2) - roomL / 2);
 
-        // Add Room to main state
+        // Convert coordinates from relative scan space to local room coordinate origin space.
+        // We preserve full irregular polygon geometries as vertices relative to the bounding box top-left.
+        const relativeVertices = pinnedPoints.map(p => ({
+            x: snap(p.x - minX),
+            y: snap(p.y - minY)
+        }));
+
+        // Preserve acquisition tracking source
+        const finalSource = spatialPoints.length > 0 ? spatialPoints[0].source : 'camera';
+
         const newRoom = {
-            id: 'r_' + Math.random().toString(36).substr(2, 9),
-            name: 'AR Scanned Room',
+            id: 'r_' + Date.now(),
+            levelId: state.currentLevelId,
+            name: `AR ${finalSource === 'arkit-lidar' ? 'LiDAR' : 'Spatial'} Room`,
             type: 'custom',
-            w: w,
-            l: l,
-            h: 8, // Default ceiling height
             x: centerX,
             y: centerY,
+            w: roomW,
+            l: roomL,
+            h: 8,
             color: '#ec4899',
             openings: [],
+            vertices: relativeVertices,
             foamBoard: false,
             carbonStraps: 0,
             floorPerimeterStrap: false,
-            nb1Height: 'none'
+            nb1Height: 'none',
+            scanMetadata: {
+                source: finalSource,
+                pointCount: spatialPoints.length,
+                timestamp: new Date().toISOString()
+            }
         };
 
         state.rooms.push(newRoom);
         selectRoom(newRoom.id);
         
-        // Go back to 2D view to let user place/snaps
+        // Return back to 2D Blueprint grid layout view
         switchView('2d');
         updateGlobalStats();
         if (window.sync3D) window.sync3D();
+        
+        // End camera and tracking sessions
+        window.stopCamera();
     } else {
-        alert('Pinned area is too small. Place corners further apart.');
+        alert('Scanned corner layout footprint is too small.');
     }
 });

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_2d"
+        android:icon="@android:drawable/ic_menu_edit"
+        android:title="2D Sketch" />
+    <item
+        android:id="@+id/nav_3d"
+        android:icon="@android:drawable/ic_menu_view"
+        android:title="3D View" />
+    <item
+        android:id="@+id/nav_ar"
+        android:icon="@android:drawable/ic_menu_camera"
+        android:title="AR Camera" />
+</menu>

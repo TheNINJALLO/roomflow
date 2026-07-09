@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <group android:checkableBehavior="none">
+        <item
+            android:id="@+id/add_living"
+            android:title="Living Room" />
+        <item
+            android:id="@+id/add_bedroom"
+            android:title="Bedroom" />
+        <item
+            android:id="@+id/add_kitchen"
+            android:title="Kitchen" />
+    </group>
+    <item android:title="Utilities">
+        <menu>
+            <item
+                android:id="@+id/add_sump"
+                android:title="Sump Pump" />
+            <item
+                android:id="@+id/add_discharge"
+                android:title="Discharge Line" />
+        </menu>
+    </item>
+</menu>
