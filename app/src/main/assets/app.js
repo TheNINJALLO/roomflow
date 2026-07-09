@@ -148,6 +148,7 @@ function addRoom(type) {
         carbonStraps: 0,
         carbonFiberScope: 'full',
         carbonFiberWalls: [],
+        customCarbonStraps: [],
         floorPerimeterStrap: false,
         nb1Height: 'none'
     };
@@ -813,6 +814,34 @@ function getRoomExteriorPerimeter(room) {
     });
     
     return extPerimeter;
+}
+
+// Initialize or synchronize manual custom straps to match count
+function initializeCustomStraps(room) {
+    if (!room.customCarbonStraps) room.customCarbonStraps = [];
+    const count = room.carbonStraps || 0;
+    if (room.customCarbonStraps.length === count) return;
+    
+    const segments = getRoomSegments(room);
+    if (segments.length === 0) return;
+    
+    if (room.customCarbonStraps.length < count) {
+        const needed = count - room.customCarbonStraps.length;
+        for (let i = 0; i < needed; i++) {
+            const segIdx = (room.customCarbonStraps.length) % segments.length;
+            const seg = segments[segIdx];
+            // Space offset ratios safely
+            const sameSegCount = room.customCarbonStraps.filter(s => s.wall === seg.wall).length;
+            const offset = Math.max(0.1, Math.min(0.9, 0.2 + (sameSegCount * 0.2) % 0.6));
+            room.customCarbonStraps.push({
+                id: 'strap_' + Math.random().toString(36).substr(2, 9),
+                wall: seg.wall,
+                offset: offset
+            });
+        }
+    } else if (room.customCarbonStraps.length > count) {
+        room.customCarbonStraps = room.customCarbonStraps.slice(0, count);
+    }
 }
 
 // Helper to get all wall segments of a room
@@ -1849,68 +1878,125 @@ function drawRoom(room) {
 
     // Draw 2D Carbon Fiber Straps (Vertical tick marks)
     if (room.carbonStraps > 0) {
-        let segments = getRoomSegments(room);
-        if (room.carbonFiberScope === 'specific' && Array.isArray(room.carbonFiberWalls)) {
-            segments = segments.filter(seg => room.carbonFiberWalls.includes(seg.wall));
-        }
-        let totalPerim = 0;
-        const segData = [];
-        segments.forEach(seg => {
-            const dx = seg.x2 - seg.x1;
-            const dy = seg.y2 - seg.y1;
-            const len = Math.sqrt(dx*dx + dy*dy);
-            if (len > 0.05) {
-                totalPerim += len;
-                segData.push({ seg, len, dx, dy });
-            }
-        });
+        const segments = getRoomSegments(room);
         
-        if (totalPerim > 0 && segData.length > 0) {
-            const N = room.carbonStraps;
-            const spacing = totalPerim / N;
-            
+        if (room.carbonFiberScope === 'specific' && room.customCarbonStraps && room.customCarbonStraps.length > 0) {
+            // Manual Custom Placed Straps
             ctx.save();
             ctx.strokeStyle = '#0f172a'; // Deep charcoal/black
             ctx.lineWidth = 3;
             
-            let currentDist = spacing / 2;
-            let currentSegIdx = 0;
-            let accumulatedDist = 0;
-            
-            for (let i = 0; i < N; i++) {
-                while (currentSegIdx < segData.length && accumulatedDist + segData[currentSegIdx].len < currentDist) {
-                    accumulatedDist += segData[currentSegIdx].len;
-                    currentSegIdx++;
-                }
-                if (currentSegIdx >= segData.length) break;
+            room.customCarbonStraps.forEach(strap => {
+                const seg = segments.find(s => s.wall === strap.wall);
+                if (!seg) return;
                 
-                const s = segData[currentSegIdx];
-                const distInSeg = currentDist - accumulatedDist;
-                const ratio = distInSeg / s.len;
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                const len = Math.sqrt(dx*dx + dy*dy);
+                if (len < 0.05) return;
                 
-                const px = s.seg.x1 + s.dx * ratio;
-                const py = s.seg.y1 + s.dy * ratio;
+                const px = seg.x1 + dx * strap.offset;
+                const py = seg.y1 + dy * strap.offset;
                 
-                const nx = -s.dy / s.len;
-                const ny = s.dx / s.len;
+                const nx = -dy / len;
+                const ny = dx / len;
                 const testDist = 0.5;
                 const testX = px + nx * testDist;
                 const testY = py + ny * testDist;
                 const inRoom = getRoomAt(testX, testY, room.levelId);
                 const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
                 
-                const tickLen = 0.35;
+                const tickLen = 0.45;
                 const ox = nx * mul;
                 const oy = ny * mul;
                 
+                // Draw strap tick mark
                 ctx.beginPath();
                 ctx.moveTo(toCanvasX(px), toCanvasY(py));
                 ctx.lineTo(toCanvasX(px + ox * tickLen), toCanvasY(py + oy * tickLen));
                 ctx.stroke();
                 
-                currentDist += spacing;
-            }
+                // If this is the selected room, draw a small draggable grab handle at the end of the tick mark!
+                if (state.selectedRoomId === room.id) {
+                    ctx.save();
+                    ctx.fillStyle = '#2dd4bf'; // Teal active grab handle
+                    ctx.strokeStyle = '#0f172a';
+                    ctx.lineWidth = 1.5;
+                    ctx.beginPath();
+                    const hx = toCanvasX(px + ox * tickLen * 0.5);
+                    const hy = toCanvasY(py + oy * tickLen * 0.5);
+                    ctx.arc(hx, hy, 5, 0, 2 * Math.PI);
+                    ctx.fill();
+                    ctx.stroke();
+                    ctx.restore();
+                }
+            });
             ctx.restore();
+        } else {
+            // Automatic Even Spacing (Scope is 'full' or no custom straps array yet)
+            let drawSegments = segments;
+            if (room.carbonFiberScope === 'specific' && Array.isArray(room.carbonFiberWalls)) {
+                drawSegments = segments.filter(seg => room.carbonFiberWalls.includes(seg.wall));
+            }
+            let totalPerim = 0;
+            const segData = [];
+            drawSegments.forEach(seg => {
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                const len = Math.sqrt(dx*dx + dy*dy);
+                if (len > 0.05) {
+                    totalPerim += len;
+                    segData.push({ seg, len, dx, dy });
+                }
+            });
+            
+            if (totalPerim > 0 && segData.length > 0) {
+                const N = room.carbonStraps;
+                const spacing = totalPerim / N;
+                
+                ctx.save();
+                ctx.strokeStyle = '#0f172a'; // Deep charcoal/black
+                ctx.lineWidth = 3;
+                
+                let currentDist = spacing / 2;
+                let currentSegIdx = 0;
+                let accumulatedDist = 0;
+                
+                for (let i = 0; i < N; i++) {
+                    while (currentSegIdx < segData.length && accumulatedDist + segData[currentSegIdx].len < currentDist) {
+                        accumulatedDist += segData[currentSegIdx].len;
+                        currentSegIdx++;
+                    }
+                    if (currentSegIdx >= segData.length) break;
+                    
+                    const s = segData[currentSegIdx];
+                    const distInSeg = currentDist - accumulatedDist;
+                    const ratio = distInSeg / s.len;
+                    
+                    const px = s.seg.x1 + s.dx * ratio;
+                    const py = s.seg.y1 + s.dy * ratio;
+                    
+                    const nx = -s.dy / s.len;
+                    const ny = s.dx / s.len;
+                    const testDist = 0.5;
+                    const testX = px + nx * testDist;
+                    const testY = py + ny * testDist;
+                    const inRoom = getRoomAt(testX, testY, room.levelId);
+                    const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                    
+                    const tickLen = 0.35;
+                    const ox = nx * mul;
+                    const oy = ny * mul;
+                    
+                    ctx.beginPath();
+                    ctx.moveTo(toCanvasX(px), toCanvasY(py));
+                    ctx.lineTo(toCanvasX(px + ox * tickLen), toCanvasY(py + oy * tickLen));
+                    ctx.stroke();
+                    
+                    currentDist += spacing;
+                }
+                ctx.restore();
+            }
         }
     }
 
@@ -2388,6 +2474,32 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
+    // Check manual Carbon Fiber Strap selection
+    if (state.selectedRoomId) {
+        const room = state.rooms.find(r => r.id === state.selectedRoomId);
+        if (room && room.carbonFiberScope === 'specific' && room.customCarbonStraps && room.customCarbonStraps.length > 0) {
+            const segments = getRoomSegments(room);
+            for (let strap of room.customCarbonStraps) {
+                const seg = segments.find(s => s.wall === strap.wall);
+                if (seg) {
+                    const dx = seg.x2 - seg.x1;
+                    const dy = seg.y2 - seg.y1;
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    if (len >= 0.05) {
+                        const px = seg.x1 + dx * strap.offset;
+                        const py = seg.y1 + dy * strap.offset;
+                        const dist = Math.sqrt((wx - px)**2 + (wy - py)**2);
+                        if (dist < 0.9) { // 0.9 feet click tolerance
+                            state.draggedStrap = { roomId: room.id, strapId: strap.id };
+                            selectItem('room', room.id);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // 0. Check Door/Window Openings click first
     for (let i = state.rooms.length - 1; i >= 0; i--) {
         const room = state.rooms[i];
@@ -2664,6 +2776,53 @@ canvas.addEventListener('mousemove', (e) => {
             updateGlobalStats();
             if (window.sync3D) window.sync3D();
         }
+        return;
+    }
+
+    // Drag manual Carbon Fiber Strap
+    if (state.draggedStrap) {
+        const room = state.rooms.find(r => r.id === state.draggedStrap.roomId);
+        if (room && room.customCarbonStraps) {
+            const strap = room.customCarbonStraps.find(s => s.id === state.draggedStrap.strapId);
+            if (strap) {
+                const segments = getRoomSegments(room);
+                let bestSeg = null;
+                let bestT = 0.5;
+                let minDist = Infinity;
+                
+                for (let seg of segments) {
+                    const dx = seg.x2 - seg.x1;
+                    const dy = seg.y2 - seg.y1;
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    if (len < 0.05) continue;
+                    
+                    let t = ((wx - seg.x1) * dx + (wy - seg.y1) * dy) / (len * len);
+                    t = Math.max(0.0, Math.min(1.0, t));
+                    const projX = seg.x1 + t * dx;
+                    const projY = seg.y1 + t * dy;
+                    const dist = Math.sqrt((wx - projX)**2 + (wy - projY)**2);
+                    
+                    if (dist < minDist) {
+                        minDist = dist;
+                        bestSeg = seg;
+                        bestT = t;
+                    }
+                }
+                
+                if (bestSeg) {
+                    strap.wall = bestSeg.wall;
+                    strap.offset = bestT;
+                    draw();
+                    if (window.sync3D) window.sync3D();
+                    
+                    // Render details panel sidebar in real-time
+                    if (typeof renderCustomStrapsList === 'function') {
+                        renderCustomStrapsList(room);
+                    }
+                }
+            }
+        }
+        canvas.style.cursor = 'grabbing';
         return;
     }
 
@@ -2982,7 +3141,7 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('mouseup', () => {
     // If elements were dragged, check if they actually moved and commit to history
-    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedFloorHatchId || state.draggedDischargeHandle || state.draggedInteriorPipeHandle || state.draggedStanchionId || state.draggedMainBeamHandle || state.draggedOpening || state.draggedVertex) {
+    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedFloorHatchId || state.draggedDischargeHandle || state.draggedInteriorPipeHandle || state.draggedStanchionId || state.draggedMainBeamHandle || state.draggedOpening || state.draggedVertex || state.draggedStrap) {
         if (state.dragSnapshot) {
             const currentStr = JSON.stringify({
                 rooms: state.rooms,
@@ -3025,6 +3184,7 @@ canvas.addEventListener('mouseup', () => {
     state.draggedMainBeamHandle = null;
     state.draggedOpening = null;
     state.draggedVertex = null;
+    state.draggedStrap = null;
     draw();
     if (window.sync3D) window.sync3D();
 });
@@ -3289,9 +3449,11 @@ document.getElementById('room-carbon-straps-input').addEventListener('input', (e
     if (!state.selectedRoomId) return;
     const room = state.rooms.find(r => r.id === state.selectedRoomId);
     if (room) {
-        const val = parseInt(e.target.value) || 0;
+        const val = Math.max(0, parseInt(e.target.value) || 0);
         if (typeof saveHistoryState === 'function') saveHistoryState();
-        room.carbonStraps = Math.max(0, val);
+        room.carbonStraps = val;
+        initializeCustomStraps(room);
+        renderCustomStrapsList(room);
         draw();
         updateGlobalStats();
         updateToolboxReinforcementLabels(room);
@@ -3309,8 +3471,10 @@ document.getElementById('room-carbon-scope-select').addEventListener('change', (
             const segments = getRoomSegments(room);
             room.carbonFiberWalls = segments.map(s => s.wall);
         }
+        initializeCustomStraps(room);
         renderCarbonWallsCheckboxes(room);
         draw();
+        if (window.sync3D) window.sync3D();
     }
 });
 
@@ -3359,7 +3523,96 @@ function renderCarbonWallsCheckboxes(room) {
         });
         container.appendChild(row);
     });
+    
+    // Render custom manual straps list
+    renderCustomStrapsList(room);
 }
+
+function renderCustomStrapsList(room) {
+    const listContainer = document.getElementById('room-custom-straps-container');
+    const listEl = document.getElementById('room-custom-straps-list');
+    if (!listContainer || !listEl) return;
+    
+    if (room.carbonFiberScope === 'specific') {
+        listContainer.classList.remove('hidden');
+    } else {
+        listContainer.classList.add('hidden');
+        return;
+    }
+    
+    listEl.innerHTML = '';
+    initializeCustomStraps(room);
+    
+    if (!room.customCarbonStraps || room.customCarbonStraps.length === 0) {
+        listEl.innerHTML = `<p style="font-size: 0.75rem; color: var(--text-muted); margin: 0; padding: 0.5rem; text-align: center; font-style: italic;">No straps placed. Click '+ Add Strap' or drag handles.</p>`;
+        return;
+    }
+    
+    room.customCarbonStraps.forEach((strap, idx) => {
+        let wallLabel = `Wall ${strap.wall}`;
+        if (room.type !== 'custom') {
+            const labels = { n: 'North Wall', e: 'East Wall', s: 'South Wall', w: 'West Wall' };
+            wallLabel = labels[strap.wall] || `Wall ${strap.wall}`;
+        } else {
+            const wallIdx = parseInt(strap.wall);
+            if (!isNaN(wallIdx)) wallLabel = `Wall ${wallIdx + 1}`;
+        }
+        
+        const pct = Math.round(strap.offset * 100);
+        
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.justifyContent = 'space-between';
+        row.style.alignItems = 'center';
+        row.style.background = 'rgba(255,255,255,0.02)';
+        row.style.border = '1px solid var(--border-color)';
+        row.style.padding = '0.35rem 0.5rem';
+        row.style.borderRadius = '4px';
+        row.style.marginTop = '0.25rem';
+        
+        row.innerHTML = `
+            <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-color);">${idx + 1}. ${wallLabel} (${pct}%)</span>
+            <button type="button" class="btn-delete-strap" style="background: transparent; color: #ef4444; border: none; font-size: 0.75rem; cursor: pointer; padding: 0.15rem 0.35rem;">Delete</button>
+        `;
+        
+        row.querySelector('.btn-delete-strap').addEventListener('click', () => {
+            saveHistoryState();
+            room.customCarbonStraps = room.customCarbonStraps.filter(s => s.id !== strap.id);
+            room.carbonStraps = room.customCarbonStraps.length;
+            
+            // Sync input Qty value
+            const input = document.getElementById('room-carbon-straps-input');
+            if (input) input.value = room.carbonStraps;
+            
+            renderCustomStrapsList(room);
+            draw();
+            updateGlobalStats();
+            if (window.sync3D) window.sync3D();
+        });
+        
+        listEl.appendChild(row);
+    });
+}
+
+// Bind manual Add Strap click handler
+document.getElementById('btn-add-custom-strap').addEventListener('click', () => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        saveHistoryState();
+        room.carbonStraps = (room.carbonStraps || 0) + 1;
+        initializeCustomStraps(room);
+        renderCustomStrapsList(room);
+        
+        // Sync input Qty value
+        const input = document.getElementById('room-carbon-straps-input');
+        if (input) input.value = room.carbonStraps;
+        
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
 
 window.changeRectWallLength = function(roomId, wallKey, newValueRaw) {
     const room = state.rooms.find(r => r.id === roomId);
@@ -4464,6 +4717,7 @@ function finishCustomRoomDrawing() {
         carbonStraps: 0,
         carbonFiberScope: 'full',
         carbonFiberWalls: [],
+        customCarbonStraps: [],
         floorPerimeterStrap: false,
         nb1Height: 'none'
     };

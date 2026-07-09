@@ -457,50 +457,31 @@ window.sync3D = function() {
         // --- Render 3D Carbon Fiber Straps (Vertical) ---
         if (room.carbonStraps > 0) {
             const segments = getRoomSegments(room);
-            let totalPerim = 0;
-            const segData = [];
-            segments.forEach(seg => {
-                const dx = seg.x2 - seg.x1;
-                const dy = seg.y2 - seg.y1;
-                const len = Math.sqrt(dx*dx + dy*dy);
-                if (len > 0.05) {
-                    totalPerim += len;
-                    segData.push({ seg, len, dx, dy });
-                }
+            const sWidth = 0.33; // 4 inches wide strap
+            const sThick = 0.025;
+            const cfMat = new THREE.MeshStandardMaterial({
+                color: '#0f172a',
+                roughness: 0.6,
+                metalness: 0.1
             });
-            
-            if (totalPerim > 0 && segData.length > 0) {
-                const N = room.carbonStraps;
-                const spacing = totalPerim / N;
-                const sWidth = 0.33; // 4 inches wide strap
-                const sThick = 0.025;
-                
-                const cfMat = new THREE.MeshStandardMaterial({
-                    color: '#0f172a',
-                    roughness: 0.6,
-                    metalness: 0.1
-                });
-                
-                let currentDist = spacing / 2;
-                let currentSegIdx = 0;
-                let accumulatedDist = 0;
-                
-                for (let i = 0; i < N; i++) {
-                    while (currentSegIdx < segData.length && accumulatedDist + segData[currentSegIdx].len < currentDist) {
-                        accumulatedDist += segData[currentSegIdx].len;
-                        currentSegIdx++;
-                    }
-                    if (currentSegIdx >= segData.length) break;
+            const offsetDist = wallThickness / 2 + 0.055;
+
+            if (room.carbonFiberScope === 'specific' && room.customCarbonStraps && room.customCarbonStraps.length > 0) {
+                // Manual Placement Mode
+                room.customCarbonStraps.forEach(strap => {
+                    const seg = segments.find(s => s.wall === strap.wall);
+                    if (!seg) return;
                     
-                    const s = segData[currentSegIdx];
-                    const distInSeg = currentDist - accumulatedDist;
-                    const ratio = distInSeg / s.len;
+                    const dx = seg.x2 - seg.x1;
+                    const dy = seg.y2 - seg.y1;
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    if (len < 0.05) return;
                     
-                    const px = s.seg.x1 + s.dx * ratio;
-                    const py = s.seg.y1 + s.dy * ratio;
+                    const px = seg.x1 + dx * strap.offset;
+                    const py = seg.y1 + dy * strap.offset;
                     
-                    const nx = -s.dy / s.len;
-                    const ny = s.dx / s.len;
+                    const nx = -dy / len;
+                    const ny = dx / len;
                     const testDist = 0.5;
                     const testX = px + nx * testDist;
                     const testY = py + ny * testDist;
@@ -510,21 +491,86 @@ window.sync3D = function() {
                     const geometry = new THREE.BoxGeometry(sWidth, room.h, sThick);
                     const mesh = new THREE.Mesh(geometry, cfMat);
                     
-                    const offsetDist = wallThickness / 2 + 0.055;
                     mesh.position.set(
                         px + nx * offsetDist * mul,
                         elevation + room.h / 2,
                         py + ny * offsetDist * mul
                     );
                     
-                    const angle = Math.atan2(s.dy, s.dx);
+                    const angle = Math.atan2(dy, dx);
                     mesh.rotation.y = -angle;
                     mesh.castShadow = true;
                     
                     scene.add(mesh);
                     roomMeshes.push(mesh);
+                });
+            } else {
+                // Automatic Even Spacing Mode
+                let drawSegments = segments;
+                if (room.carbonFiberScope === 'specific' && Array.isArray(room.carbonFiberWalls)) {
+                    drawSegments = segments.filter(seg => room.carbonFiberWalls.includes(seg.wall));
+                }
+                
+                let totalPerim = 0;
+                const segData = [];
+                drawSegments.forEach(seg => {
+                    const dx = seg.x2 - seg.x1;
+                    const dy = seg.y2 - seg.y1;
+                    const len = Math.sqrt(dx*dx + dy*dy);
+                    if (len > 0.05) {
+                        totalPerim += len;
+                        segData.push({ seg, len, dx, dy });
+                    }
+                });
+                
+                if (totalPerim > 0 && segData.length > 0) {
+                    const N = room.carbonStraps;
+                    const spacing = totalPerim / N;
                     
-                    currentDist += spacing;
+                    let currentDist = spacing / 2;
+                    let currentSegIdx = 0;
+                    let accumulatedDist = 0;
+                    
+                    for (let i = 0; i < N; i++) {
+                        while (currentSegIdx < segData.length && accumulatedDist + segData[currentSegIdx].len < currentDist) {
+                            accumulatedDist += segData[currentSegIdx].len;
+                            currentSegIdx++;
+                        }
+                        if (currentSegIdx >= segData.length) break;
+                        
+                        const s = segData[currentSegIdx];
+                        const distInSeg = currentDist - accumulatedDist;
+                        const ratio = distInSeg / s.len;
+                        
+                        const px = s.seg.x1 + s.dx * ratio;
+                        const py = s.seg.y1 + s.dy * ratio;
+                        
+                        const nx = -s.dy / s.len;
+                        const ny = s.dx / s.len;
+                        const testDist = 0.5;
+                        const testX = px + nx * testDist;
+                        const testY = py + ny * testDist;
+                        const inRoom = getRoomAt(testX, testY, room.levelId);
+                        const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                        
+                        const geometry = new THREE.BoxGeometry(sWidth, room.h, sThick);
+                        const mesh = new THREE.Mesh(geometry, cfMat);
+                        
+                        mesh.position.set(
+                            px + nx * offsetDist * mul,
+                            elevation + room.h / 2,
+                            py + ny * offsetDist * mul
+                        );
+                        
+                        const angle = Math.atan2(s.dy, s.dx);
+                        mesh.rotation.y = -angle;
+                        mesh.castShadow = true;
+                        
+                        scene.add(mesh);
+                        roomMeshes.push(mesh);
+                        
+                        currentDist += spacing;
+                    }
                 }
             }
         }
