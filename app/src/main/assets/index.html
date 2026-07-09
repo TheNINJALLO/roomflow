@@ -393,6 +393,19 @@
                             <label for="room-carbon-straps-input">Carbon Fiber Straps (Qty)</label>
                             <input type="number" id="room-carbon-straps-input" min="0" step="1" value="0">
                         </div>
+                        <div class="input-group" style="margin-top: 0.5rem;">
+                            <label for="room-carbon-scope-select">Carbon Fiber Scope</label>
+                            <select id="room-carbon-scope-select">
+                                <option value="full">Full Room Perimeter</option>
+                                <option value="specific">Specific Walls</option>
+                            </select>
+                        </div>
+                        <div id="room-carbon-walls-container" class="hidden" style="margin-top: 0.5rem; padding: 0.5rem; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px;">
+                            <label style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem; display: block; font-weight: 600; text-transform: uppercase;">Reinforced Walls</label>
+                            <div id="room-carbon-walls-checkboxes" style="display: flex; flex-direction: column; gap: 0.25rem;">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
 
                         <!-- Floor Perimeter Carbon Fiber -->
                         <div class="input-group-checkbox" style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;">

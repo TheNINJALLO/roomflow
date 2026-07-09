@@ -145,6 +145,8 @@ function addRoom(type) {
         openings: [],
         foamBoard: false,
         carbonStraps: 0,
+        carbonFiberScope: 'full',
+        carbonFiberWalls: [],
         floorPerimeterStrap: false,
         nb1Height: 'none'
     };
@@ -355,6 +357,12 @@ function selectItem(type, id) {
             const strapsInput = document.getElementById('room-carbon-straps-input');
             if (strapsInput) strapsInput.value = room.carbonStraps || 0;
 
+            const scopeSelect = document.getElementById('room-carbon-scope-select');
+            if (scopeSelect) scopeSelect.value = room.carbonFiberScope || 'full';
+            if (typeof renderCarbonWallsCheckboxes === 'function') {
+                renderCarbonWallsCheckboxes(room);
+            }
+
             const floorStrapCheckbox = document.getElementById('room-floor-perimeter-strap-checkbox');
             if (floorStrapCheckbox) floorStrapCheckbox.checked = !!room.floorPerimeterStrap;
 
@@ -364,12 +372,12 @@ function selectItem(type, id) {
             const rectInputs = document.getElementById('room-rect-inputs');
             const customInputs = document.getElementById('room-custom-walls-inputs');
             
+            customInputs.classList.remove('hidden');
+            const container = document.getElementById('custom-walls-list-container');
+            container.innerHTML = '';
+            
             if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
                 rectInputs.classList.add('hidden');
-                customInputs.classList.remove('hidden');
-                
-                const container = document.getElementById('custom-walls-list-container');
-                container.innerHTML = '';
                 for (let i = 0; i < room.vertices.length; i++) {
                     const v1 = room.vertices[i];
                     const v2 = room.vertices[(i + 1) % room.vertices.length];
@@ -396,9 +404,34 @@ function selectItem(type, id) {
                 }
             } else {
                 rectInputs.classList.remove('hidden');
-                customInputs.classList.add('hidden');
                 document.getElementById('room-w-input').value = room.w;
                 document.getElementById('room-l-input').value = room.l;
+                
+                const walls = [
+                    { name: 'Wall 1 (North)', key: 'n', val: room.w },
+                    { name: 'Wall 2 (East)', key: 'e', val: room.l },
+                    { name: 'Wall 3 (South)', key: 's', val: room.w },
+                    { name: 'Wall 4 (West)', key: 'w', val: room.l }
+                ];
+                
+                walls.forEach(w => {
+                    const div = document.createElement('div');
+                    div.style.display = 'flex';
+                    div.style.justifyContent = 'space-between';
+                    div.style.alignItems = 'center';
+                    div.style.marginBottom = '0.3rem';
+                    div.style.padding = '0.2rem 0.5rem';
+                    div.style.background = 'rgba(255,255,255,0.02)';
+                    div.style.border = '1px solid var(--border-color)';
+                    div.style.borderRadius = '6px';
+                    div.innerHTML = `
+                        <span style="font-size:0.75rem; color:var(--text-muted); font-weight:500;">${w.name}</span>
+                        <input type="number" step="0.5" min="0.5" value="${w.val.toFixed(1)}" 
+                            style="width: 75px; padding: 0.15rem 0.35rem; font-family: var(--font-mono); font-weight:600; font-size: 0.75rem; background:rgba(0,0,0,0.3); border:1px solid var(--border-color); border-radius:4px; color:var(--accent-teal); text-align:right;"
+                            onchange="changeRectWallLength('${room.id}', '${w.key}', this.value)">
+                    `;
+                    container.appendChild(div);
+                });
             }
             
             const stepsGroup = document.getElementById('room-steps-group');
@@ -765,7 +798,8 @@ function getRoomSegments(room) {
                 x1: room.x + v1.x,
                 y1: room.y + v1.y,
                 x2: room.x + v2.x,
-                y2: room.y + v2.y
+                y2: room.y + v2.y,
+                wall: i.toString()
             });
         }
     } else {
@@ -773,10 +807,10 @@ function getRoomSegments(room) {
         const y = room.y;
         const w = room.w;
         const l = room.l;
-        segs.push({ x1: x, y1: y, x2: x + w, y2: y }); // North
-        segs.push({ x1: x + w, y1: y, x2: x + w, y2: y + l }); // East
-        segs.push({ x1: x, y1: y + l, x2: x + w, y2: y + l }); // South
-        segs.push({ x1: x, y1: y, x2: x, y2: y + l }); // West
+        segs.push({ x1: x, y1: y, x2: x + w, y2: y, wall: 'n' }); // North
+        segs.push({ x1: x + w, y1: y, x2: x + w, y2: y + l, wall: 'e' }); // East
+        segs.push({ x1: x, y1: y + l, x2: x + w, y2: y + l, wall: 's' }); // South
+        segs.push({ x1: x, y1: y, x2: x, y2: y + l, wall: 'w' }); // West
     }
     return segs;
 }
@@ -1764,7 +1798,10 @@ function drawRoom(room) {
 
     // Draw 2D Carbon Fiber Straps (Vertical tick marks)
     if (room.carbonStraps > 0) {
-        const segments = getRoomSegments(room);
+        let segments = getRoomSegments(room);
+        if (room.carbonFiberScope === 'specific' && Array.isArray(room.carbonFiberWalls)) {
+            segments = segments.filter(seg => room.carbonFiberWalls.includes(seg.wall));
+        }
         let totalPerim = 0;
         const segData = [];
         segments.forEach(seg => {
@@ -3198,6 +3235,100 @@ document.getElementById('room-carbon-straps-input').addEventListener('input', (e
     }
 });
 
+document.getElementById('room-carbon-scope-select').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        saveHistoryState();
+        room.carbonFiberScope = e.target.value;
+        if (room.carbonFiberScope === 'specific' && (!room.carbonFiberWalls || room.carbonFiberWalls.length === 0)) {
+            const segments = getRoomSegments(room);
+            room.carbonFiberWalls = segments.map(s => s.wall);
+        }
+        renderCarbonWallsCheckboxes(room);
+        draw();
+    }
+});
+
+function renderCarbonWallsCheckboxes(room) {
+    const container = document.getElementById('room-carbon-walls-checkboxes');
+    if (!container) return;
+    container.innerHTML = '';
+    
+    const scopeContainer = document.getElementById('room-carbon-walls-container');
+    if (room.carbonFiberScope === 'specific') {
+        scopeContainer.classList.remove('hidden');
+    } else {
+        scopeContainer.classList.add('hidden');
+        return;
+    }
+    
+    const segments = getRoomSegments(room);
+    segments.forEach((seg, i) => {
+        let wallLabel = `Wall ${i+1}`;
+        if (room.type !== 'custom') {
+            const labels = { n: 'Wall 1 (North)', e: 'Wall 2 (East)', s: 'Wall 3 (South)', w: 'Wall 4 (West)' };
+            wallLabel = labels[seg.wall] || `Wall ${i+1}`;
+        }
+        
+        const isChecked = Array.isArray(room.carbonFiberWalls) && room.carbonFiberWalls.includes(seg.wall);
+        
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '0.5rem';
+        row.style.marginTop = '0.15rem';
+        row.innerHTML = `
+            <input type="checkbox" id="cb-wall-${seg.wall}" style="width:auto; margin:0;" ${isChecked ? 'checked' : ''}>
+            <label for="cb-wall-${seg.wall}" style="font-size:0.75rem; font-weight:500; cursor:pointer; margin-bottom:0; color:var(--text-color);">${wallLabel}</label>
+        `;
+        
+        row.querySelector('input').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                if (!room.carbonFiberWalls.includes(seg.wall)) {
+                    room.carbonFiberWalls.push(seg.wall);
+                }
+            } else {
+                room.carbonFiberWalls = room.carbonFiberWalls.filter(w => w !== seg.wall);
+            }
+            draw();
+        });
+        container.appendChild(row);
+    });
+}
+
+window.changeRectWallLength = function(roomId, wallKey, newValueRaw) {
+    const room = state.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    const val = Math.max(1.0, parseFloat(newValueRaw) || 1.0);
+    saveHistoryState();
+    
+    if (wallKey === 'n' || wallKey === 's') {
+        room.w = val;
+    } else if (wallKey === 'e' || wallKey === 'w') {
+        room.l = val;
+    }
+    
+    document.getElementById('room-w-input').value = room.w;
+    document.getElementById('room-l-input').value = room.l;
+    
+    // Re-render the wall inputs list to show updated lengths
+    const container = document.getElementById('custom-walls-list-container');
+    if (container) {
+        const wallInputs = container.querySelectorAll('input');
+        if (wallInputs.length === 4) {
+            wallInputs[0].value = room.w.toFixed(1);
+            wallInputs[1].value = room.l.toFixed(1);
+            wallInputs[2].value = room.w.toFixed(1);
+            wallInputs[3].value = room.l.toFixed(1);
+        }
+    }
+    
+    updateRoomEstimates(room);
+    draw();
+    if (window.sync3D) window.sync3D();
+};
+
 // Room Floor Perimeter Carbon Fiber change
 document.getElementById('room-floor-perimeter-strap-checkbox').addEventListener('change', (e) => {
     if (!state.selectedRoomId) return;
@@ -4265,6 +4396,8 @@ function finishCustomRoomDrawing() {
         vertices: relativeVertices,
         foamBoard: false,
         carbonStraps: 0,
+        carbonFiberScope: 'full',
+        carbonFiberWalls: [],
         floorPerimeterStrap: false,
         nb1Height: 'none'
     };
