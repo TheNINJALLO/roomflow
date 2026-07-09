@@ -144,6 +144,7 @@ function addRoom(type) {
         color: preset.color,
         openings: [],
         foamBoard: false,
+        foamBondPockets: false,
         carbonStraps: 0,
         carbonFiberScope: 'full',
         carbonFiberWalls: [],
@@ -353,6 +354,9 @@ function selectItem(type, id) {
 
             const foamCheckbox = document.getElementById('room-foam-board-checkbox');
             if (foamCheckbox) foamCheckbox.checked = !!room.foamBoard;
+
+            const pocketsCheckbox = document.getElementById('room-foam-bond-pockets-checkbox');
+            if (pocketsCheckbox) pocketsCheckbox.checked = !!room.foamBondPockets;
 
             const strapsInput = document.getElementById('room-carbon-straps-input');
             if (strapsInput) strapsInput.value = room.carbonStraps || 0;
@@ -749,6 +753,30 @@ function updateRoomEstimates(room) {
     document.getElementById('metric-perimeter').innerText = `${perimeter.toFixed(1)} ft`;
     document.getElementById('metric-volume').innerText = `${volume.toFixed(1)} cu ft`;
 
+    const bondPocketRow = document.getElementById('metric-bond-pockets-row');
+    const bondPocketCans = document.getElementById('metric-bond-pockets-cans');
+    
+    if (room.foamBondPockets && room.joists && room.joists !== 'none') {
+        const segments = getRoomSegments(room);
+        let wallLen = 0;
+        segments.forEach(seg => {
+            const dx = seg.x2 - seg.x1;
+            const dy = seg.y2 - seg.y1;
+            if (room.joists === 'ns') {
+                wallLen += Math.abs(dx);
+            } else if (room.joists === 'ew') {
+                wallLen += Math.abs(dy);
+            }
+        });
+        const roomBF = wallLen * 1.5;
+        const cans = Math.ceil(roomBF / 20);
+        
+        if (bondPocketRow) bondPocketRow.style.display = 'flex';
+        if (bondPocketCans) bondPocketCans.innerText = `${cans} cans (${roomBF.toFixed(1)} BF)`;
+    } else {
+        if (bondPocketRow) bondPocketRow.style.display = 'none';
+    }
+
     updateGlobalStats();
 }
 
@@ -1141,6 +1169,29 @@ function updateGlobalStats() {
     const nb1Bags = Math.ceil(totalNb1Area / 8);
     const nb1Text = document.getElementById('total-nb1-bags');
     if (nb1Text) nb1Text.innerText = `${nb1Bags} bags (${totalNb1Area.toFixed(0)} sq ft)`;
+
+    // Spray Foam Cans calculation
+    let totalSprayFoamCans = 0;
+    state.rooms.forEach(room => {
+        if (room.foamBondPockets && room.joists && room.joists !== 'none') {
+            const segments = getRoomSegments(room);
+            let wallLen = 0;
+            segments.forEach(seg => {
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                if (room.joists === 'ns') {
+                    wallLen += Math.abs(dx);
+                } else if (room.joists === 'ew') {
+                    wallLen += Math.abs(dy);
+                }
+            });
+            const roomBF = wallLen * 1.5;
+            totalSprayFoamCans += Math.ceil(roomBF / 20);
+        }
+    });
+
+    const foamCansText = document.getElementById('total-bond-pockets-cans');
+    if (foamCansText) foamCansText.innerText = `${totalSprayFoamCans} cans`;
 }
 
 // Delete Selected Items
@@ -3220,6 +3271,19 @@ document.getElementById('room-foam-board-checkbox').addEventListener('change', (
     }
 });
 
+// Room Spray Foam Bond Pockets change
+document.getElementById('room-foam-bond-pockets-checkbox').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.foamBondPockets = e.target.checked;
+        updateRoomEstimates(room);
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
 // Room Carbon Fiber Straps Qty change
 document.getElementById('room-carbon-straps-input').addEventListener('input', (e) => {
     if (!state.selectedRoomId) return;
@@ -3772,6 +3836,7 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                     if (r.carbonStraps === undefined) r.carbonStraps = 0;
                     if (r.floorPerimeterStrap === undefined) r.floorPerimeterStrap = false;
                     if (r.nb1Height === undefined) r.nb1Height = 'none';
+                    if (r.foamBondPockets === undefined) r.foamBondPockets = false;
                 });
                 
                 // Sync UI level select dropdown
@@ -4395,6 +4460,7 @@ function finishCustomRoomDrawing() {
         openings: [],
         vertices: relativeVertices,
         foamBoard: false,
+        foamBondPockets: false,
         carbonStraps: 0,
         carbonFiberScope: 'full',
         carbonFiberWalls: [],
@@ -4891,6 +4957,7 @@ function loadJobData(data) {
         if (r.carbonStraps === undefined) r.carbonStraps = 0;
         if (r.floorPerimeterStrap === undefined) r.floorPerimeterStrap = false;
         if (r.nb1Height === undefined) r.nb1Height = 'none';
+        if (r.foamBondPockets === undefined) r.foamBondPockets = false;
     });
     state.sumpPumps.forEach(sp => { if (!sp.levelId) sp.levelId = 'basement'; });
     state.dischargeLines.forEach(dl => { if (!dl.levelId) dl.levelId = 'basement'; });
