@@ -228,6 +228,40 @@ window.startCamera = function() {
     pinnedPoints = [];
     updateARDisplay();
 
+    // Show the splash screen first to comply with browser user-gesture requirements
+    const arSplash = document.getElementById('ar-splash');
+    if (arSplash) {
+        arSplash.style.display = 'flex';
+        
+        // Update title and description dynamically
+        const splashTitle = document.getElementById('ar-splash-title');
+        const splashDesc = document.getElementById('ar-splash-desc');
+        
+        if (activeTier === 'APPLE_LIDAR') {
+            if (splashTitle) splashTitle.innerText = "Apple LiDAR Scanner";
+            if (splashDesc) splashDesc.innerText = "Utilizes iPhone/iPad Pro LiDAR depth sensors for sub-inch spatial room blueprint estimation.";
+        } else if (activeTier === 'APPLE_ARKIT') {
+            if (splashTitle) splashTitle.innerText = "Apple Spatial AR Scanner";
+            if (splashDesc) splashDesc.innerText = "Uses native ARKit world tracking to map rooms and boundaries in real-time.";
+        } else if (activeTier === 'WEBXR_SPATIAL') {
+            if (splashTitle) splashTitle.innerText = "Spatial AR Scanner (WebXR)";
+            if (splashDesc) splashDesc.innerText = "Requires camera and spatial tracking permissions to detect surfaces and pin corners.";
+        } else {
+            if (splashTitle) splashTitle.innerText = "Camera Estimator";
+            if (splashDesc) splashDesc.innerText = "Standard browser orientation fallback. Input device holding height and aim at floor corners.";
+        }
+    }
+};
+
+// Bind initialization button click (acts as the mandatory user gesture!)
+document.getElementById('btn-ar-start-session').addEventListener('click', () => {
+    const arSplash = document.getElementById('ar-splash');
+    if (arSplash) arSplash.style.display = 'none';
+    
+    initializeScannerSession();
+});
+
+function initializeScannerSession() {
     if (activeTier === 'APPLE_LIDAR' || activeTier === 'APPLE_ARKIT') {
         // Hide standard video element as iOS shell renders camera overlay natively
         if (videoEl) videoEl.style.opacity = '0';
@@ -270,10 +304,13 @@ window.startCamera = function() {
                 videoEl.style.backgroundColor = '#1e293b';
             });
     }
-};
+}
 
 // Stop Active AR Session
 window.stopCamera = function() {
+    const arSplash = document.getElementById('ar-splash');
+    if (arSplash) arSplash.style.display = 'flex';
+
     if (activeTier === 'APPLE_LIDAR' || activeTier === 'APPLE_ARKIT') {
         window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
             version: 1,
