@@ -51,41 +51,59 @@ class ARCameraFragment : Fragment(), SensorEventListener {
     }
 
     private fun startCamera() {
-        if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA)
-            != PackageManager.PERMISSION_GRANTED) {
+        val permission = ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.CAMERA)
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(context, "Requesting Camera Permission...", Toast.LENGTH_SHORT).show()
+            requestPermissions(arrayOf(android.Manifest.permission.CAMERA), 101)
             return
         }
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
-        cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
-            
-            val previewView = androidx.camera.view.PreviewView(requireContext()).apply {
-                layoutParams = android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
-                )
-                scaleType = androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
-            }
-            binding.arSurfaceContainer.removeAllViews()
-            binding.arSurfaceContainer.addView(previewView)
+        
+        Toast.makeText(context, "Initializing Camera...", Toast.LENGTH_SHORT).show()
+        try {
+            val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
+            cameraProviderFuture.addListener({
+                try {
+                    val cameraProvider = cameraProviderFuture.get()
+                    
+                    val previewView = androidx.camera.view.PreviewView(requireContext()).apply {
+                        layoutParams = android.widget.FrameLayout.LayoutParams(
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                            android.widget.FrameLayout.LayoutParams.MATCH_PARENT
+                        )
+                        scaleType = androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
+                    }
+                    binding.arSurfaceContainer.removeAllViews()
+                    binding.arSurfaceContainer.addView(previewView)
 
-            val preview = Preview.Builder().build().also {
-                it.setSurfaceProvider(previewView.surfaceProvider)
-            }
+                    val preview = Preview.Builder().build().also {
+                        it.setSurfaceProvider(previewView.surfaceProvider)
+                    }
 
-            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+                    val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
-            try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(viewLifecycleOwner, cameraSelector, preview)
-                
-                // Clear the black overlay background and hide placeholder to make preview visible!
-                binding.arSurfaceContainer.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                binding.arPlaceholder.visibility = android.view.View.GONE
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }, ContextCompat.getMainExecutor(requireContext()))
+                    cameraProvider.unbindAll()
+                    cameraProvider.bindToLifecycle(viewLifecycleOwner, cameraSelector, preview)
+                    
+                    binding.arSurfaceContainer.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    binding.arPlaceholder.visibility = android.view.View.GONE
+                    Toast.makeText(context, "Camera active!", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.util.Log.e("RoomFlow", "CameraX initialization failed", e)
+                    Toast.makeText(context, "Camera error: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }, ContextCompat.getMainExecutor(requireContext()))
+        } catch (e: Exception) {
+            android.util.Log.e("RoomFlow", "ProcessCameraProvider failed", e)
+            Toast.makeText(context, "Camera provider error: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        if (requestCode == 101 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startCamera()
+        } else {
+            Toast.makeText(context, "Camera permission is required for layout scanner", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent) {

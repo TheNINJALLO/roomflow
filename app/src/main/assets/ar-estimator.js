@@ -284,6 +284,20 @@ document.getElementById('btn-ar-start-session').addEventListener('click', () => 
     } else {
         window.addEventListener('deviceorientation', handleOrientation);
     }
+
+    // Request device motion permission synchronously on click (mandatory for iOS Safari)
+    if (typeof DeviceMotionEvent !== 'undefined' && 
+        typeof DeviceMotionEvent.requestPermission === 'function') {
+        DeviceMotionEvent.requestPermission()
+            .then(permissionState => {
+                if (permissionState === 'granted') {
+                    window.addEventListener('devicemotion', handleMotion);
+                }
+            })
+            .catch(console.error);
+    } else {
+        window.addEventListener('devicemotion', handleMotion);
+    }
     
     initializeScannerSession();
 });
@@ -588,14 +602,55 @@ function requestOrientationPermission() {
         typeof DeviceOrientationEvent.requestPermission !== 'function') {
         window.addEventListener('deviceorientation', handleOrientation);
     }
+    if (typeof DeviceMotionEvent === 'undefined' || 
+        typeof DeviceMotionEvent.requestPermission !== 'function') {
+        window.addEventListener('devicemotion', handleMotion);
+    }
+}
+
+let smoothAx = 0;
+let smoothAy = 9.8;
+let smoothAz = 0;
+const alpha = 0.12;
+
+function handleMotion(e) {
+    const acc = e.accelerationIncludingGravity;
+    if (!acc) return;
+    
+    const rawX = acc.x || 0;
+    const rawY = acc.y || 0;
+    const rawZ = acc.z || 0;
+    
+    // Low pass filter
+    smoothAx = smoothAx + alpha * (rawX - smoothAx);
+    smoothAy = smoothAy + alpha * (rawY - smoothAy);
+    smoothAz = smoothAz + alpha * (rawZ - smoothAz);
+    
+    const g = Math.sqrt(smoothAx * smoothAx + smoothAy * smoothAy + smoothAz * smoothAz);
+    if (g > 0.1) {
+        // Y-axis alignment with gravity
+        const cosTheta = Math.abs(smoothAy) / g;
+        const thetaRad = Math.acos(Math.max(-1.0, Math.min(1.0, cosTheta)));
+        const thetaDeg = (thetaRad * 180) / Math.PI;
+        
+        if (thetaDeg >= 5 && thetaDeg <= 80) {
+            devicePitch = thetaDeg;
+            if (activeTier === 'CAMERA_ESTIMATE') {
+                calculateDistance();
+            }
+        }
+    }
 }
 
 function handleOrientation(e) {
-    let beta = e.beta || 90;
-    beta = Math.max(15, Math.min(85, beta));
-    devicePitch = 90 - beta;
-    if (activeTier === 'CAMERA_ESTIMATE') {
-        calculateDistance();
+    // Only fall back to orientation angles if device motion / accelerometer is not triggering updates
+    if (smoothAx === 0 && smoothAy === 9.8) {
+        let beta = e.beta || 90;
+        beta = Math.max(15, Math.min(85, beta));
+        devicePitch = 90 - beta;
+        if (activeTier === 'CAMERA_ESTIMATE') {
+            calculateDistance();
+        }
     }
 }
 

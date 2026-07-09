@@ -3468,6 +3468,7 @@ document.getElementById('room-joists-select').addEventListener('change', (e) => 
         if (typeof saveHistoryState === 'function') saveHistoryState();
         room.joists = e.target.value;
         draw();
+        updateGlobalStats();
         if (window.sync3D) window.sync3D();
     }
 });
@@ -3494,6 +3495,7 @@ document.getElementById('room-foam-bond-pockets-checkbox').addEventListener('cha
         room.foamBondPockets = e.target.checked;
         updateRoomEstimates(room);
         draw();
+        updateGlobalStats();
         if (window.sync3D) window.sync3D();
     }
 });
