@@ -10,7 +10,7 @@ function init3D() {
     // 1. Create Scene & Camera
     scene = new THREE.Scene();
     scene.background = new THREE.Color('#0d111a');
-
+    
     // Add Fog for professional depth
     scene.fog = new THREE.FogExp2('#0d111a', 0.015);
 
@@ -93,15 +93,15 @@ window.sync3D = function() {
             const riser = room.h / stepCount;
             const orient = room.stairOrientation || 'N';
             const slope = room.stairDirection || 'up';
-
+            
             const stepMat = new THREE.MeshStandardMaterial({
                 color: room.color,
                 roughness: 0.75,
                 metalness: 0.1
             });
-
+            
             const isHorizontal = (orient === 'N' || orient === 'S');
-
+            
             for (let i = 0; i < stepCount; i++) {
                 let stepHeight;
                 if (slope === 'up') {
@@ -109,25 +109,25 @@ window.sync3D = function() {
                 } else {
                     stepHeight = (stepCount - i) * riser;
                 }
-
+                
                 let stepGeo, stepMesh;
-
+                
                 if (isHorizontal) {
                     const tread = room.l / stepCount;
                     stepGeo = new THREE.BoxGeometry(room.w, stepHeight, tread);
                     stepMesh = new THREE.Mesh(stepGeo, stepMat);
-
+                    
                     const stepZ = (orient === 'S') ? (i * tread + tread / 2) : ((stepCount - 1 - i) * tread + tread / 2);
                     stepMesh.position.set(room.w / 2, stepHeight / 2, stepZ);
                 } else {
                     const tread = room.w / stepCount;
                     stepGeo = new THREE.BoxGeometry(tread, stepHeight, room.l);
                     stepMesh = new THREE.Mesh(stepGeo, stepMat);
-
+                    
                     const stepX = (orient === 'E') ? (i * tread + tread / 2) : ((stepCount - 1 - i) * tread + tread / 2);
                     stepMesh.position.set(stepX, stepHeight / 2, room.l / 2);
                 }
-
+                
                 stepMesh.castShadow = true;
                 stepMesh.receiveShadow = true;
                 roomGroup.add(stepMesh);
@@ -147,7 +147,7 @@ window.sync3D = function() {
                 shape.lineTo(room.vertices[i].x, room.vertices[i].y);
             }
             shape.closePath();
-
+            
             const floorGeo = new THREE.ShapeGeometry(shape);
             const floorMat = new THREE.MeshStandardMaterial({
                 color: room.color,
@@ -171,7 +171,7 @@ window.sync3D = function() {
             for (let i = 0; i < room.vertices.length; i++) {
                 const v1 = room.vertices[i];
                 const v2 = room.vertices[(i + 1) % room.vertices.length];
-
+                
                 // Openings on custom walls filter by index number string
                 const segOpenings = room.openings.filter(op => op.wall === i.toString() || op.wall === i);
                 build3DWall(v1.x, v1.y, v2.x, v2.y, room.h, segOpenings, roomGroup, wallMat);
@@ -231,7 +231,7 @@ window.sync3D = function() {
             const spacing = 1.333; // 16 inches spacing
             const jThick = 0.15;   // 2 inches wide
             const jHeight = 0.65;  // 8 inches deep
-
+            
             if (room.type === 'custom' && room.vertices) {
                 // Find bounding box
                 let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -241,7 +241,7 @@ window.sync3D = function() {
                     if (v.y < minY) minY = v.y;
                     if (v.y > maxY) maxY = v.y;
                 });
-
+                
                 if (room.joists === 'ns') {
                     for (let x = Math.ceil(minX / spacing) * spacing; x < maxX; x += spacing) {
                         const len = maxY - minY;
@@ -296,17 +296,17 @@ window.sync3D = function() {
                 metalness: 0.05
             });
             const fThick = 0.16; // 2 inches
-
+            
             segments.forEach(seg => {
                 const mx = (seg.x1 + seg.x2) / 2;
                 const my = (seg.y1 + seg.y2) / 2;
-
+                
                 // Check if exterior wall
                 let isShared = false;
                 for (let i = 0; i < state.rooms.length; i++) {
                     const other = state.rooms[i];
                     if (other.id === room.id || other.levelId !== room.levelId) continue;
-
+                    
                     const otherSegs = getRoomSegments(other);
                     for (let j = 0; j < otherSegs.length; j++) {
                         const oSeg = otherSegs[j];
@@ -318,40 +318,40 @@ window.sync3D = function() {
                     }
                     if (isShared) break;
                 }
-
+                
                 if (!isShared) {
                     const len = Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
                     if (len < 0.05) return;
-
+                    
                     const geometry = new THREE.BoxGeometry(len, room.h, fThick);
                     const mesh = new THREE.Mesh(geometry, foamMat);
-
+                    
                     const dx = seg.x2 - seg.x1;
                     const dy = seg.y2 - seg.y1;
                     const nx = -dy / len;
                     const ny = dx / len;
-
+                    
                     // Outward normal check
                     const testDist = 0.5;
                     const testX = mx + nx * testDist;
                     const testY = my + ny * testDist;
                     const inRoom = getRoomAt(testX, testY, room.levelId);
-
+                    
                     const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
                     const offsetDist = wallThickness / 2 + 0.08;
-
+                    
                     mesh.position.set(
                         mx + nx * offsetDist * mul,
                         elevation + room.h / 2,
                         my + ny * offsetDist * mul
                     );
-
+                    
                     const angle = Math.atan2(dy, dx);
                     mesh.rotation.y = -angle;
-
+                    
                     mesh.castShadow = true;
                     mesh.receiveShadow = true;
-
+                    
                     scene.add(mesh);
                     roomMeshes.push(mesh);
                 }
@@ -368,39 +368,39 @@ window.sync3D = function() {
             });
             const coatingH = room.nb1Height === '2ft' ? 2.0 : (room.nb1Height === '4ft' ? 4.0 : room.h);
             const nb1Thick = 0.015; // 0.18 inches thick layer
-
+            
             segments.forEach(seg => {
                 const len = Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
                 if (len < 0.05) return;
-
+                
                 const geometry = new THREE.BoxGeometry(len, coatingH, nb1Thick);
                 const mesh = new THREE.Mesh(geometry, nb1Mat);
-
+                
                 const dx = seg.x2 - seg.x1;
                 const dy = seg.y2 - seg.y1;
                 const nx = -dy / len;
                 const ny = dx / len;
-
+                
                 const mx = (seg.x1 + seg.x2) / 2;
                 const my = (seg.y1 + seg.y2) / 2;
-
+                
                 const testDist = 0.5;
                 const testX = mx + nx * testDist;
                 const testY = my + ny * testDist;
                 const inRoom = getRoomAt(testX, testY, room.levelId);
                 const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
-
+                
                 const offsetDist = wallThickness / 2 + 0.01;
                 mesh.position.set(
                     mx + nx * offsetDist * mul,
                     elevation + coatingH / 2,
                     my + ny * offsetDist * mul
                 );
-
+                
                 const angle = Math.atan2(dy, dx);
                 mesh.rotation.y = -angle;
                 mesh.receiveShadow = true;
-
+                
                 scene.add(mesh);
                 roomMeshes.push(mesh);
             });
@@ -416,39 +416,39 @@ window.sync3D = function() {
             });
             const pHeight = 0.33; // 4 inches high
             const pThick = 0.02;
-
+            
             segments.forEach(seg => {
                 const len = Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
                 if (len < 0.05) return;
-
+                
                 const geometry = new THREE.BoxGeometry(len, pHeight, pThick);
                 const mesh = new THREE.Mesh(geometry, cfMat);
-
+                
                 const dx = seg.x2 - seg.x1;
                 const dy = seg.y2 - seg.y1;
                 const nx = -dy / len;
                 const ny = dx / len;
-
+                
                 const mx = (seg.x1 + seg.x2) / 2;
                 const my = (seg.y1 + seg.y2) / 2;
-
+                
                 const testDist = 0.5;
                 const testX = mx + nx * testDist;
                 const testY = my + ny * testDist;
                 const inRoom = getRoomAt(testX, testY, room.levelId);
                 const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
-
+                
                 const offsetDist = wallThickness / 2 + 0.03;
                 mesh.position.set(
                     mx + nx * offsetDist * mul,
                     elevation + pHeight / 2,
                     my + ny * offsetDist * mul
                 );
-
+                
                 const angle = Math.atan2(dy, dx);
                 mesh.rotation.y = -angle;
                 mesh.receiveShadow = true;
-
+                
                 scene.add(mesh);
                 roomMeshes.push(mesh);
             });
@@ -468,37 +468,37 @@ window.sync3D = function() {
                     segData.push({ seg, len, dx, dy });
                 }
             });
-
+            
             if (totalPerim > 0 && segData.length > 0) {
                 const N = room.carbonStraps;
                 const spacing = totalPerim / N;
                 const sWidth = 0.33; // 4 inches wide strap
                 const sThick = 0.025;
-
+                
                 const cfMat = new THREE.MeshStandardMaterial({
                     color: '#0f172a',
                     roughness: 0.6,
                     metalness: 0.1
                 });
-
+                
                 let currentDist = spacing / 2;
                 let currentSegIdx = 0;
                 let accumulatedDist = 0;
-
+                
                 for (let i = 0; i < N; i++) {
                     while (currentSegIdx < segData.length && accumulatedDist + segData[currentSegIdx].len < currentDist) {
                         accumulatedDist += segData[currentSegIdx].len;
                         currentSegIdx++;
                     }
                     if (currentSegIdx >= segData.length) break;
-
+                    
                     const s = segData[currentSegIdx];
                     const distInSeg = currentDist - accumulatedDist;
                     const ratio = distInSeg / s.len;
-
+                    
                     const px = s.seg.x1 + s.dx * ratio;
                     const py = s.seg.y1 + s.dy * ratio;
-
+                    
                     const nx = -s.dy / s.len;
                     const ny = s.dx / s.len;
                     const testDist = 0.5;
@@ -506,24 +506,24 @@ window.sync3D = function() {
                     const testY = py + ny * testDist;
                     const inRoom = getRoomAt(testX, testY, room.levelId);
                     const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
-
+                    
                     const geometry = new THREE.BoxGeometry(sWidth, room.h, sThick);
                     const mesh = new THREE.Mesh(geometry, cfMat);
-
+                    
                     const offsetDist = wallThickness / 2 + 0.055;
                     mesh.position.set(
                         px + nx * offsetDist * mul,
                         elevation + room.h / 2,
                         py + ny * offsetDist * mul
                     );
-
+                    
                     const angle = Math.atan2(s.dy, s.dx);
                     mesh.rotation.y = -angle;
                     mesh.castShadow = true;
-
+                    
                     scene.add(mesh);
                     roomMeshes.push(mesh);
-
+                    
                     currentDist += spacing;
                 }
             }
@@ -541,10 +541,10 @@ window.sync3D = function() {
         const elevation = level.elevation || 0;
         const room = getRoomAt(sp.x, sp.y, spLevelId);
         const roomH = room ? room.h : (level.height || 8);
-
+        
         const sumpGroup = new THREE.Group();
         sumpGroup.position.set(sp.x, elevation, sp.y);
-
+        
         // Sump lid
         const lidGeo = new THREE.CylinderGeometry(0.8, 0.8, 0.05, 16);
         const lidMat = new THREE.MeshStandardMaterial({ color: '#1e293b', roughness: 0.6 });
@@ -552,7 +552,7 @@ window.sync3D = function() {
         lidMesh.position.y = 0.025;
         lidMesh.receiveShadow = true;
         sumpGroup.add(lidMesh);
-
+        
         // Pump motor block representation
         const motorGeo = new THREE.BoxGeometry(0.3, 0.4, 0.3);
         const motorMat = new THREE.MeshStandardMaterial({ color: '#0f172a', metalness: 0.6, roughness: 0.3 });
@@ -560,7 +560,7 @@ window.sync3D = function() {
         motorMesh.position.set(0.1, 0.2, 0.1);
         motorMesh.castShadow = true;
         sumpGroup.add(motorMesh);
-
+        
         // Vertical PVC riser
         const pipeH = roomH - 0.2;
         const pipeGeo = new THREE.CylinderGeometry(0.08, 0.08, pipeH, 8);
@@ -570,7 +570,7 @@ window.sync3D = function() {
         pipeMesh.castShadow = true;
         pipeMesh.receiveShadow = true;
         sumpGroup.add(pipeMesh);
-
+        
         scene.add(sumpGroup);
         roomMeshes.push(sumpGroup);
     });
@@ -587,11 +587,11 @@ window.sync3D = function() {
         const ipLevelId = ip.levelId || 'basement';
         const level = state.levels.find(l => l.id === ipLevelId) || { elevation: 0, height: 8 };
         const elevation = level.elevation || 0;
-
+        
         // Find room containing start point
         const containingRoom = getRoomAt(ip.x1, ip.y1, ipLevelId);
         const roomH = containingRoom ? containingRoom.h : (level.height || 8);
-
+        
         // Route horizontal run at overhead ceiling height (room height - 0.5ft)
         const pipeY = elevation + (roomH - 0.5);
         build3DPipe(ip.x1, pipeY, ip.y1, ip.x2, pipeY, ip.y2, 0.08, '#f8fafc', scene);
@@ -604,7 +604,7 @@ window.sync3D = function() {
         const elevation = level.elevation || 0;
         const room = getRoomAt(st.x, st.y, stLevelId);
         const roomH = room ? room.h : (level.height || 8);
-
+        
         // Check if stanchion is underneath any support beam on this level
         let isUnderBeam = false;
         const bHeight = 0.9;
@@ -617,12 +617,12 @@ window.sync3D = function() {
                 break;
             }
         }
-
+        
         const postH = isUnderBeam ? Math.max(0.5, roomH - bHeight) : roomH;
-
+        
         let geometry;
         let material;
-
+        
         if (st.type === 'brick') {
             geometry = new THREE.BoxGeometry(1.0, postH, 1.0);
             material = new THREE.MeshStandardMaterial({
@@ -632,25 +632,25 @@ window.sync3D = function() {
             });
         } else if (st.type === 'square') {
             geometry = new THREE.BoxGeometry(0.8, postH, 0.8);
-            material = new THREE.MeshStandardMaterial({
+            material = new THREE.MeshStandardMaterial({ 
                 color: '#b91c1c', // red-oxide steel look
-                metalness: 0.6,
-                roughness: 0.3
+                metalness: 0.6, 
+                roughness: 0.3 
             });
         } else { // round
             geometry = new THREE.CylinderGeometry(0.4, 0.4, postH, 16);
-            material = new THREE.MeshStandardMaterial({
+            material = new THREE.MeshStandardMaterial({ 
                 color: '#b91c1c', // red-oxide lally column
-                metalness: 0.6,
-                roughness: 0.3
+                metalness: 0.6, 
+                roughness: 0.3 
             });
         }
-
+        
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(st.x, elevation + postH / 2, st.y);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-
+        
         scene.add(mesh);
         roomMeshes.push(mesh);
     });
@@ -662,33 +662,33 @@ window.sync3D = function() {
         const elevation = level.elevation || 0;
         const room = getRoomAt(bm.x1, bm.y1, bmLevelId);
         const roomH = room ? room.h : (level.height || 8);
-
+        
         const len = Math.sqrt((bm.x2 - bm.x1)**2 + (bm.y2 - bm.y1)**2);
         if (len < 0.01) return;
-
+        
         const bWidth = 0.6; // 7 inches wide
         const bHeight = 0.9; // 11 inches deep
         const geometry = new THREE.BoxGeometry(len, bHeight, bWidth);
-
+        
         const material = bm.type === 'steel'
             ? new THREE.MeshStandardMaterial({ color: '#334155', metalness: 0.8, roughness: 0.2 })
             : new THREE.MeshStandardMaterial({ color: '#78350f', roughness: 0.9, metalness: 0.1 });
-
+            
         const mesh = new THREE.Mesh(geometry, material);
-
+        
         // Position midpoint
         const mx = (bm.x1 + bm.x2) / 2;
         const my = (bm.y1 + bm.y2) / 2;
         const pipeY = elevation + roomH - bHeight / 2;
         mesh.position.set(mx, pipeY, my);
-
+        
         // Rotate Y to align along endpoints
         const angle = Math.atan2(bm.y2 - bm.y1, bm.x2 - bm.x1);
         mesh.rotation.y = -angle;
-
+        
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-
+        
         scene.add(mesh);
         roomMeshes.push(mesh);
     });
@@ -802,23 +802,23 @@ function build3DPipe(x1, y1, z1, x2, y2, z2, radius, color, sceneGroup) {
     const direction = new THREE.Vector3().subVectors(point2, point1);
     const length = direction.length();
     if (length < 0.01) return;
-
+    
     const geometry = new THREE.CylinderGeometry(radius, radius, length, 8);
-    const material = new THREE.MeshStandardMaterial({
-        color: color,
+    const material = new THREE.MeshStandardMaterial({ 
+        color: color, 
         roughness: 0.4,
-        metalness: 0.1
+        metalness: 0.1 
     });
     const mesh = new THREE.Mesh(geometry, material);
-
+    
     mesh.position.copy(point1).add(direction.clone().multiplyScalar(0.5));
-
+    
     const up = new THREE.Vector3(0, 1, 0);
     direction.normalize();
     mesh.quaternion.setFromUnitVectors(up, direction);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-
+    
     sceneGroup.add(mesh);
     roomMeshes.push(mesh);
 }
@@ -834,17 +834,17 @@ document.getElementById('btn-3d-roof').addEventListener('click', (e) => {
 
 window.get3DScreenshot = function() {
     if (!renderer || !scene || !camera) return null;
-
+    
     // Save original settings
     const origBg = scene.background;
     const origFog = scene.fog;
     const origCamPos = camera.position.clone();
     const origTarget = controls ? controls.target.clone() : new THREE.Vector3();
-
+    
     // Temporarily swap to white print background and clear fog
     scene.background = new THREE.Color('#ffffff');
     scene.fog = null;
-
+    
     // Auto-focus camera on structure tightly
     const box = new THREE.Box3();
     let hasObjects = false;
@@ -852,37 +852,37 @@ window.get3DScreenshot = function() {
         box.expandByObject(mesh);
         hasObjects = true;
     });
-
+    
     if (hasObjects && controls) {
         const size = new THREE.Vector3();
         box.getSize(size);
         const center = new THREE.Vector3();
         box.getCenter(center);
-
+        
         controls.target.copy(center);
-
+        
         const maxDim = Math.max(size.x, size.y, size.z);
         const fov = camera.fov * (Math.PI / 180);
-
+        
         // Zoom closer: 1.02 padding fills the screen tightly!
         let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.02;
         cameraZ = Math.max(10, cameraZ);
-
+        
         // Tilt down angle (45 degrees isometric angle)
         camera.position.set(
             center.x + cameraZ * 0.7,
             center.y + cameraZ * 0.7,
             center.z + cameraZ * 0.9
         );
-
+        
         camera.lookAt(center);
         controls.update();
     }
-
+    
     // Render and capture
     renderer.render(scene, camera);
     const dataUrl = renderer.domElement.toDataURL('image/png');
-
+    
     // Restore settings
     scene.background = origBg;
     scene.fog = origFog;
@@ -892,6 +892,6 @@ window.get3DScreenshot = function() {
         controls.update();
     }
     renderer.render(scene, camera);
-
+    
     return dataUrl;
 };

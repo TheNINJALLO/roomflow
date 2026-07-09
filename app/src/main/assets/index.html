@@ -11,7 +11,7 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=32">
 </head>
 <body>
     <div id="app-container">
@@ -21,7 +21,7 @@
                 <i data-lucide="layout"></i>
                 <h1>RoomFlow<span>Sketcher</span></h1>
             </div>
-
+            
             <div class="view-toggles">
                 <button id="btn-view-2d" class="toggle-btn active">
                     <i data-lucide="edit-3"></i> <span>2D Sketch</span>
@@ -101,7 +101,7 @@
                 <div class="sidebar-section hidden" id="custom-wall-drawer-panel">
                     <h3>Angled Room Builder</h3>
                     <p class="section-hint">Point & click on the canvas to place corners, or build wall-by-wall using the inputs below:</p>
-
+                    
                     <div class="input-group">
                         <label for="draw-wall-length">Next Wall Length (ft)</label>
                         <input type="number" id="draw-wall-length" value="10" step="0.5" min="1">
@@ -119,7 +119,7 @@
                             <option value="315">315° (North-East)</option>
                         </select>
                     </div>
-
+                    
                     <div class="preset-buttons" style="margin-top: 0.5rem; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.4rem;">
                         <button id="btn-draw-add-wall" class="tool-btn" style="padding: 0.4rem 0.2rem;"><i data-lucide="plus"></i> Add</button>
                         <button id="btn-draw-undo-wall" class="tool-btn" style="padding: 0.4rem 0.2rem;"><i data-lucide="undo"></i> Undo</button>
@@ -229,9 +229,14 @@
                 <div id="ar-container" class="viewport">
                     <video id="ar-video" autoplay playsinline muted></video>
                     <div class="ar-overlay">
+                        <!-- Top status badges -->
+                        <div class="ar-status-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: auto; margin-bottom: auto; padding: 0.5rem 0.25rem;">
+                            <div id="ar-tier-badge" style="background: rgba(59, 130, 246, 0.85); padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 700; font-size: 0.75rem; color: white; border: 1px solid rgba(255,255,255,0.1); letter-spacing: 0.05em; text-transform: uppercase;">CAMERA ESTIMATE</div>
+                            <div id="ar-quality-badge" style="background: rgba(16, 22, 35, 0.85); border: 1px solid var(--border-color); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Orientation Only</div>
+                        </div>
                         <div class="ar-reticle"></div>
                         <div class="ar-aim-point"></div>
-
+                        
                         <div class="ar-stats">
                             <div class="ar-stat-card">
                                 <label>Estimated Dist</label>
@@ -305,14 +310,14 @@
                     <div id="no-selection-msg">
                         <p class="empty-state">Select a room, sump pump, or discharge line to modify details.</p>
                     </div>
-
+                    
                     <!-- Room Edit Fields -->
                     <div id="room-edit-fields" class="hidden">
                         <div class="input-group">
                             <label for="room-name-input">Room Name</label>
                             <input type="text" id="room-name-input">
                         </div>
-
+                        
                         <div id="room-rect-inputs">
                             <div class="dimensions-grid">
                                 <div class="input-group">
@@ -344,7 +349,7 @@
                                 <!-- Will be dynamically populated with inputs for each wall segment -->
                             </div>
                         </div>
-
+                        
                         <!-- Floor Joists Direction -->
                         <div class="input-group" style="margin-top: 0.75rem;">
                             <label for="room-joists-select">Floor Joists Direction</label>
@@ -354,7 +359,7 @@
                                 <option value="ew">East-West (Horizontal)</option>
                             </select>
                         </div>
-
+                        
                         <!-- Perimeter Foam Board (2" XPS) -->
                         <div class="input-group-checkbox" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;">
                             <input type="checkbox" id="room-foam-board-checkbox" style="width: auto; margin: 0;">
@@ -383,7 +388,7 @@
                                 <option value="full">Floor to Ceiling</option>
                             </select>
                         </div>
-
+                        
                         <!-- Staircase Properties -->
                         <div id="room-staircase-properties" class="hidden" style="border-top: 1px solid var(--border-color); margin-top: 0.75rem; padding-top: 0.75rem;">
                             <div class="input-group">
@@ -579,7 +584,7 @@
                         <span class="metric-label" style="font-weight:700; color:#facc15;">NB1 Coating</span>
                         <span class="metric-value" id="total-nb1-bags" style="font-weight:700; color:#facc15;">0 bags (0 sq ft)</span>
                     </div>
-
+                    
                     <!-- Sump Installation Fittings Pack -->
                     <div id="sump-fittings-group" class="hidden" style="margin-top: 0.75rem; border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
                         <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--accent-teal); font-weight: 700; margin-bottom: 0.4rem; letter-spacing: 0.05em;">Sump Install Package</div>
@@ -620,7 +625,7 @@
                 <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--accent-teal); display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="database"></i> Job Database</h3>
                 <button id="btn-close-jobs" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0.25rem;"><i data-lucide="x"></i></button>
             </div>
-
+            
             <!-- Save New Job Section -->
             <div style="background: rgba(15, 23, 42, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
                 <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; font-weight: 600; color: #e2e8f0;">Save Current Layout as Job</h4>
@@ -629,7 +634,7 @@
                     <button id="btn-save-job-submit" class="btn-accent" style="padding: 0.5rem 1rem; font-size: 0.85rem;"><i data-lucide="plus"></i> Save</button>
                 </div>
             </div>
-
+            
             <!-- Saved Jobs List -->
             <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; font-weight: 600; color: #94a3b8;">Active Jobs</h4>
             <div id="jobs-list-container" style="max-height: 220px; overflow-y: auto; border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; background: rgba(15, 23, 42, 0.2); padding: 0.5rem;">
@@ -641,10 +646,10 @@
     <!-- Three.js Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
+    
     <!-- Application Logic Scripts -->
-    <script src="app.js"></script>
-    <script src="renderer3d.js"></script>
-    <script src="ar-estimator.js"></script>
+    <script src="app.js?v=32"></script>
+    <script src="renderer3d.js?v=32"></script>
+    <script src="ar-estimator.js?v=32"></script>
 </body>
 </html>

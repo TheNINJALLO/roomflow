@@ -3338,6 +3338,12 @@ function switchView(viewName) {
     view3D.classList.toggle('active', viewName === '3d');
     viewAR.classList.toggle('active', viewName === 'ar');
 
+    // Hide tools & details float buttons in AR mode to avoid overlap
+    const mobileToggleTools = document.getElementById('mobile-toggle-tools');
+    const mobileToggleDetails = document.getElementById('mobile-toggle-details');
+    if (mobileToggleTools) mobileToggleTools.style.display = (viewName === 'ar') ? 'none' : '';
+    if (mobileToggleDetails) mobileToggleDetails.style.display = (viewName === 'ar') ? 'none' : '';
+
     if (viewName === 'ar') {
         if (window.startCamera) window.startCamera();
     } else {
