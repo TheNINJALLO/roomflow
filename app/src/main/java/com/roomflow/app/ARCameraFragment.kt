@@ -28,6 +28,11 @@ class ARCameraFragment : Fragment(), SensorEventListener {
     
     private var devicePitch: Float = 0f // Degrees
     private var cameraHeight: Float = 5.0f // Feet (Default 60 inches)
+    
+    private val alpha = 0.12f // Smoothing coefficient for Hand Jitter LPF
+    private var smoothAx = 0f
+    private var smoothAy = 9.8f
+    private var smoothAz = 0f
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         _binding = FragmentArcameraBinding.inflate(inflater, container, false)
@@ -55,10 +60,11 @@ class ARCameraFragment : Fragment(), SensorEventListener {
             val cameraProvider = cameraProviderFuture.get()
             
             val previewView = androidx.camera.view.PreviewView(requireContext()).apply {
-                layoutParams = android.view.ViewGroup.LayoutParams(
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                layoutParams = android.widget.FrameLayout.LayoutParams(
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT
                 )
+                scaleType = androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
             }
             binding.arSurfaceContainer.removeAllViews()
             binding.arSurfaceContainer.addView(previewView)
@@ -72,6 +78,10 @@ class ARCameraFragment : Fragment(), SensorEventListener {
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(viewLifecycleOwner, cameraSelector, preview)
+                
+                // Clear the black overlay background and hide placeholder to make preview visible!
+                binding.arSurfaceContainer.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                binding.arPlaceholder.visibility = android.view.View.GONE
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -80,26 +90,23 @@ class ARCameraFragment : Fragment(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
-            val ax = event.values[0]
-            val ay = event.values[1]
-            val az = event.values[2]
+            // Apply Hand Jitter Low-Pass Filter (LPF)
+            smoothAx = smoothAx + alpha * (event.values[0] - smoothAx)
+            smoothAy = smoothAy + alpha * (event.values[1] - smoothAy)
+            smoothAz = smoothAz + alpha * (event.values[2] - smoothAz)
             
-            val g = Math.sqrt((ax * ax + ay * ay + az * az).toDouble())
+            val g = Math.sqrt((smoothAx * smoothAx + smoothAy * smoothAy + smoothAz * smoothAz).toDouble())
             if (g > 0.1) {
-                // Cosine of angle between phone's Y-axis (long edge) and gravity vector
-                // Gravity pulls down, so ay tells us how much the phone is tilted.
-                val cosTheta = ay / g
+                // Cosine of angle between phone's long axis (Y) and gravity vector
+                val cosTheta = smoothAy / g
                 val thetaRad = Math.acos(Math.max(-1.0, Math.min(1.0, cosTheta)))
                 val thetaDeg = Math.toDegrees(thetaRad).toFloat()
                 
                 // When aiming at the floor corner:
-                // If phone is held vertical, tilt is ~90 degrees from downward gravity.
-                // If tilted down, the tilt angle from downward gravity decreases.
-                // The angle from the vertical aiming line is:
-                val aimAngleDeg = 90f - thetaDeg
-                
-                if (aimAngleDeg in 5f..80f) {
-                    val distFeet = cameraHeight * tan(Math.toRadians(aimAngleDeg.toDouble())).toFloat()
+                // Pitch/tilt from vertical (gravity) is exactly thetaDeg.
+                // Upright = 0 degrees (parallel to gravity). Aiming down = thetaDeg.
+                if (thetaDeg in 5f..80f) {
+                    val distFeet = cameraHeight * tan(Math.toRadians(thetaDeg.toDouble())).toFloat()
                     updateDistanceDisplay(distFeet)
                 }
             }

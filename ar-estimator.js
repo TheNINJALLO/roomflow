@@ -602,8 +602,7 @@ function handleOrientation(e) {
 function calculateDistance() {
     // Trigonometry distance calculation (Tier C)
     const camHeightFeet = parseFloat(cameraHeightInput.value) / 12;
-    const thetaDeg = 90 - devicePitch;
-    const thetaRad = (thetaDeg * Math.PI) / 180;
+    const thetaRad = (devicePitch * Math.PI) / 180;
     activeDistance = camHeightFeet * Math.tan(thetaRad);
     updateARDisplay();
 }
