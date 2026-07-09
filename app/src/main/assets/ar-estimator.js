@@ -271,6 +271,20 @@ document.getElementById('btn-ar-start-session').addEventListener('click', () => 
     const arSplash = document.getElementById('ar-splash');
     if (arSplash) arSplash.style.display = 'none';
     
+    // Request device orientation permission synchronously on click (mandatory for iOS Safari)
+    if (typeof DeviceOrientationEvent !== 'undefined' && 
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+            .then(permissionState => {
+                if (permissionState === 'granted') {
+                    window.addEventListener('deviceorientation', handleOrientation);
+                }
+            })
+            .catch(console.error);
+    } else {
+        window.addEventListener('deviceorientation', handleOrientation);
+    }
+    
     initializeScannerSession();
 });
 
@@ -505,7 +519,16 @@ function onXRFrame(time, frame) {
         });
     }
     
-    if (!webxrHitTestSource) return;
+    if (!webxrHitTestSource) {
+        if (devicePitch !== undefined) {
+            const camHeightFeet = parseFloat(cameraHeightInput.value) / 12;
+            const thetaDeg = 90 - devicePitch;
+            const thetaRad = (thetaDeg * Math.PI) / 180;
+            activeDistance = camHeightFeet * Math.tan(thetaRad);
+            if (distanceDisplay) distanceDisplay.innerText = formatFeetInches(activeDistance) + " (Est.)";
+        }
+        return;
+    }
     
     const hitTestResults = frame.getHitTestResults(webxrHitTestSource);
     if (hitTestResults.length > 0) {
@@ -543,6 +566,14 @@ function onXRFrame(time, frame) {
             }
         }
     } else {
+        activeXRHitPoint = null;
+        if (devicePitch !== undefined) {
+            const camHeightFeet = parseFloat(cameraHeightInput.value) / 12;
+            const thetaDeg = 90 - devicePitch;
+            const thetaRad = (thetaDeg * Math.PI) / 180;
+            activeDistance = camHeightFeet * Math.tan(thetaRad);
+            if (distanceDisplay) distanceDisplay.innerText = formatFeetInches(activeDistance) + " (Est.)";
+        }
         if (qualityBadge && (!window.RoomFlowSpatial || !window.RoomFlowSpatial.globalCapabilities.depthSensingAvailable)) {
             qualityBadge.innerText = 'Scan surface...';
         }
@@ -553,27 +584,19 @@ let activeXRHitPoint = null;
 
 // Orientation permissions and trackers (Tier C fallback)
 function requestOrientationPermission() {
-    if (typeof DeviceOrientationEvent !== 'undefined' && 
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-        
-        DeviceOrientationEvent.requestPermission()
-            .then(permissionState => {
-                if (permissionState === 'granted') {
-                    window.addEventListener('deviceorientation', handleOrientation);
-                }
-            })
-            .catch(console.error);
-    } else {
+    if (typeof DeviceOrientationEvent === 'undefined' || 
+        typeof DeviceOrientationEvent.requestPermission !== 'function') {
         window.addEventListener('deviceorientation', handleOrientation);
     }
 }
 
 function handleOrientation(e) {
-    if (activeTier !== 'CAMERA_ESTIMATE') return;
     let beta = e.beta || 90;
     beta = Math.max(15, Math.min(85, beta));
     devicePitch = 90 - beta;
-    calculateDistance();
+    if (activeTier === 'CAMERA_ESTIMATE') {
+        calculateDistance();
+    }
 }
 
 function calculateDistance() {

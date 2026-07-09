@@ -33,7 +33,7 @@ class ARCameraFragment : Fragment(), SensorEventListener {
         _binding = FragmentArcameraBinding.inflate(inflater, container, false)
         
         sensorManager = requireContext().getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+        rotationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
         
         binding.arPlaceholder.text = "Trigonometry Estimator (ARCore Not Required)"
         
@@ -54,7 +54,12 @@ class ARCameraFragment : Fragment(), SensorEventListener {
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
             
-            val previewView = androidx.camera.view.PreviewView(requireContext())
+            val previewView = androidx.camera.view.PreviewView(requireContext()).apply {
+                layoutParams = android.view.ViewGroup.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                    android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                )
+            }
             binding.arSurfaceContainer.removeAllViews()
             binding.arSurfaceContainer.addView(previewView)
 
@@ -74,25 +79,29 @@ class ARCameraFragment : Fragment(), SensorEventListener {
     }
 
     override fun onSensorChanged(event: SensorEvent) {
-        if (event.sensor.type == Sensor.TYPE_ROTATION_VECTOR) {
-            val rotationMatrix = FloatArray(9)
-            SensorManager.getRotationMatrixFromVector(rotationMatrix, event.values)
-            val orientation = FloatArray(3)
-            SensorManager.getOrientation(rotationMatrix, orientation)
+        if (event.sensor.type == Sensor.TYPE_ACCELEROMETER) {
+            val ax = event.values[0]
+            val ay = event.values[1]
+            val az = event.values[2]
             
-            // pitch is orientation[1] in radians
-            val pitchRad = orientation[1]
-            devicePitch = Math.toDegrees(pitchRad.toDouble()).toFloat()
-            
-            // Replicate web logic: distance = height * tan(theta)
-            // theta is angle from vertical (90 - pitch)
-            // If phone is vertical, pitch is ~0, theta is 90 -> dist infinity
-            // If phone is face down, pitch is -90, theta is 0 -> dist 0
-            
-            val thetaDeg = 90f + devicePitch
-            if (thetaDeg in 10f..85f) {
-                val distFeet = cameraHeight * tan(Math.toRadians(thetaDeg.toDouble())).toFloat()
-                updateDistanceDisplay(distFeet)
+            val g = Math.sqrt((ax * ax + ay * ay + az * az).toDouble())
+            if (g > 0.1) {
+                // Cosine of angle between phone's Y-axis (long edge) and gravity vector
+                // Gravity pulls down, so ay tells us how much the phone is tilted.
+                val cosTheta = ay / g
+                val thetaRad = Math.acos(Math.max(-1.0, Math.min(1.0, cosTheta)))
+                val thetaDeg = Math.toDegrees(thetaRad).toFloat()
+                
+                // When aiming at the floor corner:
+                // If phone is held vertical, tilt is ~90 degrees from downward gravity.
+                // If tilted down, the tilt angle from downward gravity decreases.
+                // The angle from the vertical aiming line is:
+                val aimAngleDeg = 90f - thetaDeg
+                
+                if (aimAngleDeg in 5f..80f) {
+                    val distFeet = cameraHeight * tan(Math.toRadians(aimAngleDeg.toDouble())).toFloat()
+                    updateDistanceDisplay(distFeet)
+                }
             }
         }
     }
