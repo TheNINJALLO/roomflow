@@ -4481,6 +4481,26 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     
     const nb1BagsCount = Math.ceil(totalNb1Area / 8);
 
+    // Spray Foam Cans calculation
+    let totalSprayFoamCans = 0;
+    state.rooms.forEach(room => {
+        if (room.foamBondPockets && room.joists && room.joists !== 'none') {
+            const segments = getRoomSegments(room);
+            let wallLen = 0;
+            segments.forEach(seg => {
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                if (room.joists === 'ns') {
+                    wallLen += Math.abs(dx);
+                } else if (room.joists === 'ew') {
+                    wallLen += Math.abs(dy);
+                }
+            });
+            const roomBF = wallLen * 1.5;
+            totalSprayFoamCans += Math.ceil(roomBF / 20);
+        }
+    });
+
     const printWindow = window.open('', '_blank');
     
     let roomRows = '';
@@ -4712,6 +4732,13 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                         <td>${nb1BagsCount} bags (${totalNb1Area.toFixed(0)} sq ft)</td>
                         <td>Cementitious waterproofing/reinforcement wall coating (1 bag covers 8 sq ft)</td>
                     </tr>
+                    ${totalSprayFoamCans > 0 ? `
+                    <tr>
+                        <td><strong>Spray Foam Cans</strong></td>
+                        <td>${totalSprayFoamCans} cans</td>
+                        <td>Rim joist / bond pockets insulation (1 can covers 20 board feet)</td>
+                    </tr>
+                    ` : ''}
                     ${plumbingEst.bushing3to2 > 0 ? `
                     <tr>
                         <td><strong>3" to 2" Bushing</strong></td>
