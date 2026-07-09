@@ -223,14 +223,14 @@ function updateHeightMeasurement(heightFeet) {
 }
 
 // Request Camera access / Initialize active mode session
-window.startCamera = function() {
+window.startCamera = function(skipSplash) {
     spatialPoints = [];
     pinnedPoints = [];
     updateARDisplay();
 
     // Show the splash screen first to comply with browser user-gesture requirements
     const arSplash = document.getElementById('ar-splash');
-    if (arSplash) {
+    if (arSplash && !skipSplash) {
         arSplash.style.display = 'flex';
         
         // Update title and description dynamically
@@ -250,6 +250,9 @@ window.startCamera = function() {
             if (splashTitle) splashTitle.innerText = "Camera Estimator";
             if (splashDesc) splashDesc.innerText = "Standard browser orientation fallback. Input device holding height and aim at floor corners.";
         }
+    } else {
+        if (arSplash) arSplash.style.display = 'none';
+        initializeScannerSession();
     }
 };
 
@@ -332,8 +335,10 @@ function startWebXRSession() {
     if (videoEl) videoEl.style.opacity = '0';
     if (xrCanvas) xrCanvas.classList.remove('hidden');
     
+    // Request basic tracking in required, and advanced features in optional to prevent startup failures
     const sessionOptions = {
-        requiredFeatures: ['local-floor', 'hit-test']
+        requiredFeatures: ['local'],
+        optionalFeatures: ['local-floor', 'hit-test']
     };
     
     navigator.xr.requestSession('immersive-ar', sessionOptions)
@@ -346,13 +351,26 @@ function startWebXRSession() {
                 baseLayer: new XRWebGLLayer(session, gl)
             });
             
+            // Gracefully fall back if local-floor or hit-test are not supported
             session.requestReferenceSpace('local-floor')
+                .catch(() => session.requestReferenceSpace('local'))
                 .then(refSpace => {
                     webxrRefSpace = refSpace;
-                    return session.requestHitTestSource({ space: session.viewerSpace });
+                    if (session.requestHitTestSource) {
+                        return session.requestHitTestSource({ space: session.viewerSpace })
+                            .catch(err => {
+                                console.warn('Hit test source failed:', err);
+                                return null;
+                            });
+                    }
+                    return null;
                 })
                 .then(hitTestSource => {
                     webxrHitTestSource = hitTestSource;
+                    session.requestAnimationFrame(onXRFrame);
+                })
+                .catch(err => {
+                    console.error('WebXR frame start failed:', err);
                     session.requestAnimationFrame(onXRFrame);
                 });
                 
@@ -369,7 +387,7 @@ function startWebXRSession() {
             console.error('WebXR session failed:', err);
             alert('Could not start Spatial AR. Falling back to Camera Estimate.');
             fallbackToCameraEstimate();
-            window.startCamera();
+            window.startCamera(true); // Pass true to skip splash and initialize fallback immediately!
         });
 }
 
