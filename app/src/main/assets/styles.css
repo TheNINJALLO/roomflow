@@ -1220,3 +1220,23 @@ body {
         justify-content: center;
     }
 }
+
+@media (max-width: 900px) {
+    .three-controls {
+        top: auto;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        flex-wrap: wrap;
+        justify-content: center;
+        width: calc(100% - 40px);
+        max-width: 360px;
+    }
+    .three-controls button {
+        padding: 0.4rem 0.85rem;
+        font-size: 0.75rem;
+        border-radius: 6px;
+        flex: 1 1 40%;
+        justify-content: center;
+    }
+}
