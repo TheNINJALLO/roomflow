@@ -964,11 +964,11 @@ window.get3DScreenshot = function() {
         let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * 1.02;
         cameraZ = Math.max(10, cameraZ);
         
-        // Tilt down angle (45 degrees isometric angle)
+        // Steeped top-down aerial view (62 degrees) to see inside rooms clearly without shrinking size
         camera.position.set(
-            center.x + cameraZ * 0.7,
-            center.y + cameraZ * 0.7,
-            center.z + cameraZ * 0.9
+            center.x + cameraZ * 0.35,
+            center.y + cameraZ * 1.1,
+            center.z + cameraZ * 0.45
         );
         
         camera.lookAt(center);
