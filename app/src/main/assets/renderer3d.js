@@ -895,3 +895,24 @@ window.get3DScreenshot = function() {
     
     return dataUrl;
 };
+
+// Programmatic 3D Zoom Function
+window.zoom3D = function(zoomIn) {
+    if (!camera || !controls) return;
+    const factor = zoomIn ? 0.85 : 1.15; // Zoom in scales down camera distance
+    const target = controls.target;
+    
+    camera.position.x = target.x + (camera.position.x - target.x) * factor;
+    camera.position.y = target.y + (camera.position.y - target.y) * factor;
+    camera.position.z = target.z + (camera.position.z - target.z) * factor;
+    controls.update();
+};
+
+// Bind 3D zoom buttons
+document.getElementById('btn-3d-zoom-in').addEventListener('click', () => {
+    window.zoom3D(true);
+});
+document.getElementById('btn-3d-zoom-out').addEventListener('click', () => {
+    window.zoom3D(false);
+});
+

@@ -211,6 +211,10 @@
                 <!-- 2D Sketch Board -->
                 <div id="canvas-container" class="viewport active">
                     <canvas id="sketch-canvas"></canvas>
+                    <div class="canvas-zoom-controls" style="position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 0.5rem; z-index: 10; pointer-events: auto;">
+                        <button id="btn-2d-zoom-in" style="background: rgba(16, 22, 35, 0.85); border: 1px solid var(--border-color); color: white; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;" title="Zoom In"><i data-lucide="zoom-in"></i></button>
+                        <button id="btn-2d-zoom-out" style="background: rgba(16, 22, 35, 0.85); border: 1px solid var(--border-color); color: white; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;" title="Zoom Out"><i data-lucide="zoom-out"></i></button>
+                    </div>
                     <div class="canvas-instructions">
                         <p><kbd>Click & Drag</kbd> rooms to position them. <kbd>Drag Handles</kbd> to resize. Grid snapping is enabled.</p>
                     </div>
@@ -222,6 +226,8 @@
                     <div class="three-controls">
                         <button id="btn-3d-orbit" class="active" title="Orbit Mode"><i data-lucide="rotate-3d"></i> Orbit</button>
                         <button id="btn-3d-roof" title="Toggle Ceilings"><i data-lucide="layers"></i> Toggle Ceilings</button>
+                        <button id="btn-3d-zoom-in" title="Zoom In"><i data-lucide="zoom-in"></i> Zoom In</button>
+                        <button id="btn-3d-zoom-out" title="Zoom Out"><i data-lucide="zoom-out"></i> Zoom Out</button>
                     </div>
                 </div>
 
