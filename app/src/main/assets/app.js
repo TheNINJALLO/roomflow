@@ -4647,27 +4647,27 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
             <h2>Blueprint Symbol & Material Legend</h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 15px; margin-bottom: 30px; font-size: 0.85rem; line-height: 1.4; color: #334155;">
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #0f172a; border-radius: 2px; flex-shrink: 0;"></span>
+                    <svg width="30" height="6" style="flex-shrink: 0; display: block;"><rect width="30" height="6" fill="#0f172a" rx="2"/></svg>
                     <div><strong>Vertical Carbon Fiber Straps:</strong> Black tick marks along wall edges indicating vertical reinforcement strap points.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #38bdf8; border-radius: 2px; flex-shrink: 0;"></span>
+                    <svg width="30" height="6" style="flex-shrink: 0; display: block;"><rect width="30" height="6" fill="#38bdf8" rx="2"/></svg>
                     <div><strong>Floor Perimeter Strap:</strong> Sky blue lines indicating horizontal stabilization carbon strap.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #f472b6; border-radius: 2px; flex-shrink: 0;"></span>
+                    <svg width="30" height="6" style="flex-shrink: 0; display: block;"><rect width="30" height="6" fill="#f472b6" rx="2"/></svg>
                     <div><strong>XPS Foam Board (Insulation):</strong> Pink line highlights indicating wall insulation sheets on exterior walls.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="display: inline-block; width: 30px; height: 6px; background-color: #a855f7; border-radius: 2px; flex-shrink: 0;"></span>
+                    <svg width="30" height="6" style="flex-shrink: 0; display: block;"><rect width="30" height="6" fill="#a855f7" rx="2"/></svg>
                     <div><strong>NB1 Wall Coating:</strong> Purple highlighting in 3D representing waterproofing and structural cementitious wall coating.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="display: inline-block; width: 14px; height: 14px; background-color: #10b981; border-radius: 50%; flex-shrink: 0;"></span>
+                    <svg width="14" height="14" style="flex-shrink: 0; display: block;"><circle cx="7" cy="7" r="7" fill="#10b981"/></svg>
                     <div><strong>Sump Pump Basin:</strong> Green circular icons indicating plotted sump pump water extraction locations.</div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="display: inline-block; width: 30px; height: 3px; background-color: #94a3b8; border: 1px dashed #64748b; border-radius: 1px; flex-shrink: 0;"></span>
+                    <svg width="30" height="3" style="flex-shrink: 0; display: block;"><line x1="0" y1="1.5" x2="30" y2="1.5" stroke="#94a3b8" stroke-width="3" stroke-dasharray="4,3"/></svg>
                     <div><strong>Utility Discharge Lines:</strong> Dashed grey lines showing drain tile pipe routing.</div>
                 </div>
             </div>
