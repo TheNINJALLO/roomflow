@@ -4152,6 +4152,11 @@ document.getElementById('btn-new').addEventListener('click', () => {
         state.rooms = [];
         state.sumpPumps = [];
         state.dischargeLines = [];
+        state.floorHatches = [];
+        state.interiorPipes = [];
+        state.stanchions = [];
+        state.mainBeams = [];
+        state.capturedMeasurements = [];
         selectItem(null);
         draw();
         updateGlobalStats();
@@ -4166,6 +4171,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
         rooms: state.rooms,
         sumpPumps: state.sumpPumps,
         dischargeLines: state.dischargeLines,
+        floorHatches: state.floorHatches || [],
         interiorPipes: state.interiorPipes || [],
         stanchions: state.stanchions || [],
         mainBeams: state.mainBeams || [],
@@ -4620,22 +4626,19 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: ${screenshot3D ? '1fr 1fr' : '1fr'}; gap: 20px; margin-bottom: 10px;">
-                <div>
-                    <h2 style="margin-top: 10px;">1. 2D Floor Plan Blueprint</h2>
-                    <div class="layout-preview" style="margin-bottom: 0;">
-                        <img src="${layoutImage}" alt="2D Layout Blueprint">
-                    </div>
-                </div>
-                ${screenshot3D ? `
-                <div>
-                    <h2 style="margin-top: 10px;">2. 3D Model Render Preview</h2>
-                    <div class="layout-preview" style="margin-bottom: 0;">
-                        <img src="${screenshot3D}" alt="3D Model Render Preview">
-                    </div>
-                </div>
-                ` : ''}
+            <h2>1. 2D Floor Plan Blueprint</h2>
+            <div class="layout-preview 2d-preview" style="margin-bottom: 0;">
+                <img src="${layoutImage}" alt="2D Floor Plan Blueprint" style="max-height: 500px;">
             </div>
+
+            <div class="page-break"></div>
+
+            ${screenshot3D ? `
+            <h2>2. 3D Model Render Preview</h2>
+            <div class="layout-preview 3d-preview" style="margin-bottom: 20px;">
+                <img src="${screenshot3D}" alt="3D Model Render Preview" style="max-height: 380px;">
+            </div>
+            ` : ''}
 
             <h2>Blueprint Symbol & Material Legend</h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 15px; margin-bottom: 30px; font-size: 0.85rem; line-height: 1.4; color: #334155;">
@@ -4665,7 +4668,9 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </div>
             </div>
 
-            <h2 class="page-break">3. Rooms & Structural Elements</h2>
+            <div class="page-break"></div>
+
+            <h2>3. Rooms & Structural Elements</h2>
             <table>
                 <thead>
                     <tr>
@@ -5083,9 +5088,10 @@ function getHistorySnapshot() {
         rooms: JSON.parse(JSON.stringify(state.rooms)),
         sumpPumps: JSON.parse(JSON.stringify(state.sumpPumps)),
         dischargeLines: JSON.parse(JSON.stringify(state.dischargeLines)),
-        interiorPipes: JSON.parse(JSON.stringify(state.interiorPipes)),
-        stanchions: JSON.parse(JSON.stringify(state.stanchions)),
-        mainBeams: JSON.parse(JSON.stringify(state.mainBeams)),
+        floorHatches: JSON.parse(JSON.stringify(state.floorHatches || [])),
+        interiorPipes: JSON.parse(JSON.stringify(state.interiorPipes || [])),
+        stanchions: JSON.parse(JSON.stringify(state.stanchions || [])),
+        mainBeams: JSON.parse(JSON.stringify(state.mainBeams || [])),
         currentLevelId: state.currentLevelId,
         // Save drawing mode variables
         drawMode: state.drawMode,
