@@ -816,6 +816,60 @@ function getRoomExteriorPerimeter(room) {
     return extPerimeter;
 }
 
+// Automatically space straps: start 2ft from corners, then space roughly 5ft apart
+function autoSpaceCarbonStraps(room) {
+    room.customCarbonStraps = [];
+    const segments = getRoomSegments(room);
+    
+    segments.forEach(seg => {
+        // Only place on walls included in carbonFiberWalls if scope is 'specific'
+        if (room.carbonFiberScope === 'specific' && Array.isArray(room.carbonFiberWalls)) {
+            if (!room.carbonFiberWalls.includes(seg.wall)) return;
+        }
+        
+        const dx = seg.x2 - seg.x1;
+        const dy = seg.y2 - seg.y1;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        
+        if (len < 4.0) {
+            // Short wall: place 1 strap at the center if length is at least 1.5 ft
+            if (len >= 1.5) {
+                room.customCarbonStraps.push({
+                    id: 'strap_' + Math.random().toString(36).substr(2, 9),
+                    wall: seg.wall,
+                    offset: 0.5
+                });
+            }
+        } else {
+            // Standard wall: start 2ft from each corner, space roughly 5ft
+            const availableLen = len - 4.0;
+            const intervals = Math.round(availableLen / 5.0);
+            const count = intervals + 1;
+            
+            if (count === 1) {
+                room.customCarbonStraps.push({
+                    id: 'strap_' + Math.random().toString(36).substr(2, 9),
+                    wall: seg.wall,
+                    offset: 0.5
+                });
+            } else {
+                const spacing = availableLen / (count - 1);
+                for (let i = 0; i < count; i++) {
+                    const distFromStart = 2.0 + i * spacing;
+                    const ratio = distFromStart / len;
+                    room.customCarbonStraps.push({
+                        id: 'strap_' + Math.random().toString(36).substr(2, 9),
+                        wall: seg.wall,
+                        offset: Math.max(0.01, Math.min(0.99, ratio))
+                    });
+                }
+            }
+        }
+    });
+    
+    room.carbonStraps = room.customCarbonStraps.length;
+}
+
 // Initialize or synchronize manual custom straps to match count
 function initializeCustomStraps(room) {
     if (!room.customCarbonStraps) room.customCarbonStraps = [];
@@ -3471,7 +3525,7 @@ document.getElementById('room-carbon-scope-select').addEventListener('change', (
             const segments = getRoomSegments(room);
             room.carbonFiberWalls = segments.map(s => s.wall);
         }
-        initializeCustomStraps(room);
+        autoSpaceCarbonStraps(room);
         renderCarbonWallsCheckboxes(room);
         draw();
         if (window.sync3D) window.sync3D();
@@ -3519,7 +3573,15 @@ function renderCarbonWallsCheckboxes(room) {
             } else {
                 room.carbonFiberWalls = room.carbonFiberWalls.filter(w => w !== seg.wall);
             }
+            autoSpaceCarbonStraps(room);
+            renderCustomStrapsList(room);
+            
+            // Sync input Qty value
+            const input = document.getElementById('room-carbon-straps-input');
+            if (input) input.value = room.carbonStraps;
+            
             draw();
+            if (window.sync3D) window.sync3D();
         });
         container.appendChild(row);
     });
@@ -3602,6 +3664,25 @@ document.getElementById('btn-add-custom-strap').addEventListener('click', () => 
         saveHistoryState();
         room.carbonStraps = (room.carbonStraps || 0) + 1;
         initializeCustomStraps(room);
+        renderCustomStrapsList(room);
+        
+        // Sync input Qty value
+        const input = document.getElementById('room-carbon-straps-input');
+        if (input) input.value = room.carbonStraps;
+        
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+// Bind manual Auto-Space click handler
+document.getElementById('btn-auto-space-straps').addEventListener('click', () => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        saveHistoryState();
+        autoSpaceCarbonStraps(room);
         renderCustomStrapsList(room);
         
         // Sync input Qty value
