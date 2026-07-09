@@ -49,64 +49,74 @@ if (!xrCanvas) {
 }
 
 // Check Platform capabilities on script load
-detectSpatialCapabilities();
+window.addEventListener('DOMContentLoaded', () => {
+    detectSpatialCapabilities();
+});
 
 function detectSpatialCapabilities() {
-    // 1. Detect Apple Native WebView Bridge
-    const isAppleNative = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.RoomFlowNativeBridge);
-    
-    if (isAppleNative) {
-        activeTier = 'APPLE_ARKIT';
-        if (tierBadge) tierBadge.innerText = 'Apple Spatial AR';
-        if (qualityBadge) qualityBadge.innerText = 'ARKit Active';
-        
-        // Request actual device capabilities from native wrapper
-        window.webkit.messageHandlers.RoomFlowNativeBridge.postMessage(JSON.stringify({
-            version: 1,
-            type: 'checkAppleSpatialCapabilities'
-        }));
-    } else if (navigator.xr) {
-        // 2. Detect Android WebXR immersive-ar support
-        navigator.xr.isSessionSupported('immersive-ar')
-            .then(supported => {
-                if (supported) {
-                    activeTier = 'WEBXR_SPATIAL';
-                    if (tierBadge) tierBadge.innerText = 'SPATIAL AR';
-                    if (qualityBadge) qualityBadge.innerText = 'WebXR Available';
-                } else {
-                    fallbackToCameraEstimate();
-                }
-            })
-            .catch(() => {
-                fallbackToCameraEstimate();
-            });
-    } else {
-        fallbackToCameraEstimate();
+    if (window.RoomFlowSpatial && window.RoomFlowSpatial.spatialManager) {
+        window.RoomFlowSpatial.spatialManager.selectBestProvider().then(() => {
+            updateARDisplay();
+            updateQualityBadgeDisplay();
+        });
     }
 }
 
 function fallbackToCameraEstimate() {
     activeTier = 'CAMERA_ESTIMATE';
-    if (tierBadge) tierBadge.innerText = 'CAMERA ESTIMATE';
-    if (qualityBadge) qualityBadge.innerText = 'Orientation Only';
+    if (window.RoomFlowSpatial) {
+        window.RoomFlowSpatial.globalCapabilities.immersiveARAvailable = false;
+        window.RoomFlowSpatial.spatialManager.selectBestProvider().then(() => {
+            updateQualityBadgeDisplay();
+        });
+    } else {
+        if (tierBadge) tierBadge.innerText = 'CAMERA ESTIMATE';
+        if (qualityBadge) qualityBadge.innerText = 'Orientation Only';
+    }
+}
+
+function updateQualityBadgeDisplay() {
+    if (!qualityBadge) return;
+    if (activeTier === 'APPLE_LIDAR') {
+        qualityBadge.innerText = 'LiDAR depth active';
+    } else if (activeTier === 'APPLE_ARKIT') {
+        qualityBadge.innerText = 'ARKit Depth Active';
+    } else if (activeTier === 'WEBXR_DEPTH') {
+        qualityBadge.innerText = 'WebXR Depth Active';
+    } else if (activeTier === 'WEBXR_SPATIAL') {
+        qualityBadge.innerText = 'WebXR Hit Test';
+    } else if (activeTier === 'ANDROID_NATIVE') {
+        qualityBadge.innerText = 'Native ARCore Active';
+    } else {
+        qualityBadge.innerText = 'Orientation Only';
+    }
 }
 
 function updateAppleCapabilities(caps) {
     appleCapabilities = caps;
-    if (caps.lidarSupported) {
-        activeTier = 'APPLE_LIDAR';
-        if (tierBadge) {
-            tierBadge.innerText = 'APPLE LiDAR';
-            tierBadge.style.background = 'rgba(16, 185, 129, 0.85)'; // Green badge for LiDAR
-        }
-        if (qualityBadge) qualityBadge.innerText = 'LiDAR depth active';
+    window.appleCapabilities = caps;
+    if (window.RoomFlowSpatial) {
+        window.RoomFlowSpatial.globalCapabilities.appleLiDARAvailable = !!caps.lidarSupported;
+        window.RoomFlowSpatial.globalCapabilities.roomPlanAvailable = !!caps.roomPlanSupported;
+        window.RoomFlowSpatial.spatialManager.selectBestProvider().then(() => {
+            updateQualityBadgeDisplay();
+        });
     } else {
-        activeTier = 'APPLE_ARKIT';
-        if (tierBadge) {
-            tierBadge.innerText = 'APPLE ARKIT';
-            tierBadge.style.background = 'rgba(59, 130, 246, 0.85)';
+        if (caps.lidarSupported) {
+            activeTier = 'APPLE_LIDAR';
+            if (tierBadge) {
+                tierBadge.innerText = 'APPLE LiDAR';
+                tierBadge.style.background = 'rgba(16, 185, 129, 0.85)'; // Green badge for LiDAR
+            }
+            if (qualityBadge) qualityBadge.innerText = 'LiDAR depth active';
+        } else {
+            activeTier = 'APPLE_ARKIT';
+            if (tierBadge) {
+                tierBadge.innerText = 'APPLE ARKIT';
+                tierBadge.style.background = 'rgba(59, 130, 246, 0.85)';
+            }
+            if (qualityBadge) qualityBadge.innerText = caps.sceneReconstructionSupported ? 'ARKit mesh building' : 'ARKit depth active';
         }
-        if (qualityBadge) qualityBadge.innerText = caps.sceneReconstructionSupported ? 'ARKit mesh building' : 'ARKit depth active';
     }
 }
 
@@ -325,70 +335,126 @@ window.stopCamera = function() {
         if (videoStream) {
             videoStream.getTracks().forEach(track => track.stop());
             videoStream = null;
-        }
         videoEl.srcObject = null;
     }
 };
 
-// Android WebXR spatial session initializer
+// // Android WebXR spatial session initializer
 function startWebXRSession() {
     if (videoEl) videoEl.style.opacity = '0';
     if (xrCanvas) xrCanvas.classList.remove('hidden');
     
-    // Request basic tracking in required, and advanced features in optional to prevent startup failures
-    const sessionOptions = {
-        requiredFeatures: ['local'],
-        optionalFeatures: ['local-floor', 'hit-test']
-    };
+    // Progressive session option attempts to gracefully handle lack of permissions or features
+    const attempts = [
+        {
+            requiredFeatures: ['local'],
+            optionalFeatures: ['local-floor', 'hit-test', 'anchors', 'depth-sensing', 'dom-overlay'],
+            depthSensing: {
+                usagePreference: ['cpu-optimized', 'gpu-optimized'],
+                dataFormatPreference: ['float32', 'luminance-alpha']
+            },
+            domOverlay: { root: document.body }
+        },
+        {
+            requiredFeatures: ['local'],
+            optionalFeatures: ['local-floor', 'hit-test', 'anchors', 'dom-overlay'],
+            domOverlay: { root: document.body }
+        },
+        {
+            requiredFeatures: ['local'],
+            optionalFeatures: ['local-floor', 'hit-test', 'dom-overlay'],
+            domOverlay: { root: document.body }
+        },
+        {
+            requiredFeatures: ['local'],
+            optionalFeatures: ['dom-overlay'],
+            domOverlay: { root: document.body }
+        },
+        {
+            requiredFeatures: ['local']
+        }
+    ];
+
+    let attemptIndex = 0;
+
+    function tryNextSession() {
+        if (attemptIndex >= attempts.length) {
+            console.error('All progressive WebXR session attempts failed.');
+            alert('Immersive WebXR AR sessions are unavailable in the current browser.');
+            fallbackToCameraEstimate();
+            window.startCamera(true);
+            return;
+        }
+
+        const options = attempts[attemptIndex];
+        const attemptLabel = `Attempt ${attemptIndex + 1}: req=[${options.requiredFeatures.join(',')}], opt=[${(options.optionalFeatures || []).join(',')}]`;
+        console.log(`Requesting WebXR Session - ${attemptLabel}`);
+        
+        if (window.RoomFlowSpatial) {
+            window.RoomFlowSpatial.spatialManager.providers[2].name = `WebXR (${attemptLabel})`;
+            window.RoomFlowSpatial.spatialManager.providers[3].name = `WebXR (${attemptLabel})`;
+        }
+
+        navigator.xr.requestSession('immersive-ar', options)
+            .then(session => {
+                console.log(`WebXR Session successfully created: ${attemptLabel}`);
+                if (window.RoomFlowSpatial) {
+                    window.RoomFlowSpatial.spatialManager.providers[2].name = 'WebXR Depth Sensing';
+                    window.RoomFlowSpatial.spatialManager.providers[3].name = 'WebXR Hit-Testing';
+                    window.RoomFlowSpatial.spatialManager.selectBestProvider();
+                }
+                initializeWebXRSession(session);
+            })
+            .catch(err => {
+                console.warn(`WebXR configuration failed: ${attemptLabel} - Error: ${err.message}`);
+                attemptIndex++;
+                tryNextSession();
+            });
+    }
+
+    tryNextSession();
+}
+
+function initializeWebXRSession(session) {
+    webxrSession = session;
     
-    navigator.xr.requestSession('immersive-ar', sessionOptions)
-        .then(session => {
-            webxrSession = session;
-            
-            // Configure WebGL compatibility
-            const gl = xrCanvas.getContext('webgl', { xrCompatible: true });
-            session.updateRenderState({
-                baseLayer: new XRWebGLLayer(session, gl)
-            });
-            
-            // Gracefully fall back if local-floor or hit-test are not supported
-            session.requestReferenceSpace('local-floor')
-                .catch(() => session.requestReferenceSpace('local'))
-                .then(refSpace => {
-                    webxrRefSpace = refSpace;
-                    if (session.requestHitTestSource) {
-                        return session.requestHitTestSource({ space: session.viewerSpace })
-                            .catch(err => {
-                                console.warn('Hit test source failed:', err);
-                                return null;
-                            });
-                    }
-                    return null;
-                })
-                .then(hitTestSource => {
-                    webxrHitTestSource = hitTestSource;
-                    session.requestAnimationFrame(onXRFrame);
-                })
-                .catch(err => {
-                    console.error('WebXR frame start failed:', err);
-                    session.requestAnimationFrame(onXRFrame);
-                });
-                
-            session.addEventListener('end', () => {
-                webxrSession = null;
-                webxrHitTestSource = null;
-                webxrRefSpace = null;
-                if (xrCanvas) xrCanvas.classList.add('hidden');
-                if (videoEl) videoEl.style.opacity = '1';
-                fallbackToCameraEstimate();
-            });
+    // Configure WebGL compatibility
+    const gl = xrCanvas.getContext('webgl', { xrCompatible: true });
+    session.updateRenderState({
+        baseLayer: new XRWebGLLayer(session, gl)
+    });
+    
+    // Gracefully request reference space and hit test source
+    session.requestReferenceSpace('local-floor')
+        .catch(() => session.requestReferenceSpace('local'))
+        .then(refSpace => {
+            webxrRefSpace = refSpace;
+            if (session.requestHitTestSource) {
+                return session.requestHitTestSource({ space: session.viewerSpace })
+                    .catch(err => {
+                        console.warn('Hit test source failed:', err);
+                        return null;
+                    });
+            }
+            return null;
+        })
+        .then(hitTestSource => {
+            webxrHitTestSource = hitTestSource;
+            session.requestAnimationFrame(onXRFrame);
         })
         .catch(err => {
-            console.error('WebXR session failed:', err);
-            alert('Could not start Spatial AR. Falling back to Camera Estimate.');
-            fallbackToCameraEstimate();
-            window.startCamera(true); // Pass true to skip splash and initialize fallback immediately!
+            console.error('WebXR tracking init failed:', err);
+            session.requestAnimationFrame(onXRFrame);
         });
+        
+    session.addEventListener('end', () => {
+        webxrSession = null;
+        webxrHitTestSource = null;
+        webxrRefSpace = null;
+        if (xrCanvas) xrCanvas.classList.add('hidden');
+        if (videoEl) videoEl.style.opacity = '1';
+        fallbackToCameraEstimate();
+    });
 }
 
 function onXRFrame(time, frame) {
@@ -397,7 +463,43 @@ function onXRFrame(time, frame) {
     webxrSession.requestAnimationFrame(onXRFrame);
     
     const pose = frame.getViewerPose(webxrRefSpace);
-    if (!pose || !webxrHitTestSource) return;
+    if (!pose) return;
+
+    // --- Dynamic Depth-Sensing Feature Extract ---
+    if (window.RoomFlowSpatial && pose.views) {
+        pose.views.forEach(view => {
+            const depthInfo = window.RoomFlowSpatial.DepthProvider.getDepthFrame(view, frame);
+            if (depthInfo) {
+                const filtered = window.RoomFlowSpatial.DepthFrameProcessor.filterFrame(depthInfo);
+                const cloud = window.RoomFlowSpatial.PointCloudBuilder.buildPointCloud(filtered, view.projectionMatrix, view.transform.matrix);
+                
+                // If point cloud has valid data, perform plane fits
+                if (cloud.length > 50) {
+                    const planes = window.RoomFlowSpatial.PlaneDetector.detectPlanes(cloud);
+                    const floorY = window.RoomFlowSpatial.FloorDetector.locateFloor(planes);
+                    const ceilingY = window.RoomFlowSpatial.CeilingDetector.locateCeiling(planes);
+                    
+                    // Display current depth stats in quality badge
+                    if (qualityBadge) {
+                        qualityBadge.innerText = `Depth Active: ${cloud.length} pts`;
+                    }
+                    
+                    // Complement hit-test with depth-based active distance estimation if hit-test is delayed
+                    if (!webxrHitTestSource && cloud.length > 0) {
+                        // Use center pixel depth as active aim distance
+                        const midIndex = Math.floor(filtered.width / 2) * filtered.width + Math.floor(filtered.height / 2);
+                        let midDepth = filtered.rawValueType === 'float32' ? filtered.rawValue[midIndex] : filtered.rawValue[midIndex * 2] / 255.0;
+                        if (midDepth > 0.1 && midDepth < 8.0) {
+                            activeDistance = midDepth * STANDARD_METERS_TO_FEET;
+                            distanceDisplay.innerText = formatFeetInches(activeDistance);
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    if (!webxrHitTestSource) return;
     
     const hitTestResults = frame.getHitTestResults(webxrHitTestSource);
     if (hitTestResults.length > 0) {
@@ -430,10 +532,14 @@ function onXRFrame(time, frame) {
                 const segmentDist = Math.sqrt(segX*segX + segZ*segZ);
                 segmentDisplay.innerText = formatFeetInches(segmentDist);
             }
-            if (qualityBadge) qualityBadge.innerText = 'Spatial tracking active';
+            if (qualityBadge && (!window.RoomFlowSpatial || !window.RoomFlowSpatial.globalCapabilities.depthSensingAvailable)) {
+                qualityBadge.innerText = 'Spatial tracking active';
+            }
         }
     } else {
-        if (qualityBadge) qualityBadge.innerText = 'Scan surface...';
+        if (qualityBadge && (!window.RoomFlowSpatial || !window.RoomFlowSpatial.globalCapabilities.depthSensingAvailable)) {
+            qualityBadge.innerText = 'Scan surface...';
+        }
     }
 }
 

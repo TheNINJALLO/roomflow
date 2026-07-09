@@ -51,6 +51,7 @@
                 <button id="btn-save" title="Save Project"><i data-lucide="save"></i></button>
                 <button id="btn-load" title="Load Project"><i data-lucide="folder-open"></i></button>
                 <button id="btn-jobs" title="Job Database (Local / Share)"><i data-lucide="database"></i></button>
+                <button id="btn-diagnostics" title="Device & AR Diagnostics"><i data-lucide="settings-2"></i></button>
                 <input type="file" id="file-input" style="display: none;" accept=".json">
                 <button id="btn-export-pdf" class="btn-accent"><i data-lucide="download"></i> <span>Export</span></button>
             </div>
@@ -658,11 +659,45 @@
         </div>
     </div>
 
+    <!-- Diagnostics Modal -->
+    <div id="diagnostics-modal" class="modal hidden" style="position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 2rem; width: 90%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); color: #f8fafc; max-height: 85vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem;">
+                <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--accent-teal); display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="settings-2"></i> Device & AR Diagnostics</h3>
+                <button id="btn-close-diagnostics" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0.25rem;"><i data-lucide="x"></i></button>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; font-weight: 600; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Selected Spatial Provider</h4>
+                <div id="diag-selected-engine" style="font-weight: 700; color: var(--accent-teal); background: rgba(0,255,209,0.1); border: 1px solid rgba(0,255,209,0.2); padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.9rem;">Detecting...</div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; font-weight: 600; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Detailed Capabilities Cache</h4>
+                <div id="diag-caps-list" style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 0.75rem;">
+                    <!-- Filled dynamically -->
+                </div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="margin: 0 0 0.5rem 0; font-size: 0.9rem; font-weight: 600; color: #e2e8f0; text-transform: uppercase; letter-spacing: 0.05em;">Fallback Routing History</h4>
+                <div id="diag-fallback-history" style="background: rgba(15, 23, 42, 0.4); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px; padding: 0.75rem; max-height: 120px; overflow-y: auto; font-family: var(--font-mono);">
+                    <!-- Filled dynamically -->
+                </div>
+            </div>
+            
+            <div style="text-align: right;">
+                <button id="btn-diagnostics-ok" style="background: var(--accent-blue); color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 0.85rem; transition: all 0.2s;">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Three.js Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <!-- Application Logic Scripts -->
+    <script src="spatial-engine.js?v=36"></script>
     <script src="app.js?v=36"></script>
     <script src="renderer3d.js?v=36"></script>
     <script src="ar-estimator.js?v=36"></script>

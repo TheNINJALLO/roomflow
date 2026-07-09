@@ -4479,6 +4479,22 @@ document.getElementById('btn-close-jobs').addEventListener('click', () => {
     document.getElementById('jobs-modal').classList.add('hidden');
 });
 
+// Diagnostics Modal Controls
+document.getElementById('btn-diagnostics').addEventListener('click', () => {
+    document.getElementById('diagnostics-modal').classList.remove('hidden');
+    if (window.RoomFlowSpatial) {
+        window.RoomFlowSpatial.performCapabilityDetection();
+    }
+});
+
+document.getElementById('btn-close-diagnostics').addEventListener('click', () => {
+    document.getElementById('diagnostics-modal').classList.add('hidden');
+});
+
+document.getElementById('btn-diagnostics-ok').addEventListener('click', () => {
+    document.getElementById('diagnostics-modal').classList.add('hidden');
+});
+
 // Save job helper
 document.getElementById('btn-save-job-submit').addEventListener('click', () => {
     const input = document.getElementById('job-name-input');
