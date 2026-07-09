@@ -286,7 +286,7 @@ function initializeScannerSession() {
                 levelId: state.currentLevelId
             }
         }));
-    } else if (activeTier === 'WEBXR_SPATIAL') {
+    } else if (activeTier === 'WEBXR_SPATIAL' || activeTier === 'WEBXR_DEPTH') {
         startWebXRSession();
     } else {
         // TIER C: Camera orientation estimate fallback
