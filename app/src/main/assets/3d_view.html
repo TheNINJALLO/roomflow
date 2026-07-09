@@ -2,8 +2,9 @@
 <html>
 <head>
     <style>
-        body { margin: 0; overflow: hidden; background: #0d111a; }
-        #three-container { width: 100vw; height: 100vh; }
+        body { margin: 0; overflow: hidden; background: #0d111a; touch-action: none; user-select: none; }
+        #three-container { width: 100vw; height: 100vh; touch-action: none; }
+        canvas { touch-action: none; }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>

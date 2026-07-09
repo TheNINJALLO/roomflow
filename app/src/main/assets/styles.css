@@ -385,6 +385,11 @@ html, body {
     pointer-events: none;
     transition: opacity 0.3s ease;
     overflow: hidden;
+    touch-action: none;
+}
+
+.viewport canvas {
+    touch-action: none;
 }
 
 .viewport.active {
