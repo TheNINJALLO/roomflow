@@ -723,7 +723,6 @@ window.sync3D = function() {
         });
         const frameMesh = new THREE.Mesh(frameGeo, frameMat);
         hatchGroup.add(frameMesh);
-        roomMeshes.push(frameMesh);
         
         // Lid panel
         const lidGeo = new THREE.BoxGeometry(h.w - 0.2, 0.06, h.l - 0.2);
@@ -735,7 +734,6 @@ window.sync3D = function() {
         const lidMesh = new THREE.Mesh(lidGeo, lidMat);
         lidMesh.position.y = 0.01;
         hatchGroup.add(lidMesh);
-        roomMeshes.push(lidMesh);
         
         // Tiny latch handle
         const handleGeo = new THREE.BoxGeometry(0.3, 0.02, 0.1);
@@ -746,9 +744,9 @@ window.sync3D = function() {
         const handleMesh = new THREE.Mesh(handleGeo, handleMat);
         handleMesh.position.set(h.w / 2 - 0.4, 0.05, 0);
         hatchGroup.add(handleMesh);
-        roomMeshes.push(handleMesh);
         
         scene.add(hatchGroup);
+        roomMeshes.push(hatchGroup);
     });
 
     // 5. Render Support Beams (timber wood or steel girders)
