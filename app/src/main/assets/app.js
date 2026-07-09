@@ -4610,6 +4610,10 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                     button { display: none; }
                     body { padding: 15px; margin: 0; }
                     .page-break { page-break-before: always; break-before: page; }
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
                 }
                 .print-btn { background-color: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; float: right; }
                 .print-btn:hover { background-color: #2563eb; }
