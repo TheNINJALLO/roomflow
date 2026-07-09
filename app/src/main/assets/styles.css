@@ -1260,3 +1260,20 @@ html, body {
         justify-content: center;
     }
 }
+
+/* AR Mode Transparency & Solid Overlay Controls */
+#app-container.ar-mode-active {
+    background-color: transparent !important;
+}
+
+#app-container.ar-mode-active .app-header {
+    background-color: #0d111a !important;
+    backdrop-filter: none !important;
+    z-index: 1000 !important;
+}
+
+#app-container.ar-mode-active .sidebar {
+    background-color: #0d111a !important;
+    backdrop-filter: none !important;
+    z-index: 1000 !important;
+}

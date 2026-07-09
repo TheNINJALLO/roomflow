@@ -71,6 +71,7 @@ class ARCameraFragment : Fragment(), SensorEventListener {
                             android.widget.FrameLayout.LayoutParams.MATCH_PARENT
                         )
                         scaleType = androidx.camera.view.PreviewView.ScaleType.FILL_CENTER
+                        implementationMode = androidx.camera.view.PreviewView.ImplementationMode.COMPATIBLE
                     }
                     binding.arSurfaceContainer.removeAllViews()
                     binding.arSurfaceContainer.addView(previewView)

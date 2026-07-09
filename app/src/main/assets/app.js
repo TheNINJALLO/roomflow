@@ -4107,6 +4107,19 @@ function switchView(viewName) {
     view3D.classList.toggle('active', viewName === '3d');
     viewAR.classList.toggle('active', viewName === 'ar');
 
+    // Toggle AR transparency controls & solid overlays
+    const appContainer = document.getElementById('app-container');
+    const viewportContainer = document.querySelector('.viewport-container');
+    if (viewName === 'ar') {
+        if (appContainer) appContainer.classList.add('ar-mode-active');
+        document.body.style.backgroundColor = 'transparent';
+        if (viewportContainer) viewportContainer.style.backgroundColor = 'transparent';
+    } else {
+        if (appContainer) appContainer.classList.remove('ar-mode-active');
+        document.body.style.backgroundColor = '';
+        if (viewportContainer) viewportContainer.style.backgroundColor = '';
+    }
+
     // Hide tools & details float buttons in AR mode to avoid overlap
     const mobileToggleTools = document.getElementById('mobile-toggle-tools');
     const mobileToggleDetails = document.getElementById('mobile-toggle-details');
