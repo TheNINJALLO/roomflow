@@ -4592,13 +4592,18 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
                 th { background-color: #f3f4f6; color: #1e3a8a; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
                 tr.totals { font-weight: 700; background-color: #eff6ff; }
-                .layout-preview { text-align: center; margin-bottom: 30px; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; background-color: #ffffff; }
-                .layout-preview img { max-width: 100%; max-height: 70vh; object-fit: contain; }
-                .footer { margin-top: 50px; text-align: center; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 25px; page-break-inside: avoid; }
+                tr { page-break-inside: avoid; }
+                th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+                th { background-color: #f3f4f6; color: #1e3a8a; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
+                tr.totals { font-weight: 700; background-color: #eff6ff; }
+                .layout-preview { text-align: center; margin-bottom: 20px; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; background-color: #ffffff; }
+                .layout-preview img { max-width: 100%; max-height: 260px; object-fit: contain; }
+                .footer { margin-top: 30px; text-align: center; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 15px; }
                 @media print {
                     button { display: none; }
-                    body { padding: 20px; }
-                    h2 { page-break-before: always; break-before: page; }
+                    body { padding: 15px; margin: 0; }
+                    .page-break { page-break-before: always; break-before: page; }
                 }
                 .print-btn { background-color: #3b82f6; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; float: right; }
                 .print-btn:hover { background-color: #2563eb; }
@@ -4615,17 +4620,22 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </div>
             </div>
 
-            <h2>1. 2D Floor Plan Blueprint</h2>
-            <div class="layout-preview">
-                <img src="${layoutImage}" alt="2D Layout Blueprint">
+            <div style="display: grid; grid-template-columns: ${screenshot3D ? '1fr 1fr' : '1fr'}; gap: 20px; margin-bottom: 10px;">
+                <div>
+                    <h2 style="margin-top: 10px;">1. 2D Floor Plan Blueprint</h2>
+                    <div class="layout-preview" style="margin-bottom: 0;">
+                        <img src="${layoutImage}" alt="2D Layout Blueprint">
+                    </div>
+                </div>
+                ${screenshot3D ? `
+                <div>
+                    <h2 style="margin-top: 10px;">2. 3D Model Render Preview</h2>
+                    <div class="layout-preview" style="margin-bottom: 0;">
+                        <img src="${screenshot3D}" alt="3D Model Render Preview">
+                    </div>
+                </div>
+                ` : ''}
             </div>
-
-            ${screenshot3D ? `
-            <h2>2. 3D Model Render Preview</h2>
-            <div class="layout-preview">
-                <img src="${screenshot3D}" alt="3D Model Render Preview">
-            </div>
-            ` : ''}
 
             <h2>Blueprint Symbol & Material Legend</h2>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-top: 15px; margin-bottom: 30px; font-size: 0.85rem; line-height: 1.4; color: #334155;">
@@ -4655,7 +4665,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 </div>
             </div>
 
-            <h2>3. Rooms & Structural Elements</h2>
+            <h2 class="page-break">3. Rooms & Structural Elements</h2>
             <table>
                 <thead>
                     <tr>
