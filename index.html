@@ -140,6 +140,12 @@
                         <button id="btn-add-window" class="tool-btn" disabled>
                             <i data-lucide="square-dashed"></i> Standard Window
                         </button>
+                        <button id="btn-add-crawl-door" class="tool-btn" disabled>
+                            <i data-lucide="door-open"></i> Exterior Crawl Door
+                        </button>
+                        <button id="btn-add-hatch" class="tool-btn" disabled>
+                            <i data-lucide="layout-grid"></i> Crawlspace Hatch
+                        </button>
                     </div>
                 </div>
 
@@ -502,6 +508,33 @@
                             <input type="number" id="beam-len-input" step="0.5" min="1">
                         </div>
                         <button id="btn-delete-beam" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Support Beam</button>
+                    </div>
+                </div>
+
+                <!-- Floor Hatch Properties -->
+                <div class="sidebar-section hidden" id="floor-hatch-edit-fields">
+                    <h3>Hatch Properties</h3>
+                    <div class="edit-inputs">
+                        <div class="input-group">
+                            <label for="floor-hatch-name-input">Hatch Name</label>
+                            <input type="text" id="floor-hatch-name-input" value="Crawlspace Access Hatch">
+                        </div>
+                        <div class="input-group">
+                            <label for="floor-hatch-width-input">Width (ft)</label>
+                            <input type="number" id="floor-hatch-width-input" step="0.5" min="1" value="3">
+                        </div>
+                        <div class="input-group">
+                            <label for="floor-hatch-length-input">Length (ft)</label>
+                            <input type="number" id="floor-hatch-length-input" step="0.5" min="1" value="3">
+                        </div>
+                        <div class="input-group">
+                            <label for="floor-hatch-target-select">Elevation Target</label>
+                            <select id="floor-hatch-target-select">
+                                <option value="floor">Floor Level</option>
+                                <option value="ceiling">Ceiling Level</option>
+                            </select>
+                        </div>
+                        <button id="btn-delete-floor-hatch" class="btn-danger btn-full"><i data-lucide="trash-2"></i> Delete Access Hatch</button>
                     </div>
                 </div>
 

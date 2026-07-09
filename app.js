@@ -3,10 +3,12 @@ const state = {
     rooms: [],
     sumpPumps: [],
     dischargeLines: [],
+    floorHatches: [],
     capturedMeasurements: [],
     selectedRoomId: null,
     selectedSumpPumpId: null,
     selectedDischargeLineId: null,
+    selectedFloorHatchId: null,
     activeView: '2d', // '2d', '3d', 'ar'
     scale: 15,        // Pixels per foot
     offsetX: 0,       // Canvas pan offset X
@@ -17,6 +19,7 @@ const state = {
     draggedRoomId: null,
     draggedHandle: null, // 'w', 'e', 'n', 's', 'nw', 'ne', 'se', 'sw' or 'move'
     draggedSumpPumpId: null,
+    draggedFloorHatchId: null,
     draggedDischargeHandle: null, // { id, point: 'p1' | 'p2' | 'move' }
     draggedOpening: null,        // { roomId, openingId }
     draggedVertex: null,         // { roomId, vertexIndex }
@@ -293,6 +296,7 @@ function selectItem(type, id) {
     state.selectedInteriorPipeId = (type === 'interiorPipe') ? id : null;
     state.selectedStanchionId = (type === 'stanchion') ? id : null;
     state.selectedMainBeamId = (type === 'beam') ? id : null;
+    state.selectedFloorHatchId = (type === 'floorHatch') ? id : null;
     
     const roomFields = document.getElementById('room-edit-fields');
     const sumpFields = document.getElementById('sump-edit-fields');
@@ -300,10 +304,13 @@ function selectItem(type, id) {
     const interiorPipeFields = document.getElementById('interior-pipe-edit-fields');
     const stanchionFields = document.getElementById('stanchion-edit-fields');
     const beamFields = document.getElementById('beam-edit-fields');
+    const floorHatchFields = document.getElementById('floor-hatch-edit-fields');
     const noSel = document.getElementById('no-selection-msg');
     
     const btnAddDoor = document.getElementById('btn-add-door');
     const btnAddWindow = document.getElementById('btn-add-window');
+    const btnAddCrawlDoor = document.getElementById('btn-add-crawl-door');
+    const btnAddHatch = document.getElementById('btn-add-hatch');
     const btnAddStrap = document.getElementById('btn-add-strap');
     const btnAddPerim = document.getElementById('btn-add-perimeter-strap');
     const btnAddNb1 = document.getElementById('btn-add-nb1');
@@ -315,9 +322,12 @@ function selectItem(type, id) {
     if (interiorPipeFields) interiorPipeFields.classList.add('hidden');
     if (stanchionFields) stanchionFields.classList.add('hidden');
     if (beamFields) beamFields.classList.add('hidden');
+    if (floorHatchFields) floorHatchFields.classList.add('hidden');
     noSel.classList.remove('hidden');
     btnAddDoor.disabled = true;
     btnAddWindow.disabled = true;
+    if (btnAddCrawlDoor) btnAddCrawlDoor.disabled = true;
+    if (btnAddHatch) btnAddHatch.disabled = true;
     if (btnAddStrap) btnAddStrap.disabled = true;
     if (btnAddPerim) btnAddPerim.disabled = true;
     if (btnAddNb1) btnAddNb1.disabled = true;
@@ -328,6 +338,10 @@ function selectItem(type, id) {
         if (room) {
             noSel.classList.add('hidden');
             roomFields.classList.remove('hidden');
+            btnAddDoor.disabled = false;
+            btnAddWindow.disabled = false;
+            if (btnAddCrawlDoor) btnAddCrawlDoor.disabled = false;
+            if (btnAddHatch) btnAddHatch.disabled = false;
             
             document.getElementById('room-name-input').value = room.name;
             document.getElementById('room-h-input').value = room.h;
@@ -455,6 +469,17 @@ function selectItem(type, id) {
             document.getElementById('beam-type-select').value = bm.type || 'timber';
             document.getElementById('beam-len-input').value = bm.length.toFixed(1);
         }
+    } else if (type === 'floorHatch' && id) {
+        const h = state.floorHatches.find(p => p.id === id);
+        const floorHatchFields = document.getElementById('floor-hatch-edit-fields');
+        if (h && floorHatchFields) {
+            noSel.classList.add('hidden');
+            floorHatchFields.classList.remove('hidden');
+            document.getElementById('floor-hatch-name-input').value = h.name;
+            document.getElementById('floor-hatch-width-input').value = h.w;
+            document.getElementById('floor-hatch-length-input').value = h.l;
+            document.getElementById('floor-hatch-target-select').value = h.target || 'floor';
+        }
     }
     
     // Toggle estimator panel visibility
@@ -531,8 +556,8 @@ function addOpening(type) {
         maxOffset = (bestWall === 'n' || bestWall === 's') ? room.w : room.l;
     }
 
-    const width = type === 'door' ? 3.0 : 4.0;
-    const height = type === 'door' ? 6.8 : 4.0;
+    const width = type === 'door' ? 3.0 : (type === 'crawl_door' ? 3.0 : 4.0);
+    const height = type === 'door' ? 6.8 : (type === 'crawl_door' ? 2.0 : 4.0);
     const offset = snap(maxOffset / 2);
 
     room.openings.push({
@@ -653,10 +678,15 @@ function updateRoomEstimates(room) {
                 <div>
                     <label>Wall</label>
                     <select onchange="updateOpening('${room.id}', '${op.id}', 'wall', this.value)">
-                        <option value="n" ${op.wall === 'n' ? 'selected' : ''}>N</option>
-                        <option value="e" ${op.wall === 'e' ? 'selected' : ''}>E</option>
-                        <option value="s" ${op.wall === 's' ? 'selected' : ''}>S</option>
-                        <option value="w" ${op.wall === 'w' ? 'selected' : ''}>W</option>
+                        ${room.type === 'custom' && room.vertices
+                            ? room.vertices.map((v, i) => `<option value="${i}" ${op.wall === i.toString() ? 'selected' : ''}>Wall ${i+1}</option>`).join('')
+                            : `
+                                <option value="n" ${op.wall === 'n' ? 'selected' : ''}>N</option>
+                                <option value="e" ${op.wall === 'e' ? 'selected' : ''}>E</option>
+                                <option value="s" ${op.wall === 's' ? 'selected' : ''}>S</option>
+                                <option value="w" ${op.wall === 'w' ? 'selected' : ''}>W</option>
+                            `
+                        }
                     </select>
                 </div>
                 <div>
@@ -1443,6 +1473,47 @@ function draw(isPrinting = false) {
         ctx.fillText(st.name, cx, cy - radius - 6);
     });
 
+    // Draw Floor Hatches
+    state.floorHatches.forEach(h => {
+        if (h.levelId && h.levelId !== state.currentLevelId) return;
+        const cx = toCanvasX(h.x);
+        const cy = toCanvasY(h.y);
+        const isSelected = h.id === state.selectedFloorHatchId;
+        const wPix = h.w * state.scale;
+        const lPix = h.l * state.scale;
+        
+        ctx.fillStyle = isSelected ? 'rgba(236, 72, 153, 0.2)' : 'rgba(30, 41, 59, 0.6)';
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#ec4899';
+        ctx.lineWidth = isSelected ? 3 : 2;
+        
+        ctx.beginPath();
+        ctx.rect(cx - wPix / 2, cy - lPix / 2, wPix, lPix);
+        ctx.fill();
+        ctx.stroke();
+        
+        // Crossed lines for hatch designation
+        ctx.strokeStyle = isSelected ? varColor('--accent-teal') : 'rgba(236, 72, 153, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - wPix / 2, cy - lPix / 2);
+        ctx.lineTo(cx + wPix / 2, cy + lPix / 2);
+        ctx.moveTo(cx + wPix / 2, cy - lPix / 2);
+        ctx.lineTo(cx - wPix / 2, cy + lPix / 2);
+        ctx.stroke();
+        
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : '#ec4899';
+        ctx.font = '600 8px var(--font-mono)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const labelText = (h.target === 'ceiling' ? 'CEILING HATCH' : 'FLOOR HATCH');
+        ctx.fillText(labelText, cx, cy);
+        
+        ctx.fillStyle = isSelected ? varColor('--accent-teal') : c(varColor('--text-muted'), '#475569');
+        ctx.font = '600 9px var(--font-sans)';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(h.name, cx, cy - lPix / 2 - 6);
+    });
+
     // Draw Support Beams
     state.mainBeams.forEach(bm => {
         if (bm.levelId && bm.levelId !== state.currentLevelId) return;
@@ -1982,7 +2053,7 @@ function drawOpeningOnWall(room, op) {
         ctx.save();
         ctx.translate(cx, cy);
         ctx.rotate(angle);
-        ctx.fillStyle = op.type === 'door' ? '#f59e0b' : '#06b6d4';
+        ctx.fillStyle = op.type === 'door' ? '#f59e0b' : (op.type === 'crawl_door' ? '#f97316' : '#06b6d4');
         ctx.fillRect(-widthPix / 2, -thickness / 2, widthPix, thickness);
         ctx.strokeStyle = '#ffffff';
         ctx.lineWidth = 1;
@@ -2013,15 +2084,23 @@ function drawOpeningOnWall(room, op) {
         opH = widthPix;
     }
 
-    ctx.fillStyle = op.type === 'door' ? '#f59e0b' : '#06b6d4';
+    ctx.fillStyle = op.type === 'door' ? '#f59e0b' : (op.type === 'crawl_door' ? '#f97316' : '#06b6d4');
     ctx.fillRect(opX, opY, opW, opH);
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
     ctx.strokeRect(opX, opY, opW, opH);
 
-    if (op.type === 'door') {
-        ctx.strokeStyle = 'rgba(245, 158, 11, 0.4)';
+    if (op.type === 'door' || op.type === 'crawl_door') {
+        const strokeColor = op.type === 'door' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(249, 115, 22, 0.5)';
+        ctx.strokeStyle = strokeColor;
         ctx.lineWidth = 1;
+        
+        if (op.type === 'crawl_door') {
+            ctx.setLineDash([2, 2]);
+        } else {
+            ctx.setLineDash([]);
+        }
+        
         ctx.beginPath();
         if (op.wall === 'n') {
             ctx.arc(opX, opY, widthPix, 0, Math.PI / 2);
@@ -2033,6 +2112,7 @@ function drawOpeningOnWall(room, op) {
             ctx.arc(opX + thickness, opY, widthPix, Math.PI / 2, Math.PI);
         }
         ctx.stroke();
+        ctx.setLineDash([]);
     }
 }
 
@@ -2346,6 +2426,22 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
+    // Check Floor Hatches click
+    for (let i = state.floorHatches.length - 1; i >= 0; i--) {
+        const h = state.floorHatches[i];
+        if (h.levelId && h.levelId !== state.currentLevelId) continue;
+        const hcx = toCanvasX(h.x);
+        const hcy = toCanvasY(h.y);
+        const hwPix = h.w * state.scale;
+        const hlPix = h.l * state.scale;
+        
+        if (Math.abs(mx - hcx) < hwPix / 2 && Math.abs(my - hcy) < hlPix / 2) {
+            selectItem('floorHatch', h.id);
+            state.draggedFloorHatchId = h.id;
+            return;
+        }
+    }
+
     // Check Stanchions click
     for (let i = state.stanchions.length - 1; i >= 0; i--) {
         const st = state.stanchions[i];
@@ -2590,6 +2686,17 @@ canvas.addEventListener('mousemove', (e) => {
         return;
     }
 
+    // Floor Hatch Dragging
+    if (state.draggedFloorHatchId) {
+        const h = state.floorHatches.find(p => p.id === state.draggedFloorHatchId);
+        if (h) {
+            h.x = snap(wx);
+            h.y = snap(wy);
+            draw();
+        }
+        return;
+    }
+
     // Support Beam Dragging
     if (state.draggedMainBeamHandle) {
         const bm = state.mainBeams.find(l => l.id === state.draggedMainBeamHandle.id);
@@ -2787,7 +2894,7 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('mouseup', () => {
     // If elements were dragged, check if they actually moved and commit to history
-    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedDischargeHandle || state.draggedInteriorPipeHandle || state.draggedStanchionId || state.draggedMainBeamHandle || state.draggedOpening || state.draggedVertex) {
+    if (state.draggedRoomId || state.draggedSumpPumpId || state.draggedFloorHatchId || state.draggedDischargeHandle || state.draggedInteriorPipeHandle || state.draggedStanchionId || state.draggedMainBeamHandle || state.draggedOpening || state.draggedVertex) {
         if (state.dragSnapshot) {
             const currentStr = JSON.stringify({
                 rooms: state.rooms,
@@ -2795,7 +2902,8 @@ canvas.addEventListener('mouseup', () => {
                 dischargeLines: state.dischargeLines,
                 interiorPipes: state.interiorPipes,
                 stanchions: state.stanchions,
-                mainBeams: state.mainBeams
+                mainBeams: state.mainBeams,
+                floorHatches: state.floorHatches
             });
             const snapStr = JSON.stringify({
                 rooms: state.dragSnapshot.rooms,
@@ -2803,7 +2911,8 @@ canvas.addEventListener('mouseup', () => {
                 dischargeLines: state.dragSnapshot.dischargeLines,
                 interiorPipes: state.dragSnapshot.interiorPipes,
                 stanchions: state.dragSnapshot.stanchions || [],
-                mainBeams: state.dragSnapshot.mainBeams || []
+                mainBeams: state.dragSnapshot.mainBeams || [],
+                floorHatches: state.dragSnapshot.floorHatches || []
             });
             if (currentStr !== snapStr) {
                 state.undoStack.push(state.dragSnapshot);
@@ -2821,6 +2930,7 @@ canvas.addEventListener('mouseup', () => {
     state.draggedRoomId = null;
     state.draggedHandle = null;
     state.draggedSumpPumpId = null;
+    state.draggedFloorHatchId = null;
     state.draggedDischargeHandle = null;
     state.draggedInteriorPipeHandle = null;
     state.draggedStanchionId = null;
@@ -3202,6 +3312,46 @@ document.getElementById('beam-len-input').addEventListener('input', (e) => {
     }
 });
 document.getElementById('btn-delete-beam').addEventListener('click', deleteSelectedMainBeam);
+document.getElementById('btn-delete-floor-hatch').addEventListener('click', deleteSelectedFloorHatch);
+
+document.getElementById('floor-hatch-name-input').addEventListener('input', (e) => {
+    if (!state.selectedFloorHatchId) return;
+    const h = state.floorHatches.find(p => p.id === state.selectedFloorHatchId);
+    if (h) {
+        h.name = e.target.value.trim();
+        draw();
+    }
+});
+
+document.getElementById('floor-hatch-width-input').addEventListener('input', (e) => {
+    if (!state.selectedFloorHatchId) return;
+    const h = state.floorHatches.find(p => p.id === state.selectedFloorHatchId);
+    if (h) {
+        h.w = Math.max(1, parseFloat(e.target.value) || 3.0);
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+document.getElementById('floor-hatch-length-input').addEventListener('input', (e) => {
+    if (!state.selectedFloorHatchId) return;
+    const h = state.floorHatches.find(p => p.id === state.selectedFloorHatchId);
+    if (h) {
+        h.l = Math.max(1, parseFloat(e.target.value) || 3.0);
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+document.getElementById('floor-hatch-target-select').addEventListener('change', (e) => {
+    if (!state.selectedFloorHatchId) return;
+    const h = state.floorHatches.find(p => p.id === state.selectedFloorHatchId);
+    if (h) {
+        h.target = e.target.value;
+        draw();
+        if (window.sync3D) window.sync3D();
+    }
+});
 
 // Trigger presets
 document.querySelectorAll('.add-room-btn').forEach(btn => {
@@ -3220,6 +3370,62 @@ document.getElementById('btn-add-window').addEventListener('click', () => {
     addOpening('window');
     if (typeof closeAllDrawers === 'function') closeAllDrawers();
 });
+document.getElementById('btn-add-crawl-door').addEventListener('click', () => {
+    addOpening('crawl_door');
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
+document.getElementById('btn-add-hatch').addEventListener('click', () => {
+    addFloorHatch();
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
+
+function addFloorHatch() {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (!room) return;
+    
+    saveHistoryState();
+    
+    let hx = room.x;
+    let hy = room.y;
+    if (room.type === 'custom' && room.vertices) {
+        let sumX = 0, sumY = 0;
+        room.vertices.forEach(v => {
+            sumX += v.x;
+            sumY += v.y;
+        });
+        hx += sumX / room.vertices.length;
+        hy += sumY / room.vertices.length;
+    } else {
+        hx += room.w / 2;
+        hy += room.l / 2;
+    }
+    
+    const newHatch = {
+        id: generateId(),
+        name: `Hatch ${state.floorHatches.length + 1}`,
+        levelId: state.currentLevelId,
+        x: snap(hx),
+        y: snap(hy),
+        w: 3.0,
+        l: 3.0,
+        target: 'floor' // 'floor' or 'ceiling'
+    };
+    
+    state.floorHatches.push(newHatch);
+    selectItem('floorHatch', newHatch.id);
+    draw();
+    if (window.sync3D) window.sync3D();
+}
+
+function deleteSelectedFloorHatch() {
+    if (!state.selectedFloorHatchId) return;
+    saveHistoryState();
+    state.floorHatches = state.floorHatches.filter(h => h.id !== state.selectedFloorHatchId);
+    selectItem(null);
+    draw();
+    if (window.sync3D) window.sync3D();
+}
 
 document.getElementById('btn-add-strap').addEventListener('click', () => {
     if (!state.selectedRoomId) return;
@@ -3423,6 +3629,7 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                 state.rooms = Array.isArray(data) ? data : (data.rooms || []);
                 state.sumpPumps = data.sumpPumps || [];
                 state.dischargeLines = data.dischargeLines || [];
+                state.floorHatches = data.floorHatches || [];
                 state.interiorPipes = data.interiorPipes || [];
                 state.stanchions = data.stanchions || [];
                 state.mainBeams = data.mainBeams || [];
@@ -4296,6 +4503,7 @@ function undo() {
     state.rooms = previous.rooms;
     state.sumpPumps = previous.sumpPumps;
     state.dischargeLines = previous.dischargeLines;
+    state.floorHatches = previous.floorHatches || [];
     state.interiorPipes = previous.interiorPipes || [];
     state.stanchions = previous.stanchions || [];
     state.mainBeams = previous.mainBeams || [];
@@ -4337,6 +4545,7 @@ function redo() {
     state.rooms = nextState.rooms;
     state.sumpPumps = nextState.sumpPumps;
     state.dischargeLines = nextState.dischargeLines;
+    state.floorHatches = nextState.floorHatches || [];
     state.interiorPipes = nextState.interiorPipes || [];
     state.stanchions = nextState.stanchions || [];
     state.mainBeams = nextState.mainBeams || [];
@@ -4508,6 +4717,7 @@ document.getElementById('btn-save-job-submit').addEventListener('click', () => {
         rooms: state.rooms,
         sumpPumps: state.sumpPumps,
         dischargeLines: state.dischargeLines,
+        floorHatches: state.floorHatches,
         interiorPipes: state.interiorPipes,
         stanchions: state.stanchions,
         mainBeams: state.mainBeams,
@@ -4536,6 +4746,7 @@ function loadJobData(data) {
     state.rooms = data.rooms || [];
     state.sumpPumps = data.sumpPumps || [];
     state.dischargeLines = data.dischargeLines || [];
+    state.floorHatches = data.floorHatches || [];
     state.interiorPipes = data.interiorPipes || [];
     state.stanchions = data.stanchions || [];
     state.mainBeams = data.mainBeams || [];
@@ -4550,6 +4761,7 @@ function loadJobData(data) {
     });
     state.sumpPumps.forEach(sp => { if (!sp.levelId) sp.levelId = 'basement'; });
     state.dischargeLines.forEach(dl => { if (!dl.levelId) dl.levelId = 'basement'; });
+    state.floorHatches.forEach(h => { if (!h.levelId) h.levelId = 'basement'; });
     state.interiorPipes.forEach(ip => { if (!ip.levelId) ip.levelId = 'basement'; });
     state.stanchions.forEach(st => { if (!st.levelId) st.levelId = 'basement'; });
     state.mainBeams.forEach(bm => { if (!bm.levelId) bm.levelId = 'basement'; });

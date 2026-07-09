@@ -655,6 +655,56 @@ window.sync3D = function() {
         roomMeshes.push(mesh);
     });
 
+    // Render Floor Hatches (Access ports)
+    state.floorHatches.forEach(h => {
+        const hLevelId = h.levelId || 'basement';
+        const level = state.levels.find(l => l.id === hLevelId) || { elevation: 0, height: 8 };
+        const elevation = level.elevation || 0;
+        const room = getRoomAt(h.x, h.y, hLevelId);
+        const roomH = room ? room.h : (level.height || 8);
+        
+        const yPos = h.target === 'ceiling' ? (elevation + roomH - 0.02) : (elevation + 0.02);
+        
+        const hatchGroup = new THREE.Group();
+        hatchGroup.position.set(h.x, yPos, h.y);
+        
+        // Frame border
+        const frameGeo = new THREE.BoxGeometry(h.w, 0.04, h.l);
+        const frameMat = new THREE.MeshStandardMaterial({
+            color: '#1e293b',
+            roughness: 0.5,
+            metalness: 0.8
+        });
+        const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+        hatchGroup.add(frameMesh);
+        roomMeshes.push(frameMesh);
+        
+        // Lid panel
+        const lidGeo = new THREE.BoxGeometry(h.w - 0.2, 0.06, h.l - 0.2);
+        const lidMat = new THREE.MeshStandardMaterial({
+            color: '#475569',
+            roughness: 0.6,
+            metalness: 0.7
+        });
+        const lidMesh = new THREE.Mesh(lidGeo, lidMat);
+        lidMesh.position.y = 0.01;
+        hatchGroup.add(lidMesh);
+        roomMeshes.push(lidMesh);
+        
+        // Tiny latch handle
+        const handleGeo = new THREE.BoxGeometry(0.3, 0.02, 0.1);
+        const handleMat = new THREE.MeshStandardMaterial({
+            color: '#ec4899',
+            roughness: 0.2
+        });
+        const handleMesh = new THREE.Mesh(handleGeo, handleMat);
+        handleMesh.position.set(h.w / 2 - 0.4, 0.05, 0);
+        hatchGroup.add(handleMesh);
+        roomMeshes.push(handleMesh);
+        
+        scene.add(hatchGroup);
+    });
+
     // 5. Render Support Beams (timber wood or steel girders)
     state.mainBeams.forEach(bm => {
         const bmLevelId = bm.levelId || 'basement';
@@ -741,7 +791,7 @@ function build3DWall(x1, z1, x2, z2, height, openings, group, material) {
         }
 
         // 2. Vertical slices above/below the opening
-        if (op.type === 'door') {
+        if (op.type === 'door' || op.type === 'crawl_door') {
             // Door opening: Only wall segment above the lintel (header)
             const headerH = height - op.h;
             if (headerH > 0) {
