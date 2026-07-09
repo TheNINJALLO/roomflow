@@ -425,22 +425,27 @@ function initializeWebXRSession(session) {
         baseLayer: new XRWebGLLayer(session, gl)
     });
     
-    // Gracefully request reference space and hit test source
-    session.requestReferenceSpace('local-floor')
-        .catch(() => session.requestReferenceSpace('local'))
-        .then(refSpace => {
-            webxrRefSpace = refSpace;
+    // Request viewer space first to correctly bind requestHitTestSource
+    session.requestReferenceSpace('viewer')
+        .then(viewerSpace => {
             if (session.requestHitTestSource) {
-                return session.requestHitTestSource({ space: session.viewerSpace })
-                    .catch(err => {
-                        console.warn('Hit test source failed:', err);
-                        return null;
-                    });
+                return session.requestHitTestSource({ space: viewerSpace });
             }
+            return null;
+        })
+        .catch(err => {
+            console.warn('Hit test source registration failed:', err);
             return null;
         })
         .then(hitTestSource => {
             webxrHitTestSource = hitTestSource;
+            
+            // Request tracking reference space ('local-floor' or 'local')
+            return session.requestReferenceSpace('local-floor')
+                .catch(() => session.requestReferenceSpace('local'));
+        })
+        .then(refSpace => {
+            webxrRefSpace = refSpace;
             session.requestAnimationFrame(onXRFrame);
         })
         .catch(err => {

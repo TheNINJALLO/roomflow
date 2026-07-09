@@ -298,51 +298,36 @@ class DepthProvider {
 
 class DepthFrameProcessor {
     static filterFrame(depthInfo) {
-        if (!depthInfo) return null;
-        // Output normalized coordinates and raw data safely
-        return {
-            width: depthInfo.width,
-            height: depthInfo.height,
-            rawValue: depthInfo.data, // TypedArray
-            rawValueType: depthInfo.rawValueType || 'float32',
-            normMultiplier: depthInfo.normMultiplier || 1.0
-        };
+        return depthInfo;
     }
 }
 
 class PointCloudBuilder {
-    static buildPointCloud(filteredFrame, projectionMatrix, viewMatrix) {
-        if (!filteredFrame || !projectionMatrix) return [];
-        const width = filteredFrame.width;
-        const height = filteredFrame.height;
-        const rawValue = filteredFrame.rawValue;
+    static buildPointCloud(depthInfo, projectionMatrix, viewMatrix) {
+        if (!depthInfo || !projectionMatrix) return [];
+        const width = depthInfo.width;
+        const height = depthInfo.height;
         const points = [];
         
-        // Downsample points temporal limits to avoid overheating / CPU drain
-        const step = 4; // process every 4th pixel
+        // Downsample points to avoid overheating / CPU drain
+        const step = 4;
         
         for (let y = 0; y < height; y += step) {
             for (let x = 0; x < width; x += step) {
-                const index = y * width + x;
-                let depth = 0;
-                if (filteredFrame.rawValueType === 'float32') {
-                    depth = rawValue[index];
-                } else {
-                    // luminance-alpha 16bit layout fallback
-                    depth = rawValue[index * 2] / 255.0;
-                }
-                
-                if (depth > 0.1 && depth < 8.0) { // Limit depth to 8 meters max
-                    // Reverse projection math back to camera space point (m)
-                    const pX = (x / width) * 2 - 1;
-                    const pY = -(y / height) * 2 + 1;
-                    
-                    // Simple unprojection transform
-                    const zM = depth;
-                    const xM = pX * zM * (1 / projectionMatrix[0]);
-                    const yM = pY * zM * (1 / projectionMatrix[5]);
-                    
-                    points.push({ x: xM, y: yM, z: zM });
+                try {
+                    const depth = depthInfo.getDepthInMeters(x, y);
+                    if (depth > 0.1 && depth < 8.0) {
+                        const pX = (x / width) * 2 - 1;
+                        const pY = -(y / height) * 2 + 1;
+                        
+                        const zM = depth;
+                        const xM = pX * zM * (1 / projectionMatrix[0]);
+                        const yM = pY * zM * (1 / projectionMatrix[5]);
+                        
+                        points.push({ x: xM, y: yM, z: zM });
+                    }
+                } catch (e) {
+                    // Fall back silently on coordinate translation bounds exceptions
                 }
             }
         }
