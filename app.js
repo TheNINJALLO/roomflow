@@ -3560,11 +3560,15 @@ function renderCarbonWallsCheckboxes(room) {
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.alignItems = 'center';
+        row.style.justifyContent = 'space-between';
         row.style.gap = '0.5rem';
-        row.style.marginTop = '0.15rem';
+        row.style.marginTop = '0.2rem';
         row.innerHTML = `
-            <input type="checkbox" id="cb-wall-${seg.wall}" style="width:auto; margin:0;" ${isChecked ? 'checked' : ''}>
-            <label for="cb-wall-${seg.wall}" style="font-size:0.75rem; font-weight:500; cursor:pointer; margin-bottom:0; color:var(--text-color);">${wallLabel}</label>
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="cb-wall-${seg.wall}" style="width:auto; margin:0;" ${isChecked ? 'checked' : ''}>
+                <label for="cb-wall-${seg.wall}" style="font-size:0.75rem; font-weight:500; cursor:pointer; margin-bottom:0; color:var(--text-color);">${wallLabel}</label>
+            </div>
+            <button type="button" class="btn-add-wall-strap" style="background: rgba(45, 212, 191, 0.15); color: var(--accent-teal); border: 1px solid rgba(45, 212, 191, 0.25); padding: 0.15rem 0.35rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">+ Add Strap</button>
         `;
         
         row.querySelector('input').addEventListener('change', (e) => {
@@ -3585,6 +3589,34 @@ function renderCarbonWallsCheckboxes(room) {
             draw();
             if (window.sync3D) window.sync3D();
         });
+
+        row.querySelector('.btn-add-wall-strap').addEventListener('click', (e) => {
+            e.stopPropagation();
+            saveHistoryState();
+            
+            // Ensure the wall is checked if adding a strap
+            if (!room.carbonFiberWalls.includes(seg.wall)) {
+                room.carbonFiberWalls.push(seg.wall);
+            }
+            
+            if (!room.customCarbonStraps) room.customCarbonStraps = [];
+            room.customCarbonStraps.push({
+                id: 'strap_' + Math.random().toString(36).substr(2, 9),
+                wall: seg.wall,
+                offset: 0.5
+            });
+            room.carbonStraps = room.customCarbonStraps.length;
+            
+            // Sync input Qty value
+            const input = document.getElementById('room-carbon-straps-input');
+            if (input) input.value = room.carbonStraps;
+            
+            renderCarbonWallsCheckboxes(room);
+            draw();
+            updateGlobalStats();
+            if (window.sync3D) window.sync3D();
+        });
+
         container.appendChild(row);
     });
     
