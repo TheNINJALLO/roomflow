@@ -4812,20 +4812,29 @@ function printCustomerProposal() {
     
     // Build list of active items to price
     const proposalItems = [];
-    let sumRawCosts = 0;
+    let sumOtherRawCosts = 0;
+    let dehumFlatTotal = 0;
     
     // Add regular catalog items
     Object.keys(report.items).forEach(id => {
         const item = report.items[id];
         if (item.purchaseQty > 0 && !item.excluded) {
-            proposalItems.push({
+            const isDehum = id === 'permanent_dehumidifier';
+            const itemObj = {
+                id: id,
                 name: item.data.name,
                 notes: item.data.notes,
                 qty: item.purchaseQty,
                 unit: item.data.purchaseUnit,
-                rawCost: item.cost
-            });
-            sumRawCosts += item.cost;
+                rawCost: item.cost,
+                isDehum: isDehum
+            };
+            proposalItems.push(itemObj);
+            if (isDehum) {
+                dehumFlatTotal += item.purchaseQty * 2000.00;
+            } else {
+                sumOtherRawCosts += item.cost;
+            }
         }
     });
     
@@ -4844,25 +4853,34 @@ function printCustomerProposal() {
                 const totalItemCost = baseCost + itemLaborCost;
                 
                 proposalItems.push({
+                    id: 'custom_' + Math.random(),
                     name: item.name || 'Custom Item',
                     notes: item.notes || 'Custom contractor line item',
                     qty: qty,
                     unit: item.unit || 'pcs',
-                    rawCost: totalItemCost
+                    rawCost: totalItemCost,
+                    isDehum: false
                 });
-                sumRawCosts += totalItemCost;
+                sumOtherRawCosts += totalItemCost;
             }
         });
     }
 
-    // Distribute labor and markup proportionally
-    const multiplier = sumRawCosts > 0 ? (totalSellingPrice / sumRawCosts) : 1;
+    // Distribute labor and markup proportionally over other items
+    const remainingTotal = Math.max(0, totalSellingPrice - dehumFlatTotal);
+    const multiplier = sumOtherRawCosts > 0 ? (remainingTotal / sumOtherRawCosts) : 1;
     
     let itemsRows = '';
     if (proposalItems.length > 0) {
         proposalItems.forEach(item => {
-            const customerTotal = item.rawCost * multiplier;
-            const customerUnitPrice = customerTotal / item.qty;
+            let customerTotal, customerUnitPrice;
+            if (item.isDehum) {
+                customerTotal = item.qty * 2000.00;
+                customerUnitPrice = 2000.00;
+            } else {
+                customerTotal = item.rawCost * multiplier;
+                customerUnitPrice = customerTotal / item.qty;
+            }
             itemsRows += `
                 <tr>
                     <td><strong>${item.name}</strong><br><small style="color:#64748b;">${item.notes}</small></td>
