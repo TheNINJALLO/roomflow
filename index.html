@@ -738,12 +738,28 @@
             </div>
             
             <!-- Save New Job Section -->
-            <div style="background: rgba(15, 23, 42, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
+            <div style="background: rgba(15, 23, 42, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 1rem; margin-bottom: 1rem;">
                 <h4 style="margin: 0 0 0.75rem 0; font-size: 0.9rem; font-weight: 600; color: #e2e8f0;">Save Current Layout as Job</h4>
                 <div style="display: flex; gap: 0.5rem;">
                     <input type="text" id="job-name-input" placeholder="e.g. Smith Residence Crawlspace" style="flex: 1; padding: 0.5rem 0.75rem; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #ffffff; font-size: 0.85rem;">
                     <button id="btn-save-job-submit" class="btn-accent" style="padding: 0.5rem 1rem; font-size: 0.85rem;"><i data-lucide="plus"></i> Save</button>
                 </div>
+            </div>
+
+            <!-- Cloud Synchronization Setup -->
+            <div style="background: rgba(15, 23, 42, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <h4 style="margin: 0; font-size: 0.9rem; font-weight: 600; color: #e2e8f0;">Cloud Sync across Devices</h4>
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <input type="checkbox" id="sync-enabled" style="margin: 0; width: auto; cursor: pointer;">
+                        <label for="sync-enabled" style="margin: 0; font-size: 0.8rem; font-weight: 500; color: #94a3b8; cursor: pointer;">Enable</label>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="text" id="sync-key-input" placeholder="Enter Company Sync Key" style="flex: 1; padding: 0.5rem 0.75rem; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #ffffff; font-size: 0.85rem;">
+                    <button id="btn-sync-now" class="btn-accent" style="padding: 0.5rem 0.75rem; font-size: 0.8rem; background-color: var(--accent-teal); border-color: var(--accent-teal);"><i data-lucide="refresh-cw"></i> Sync</button>
+                </div>
+                <div id="sync-status" style="margin-top: 0.4rem; font-size: 0.7rem; color: #94a3b8; font-style: italic;">Status: Offline/Local-only</div>
             </div>
             
             <!-- Saved Jobs List -->
@@ -795,7 +811,7 @@
     <script src="spatial-engine.js?v=59"></script>
     <script src="cost-catalog.js?v=59"></script>
     <script src="cost-engine.js?v=59"></script>
-    <script src="app.js?v=60"></script>
+    <script src="app.js?v=61"></script>
     <script src="renderer3d.js?v=59"></script>
     <script src="ar-estimator.js?v=59"></script>
     <script src="cost-ui.js?v=59"></script>

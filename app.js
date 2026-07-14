@@ -5496,10 +5496,169 @@ window.deleteMeasurement = function(idx) {
 
 window.updateMeasurementsSidebar = updateMeasurementsSidebar;
 
+// --- CLOUD SYNC ENGINE ---
+function getSyncConfig() {
+    const enabled = localStorage.getItem('roomflow_sync_enabled') === 'true';
+    const key = localStorage.getItem('roomflow_sync_key') || '';
+    return { enabled, key };
+}
+
+function updateSyncUI() {
+    const config = getSyncConfig();
+    const chk = document.getElementById('sync-enabled');
+    const inp = document.getElementById('sync-key-input');
+    const status = document.getElementById('sync-status');
+    
+    if (chk) chk.checked = config.enabled;
+    if (inp) inp.value = config.key;
+    
+    if (!config.enabled) {
+        if (status) status.textContent = "Status: Offline/Local-only";
+    }
+}
+
+async function syncCloudJobs() {
+    const chk = document.getElementById('sync-enabled');
+    const inp = document.getElementById('sync-key-input');
+    const status = document.getElementById('sync-status');
+    
+    if (!chk || !inp) return;
+    
+    const enabled = chk.checked;
+    const key = inp.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    
+    localStorage.setItem('roomflow_sync_enabled', enabled ? 'true' : 'false');
+    localStorage.setItem('roomflow_sync_key', key);
+    
+    if (!enabled || !key) {
+        if (status) status.textContent = "Status: Offline/Local-only";
+        return;
+    }
+    
+    if (key.length < 3) {
+        if (status) status.textContent = "Status: Key too short (min 3 chars)";
+        return;
+    }
+    
+    if (status) status.textContent = "Status: Syncing...";
+    
+    let localJobs = {};
+    try {
+        const stored = localStorage.getItem('roomflow_jobs');
+        if (stored) localJobs = JSON.parse(stored);
+    } catch(e) {
+        console.error(e);
+    }
+    
+    try {
+        const url = 'https://kvdb.io/roomflow_sync_' + key + '/jobs';
+        const res = await fetch(url);
+        
+        if (res.ok) {
+            const cloudText = await res.text();
+            let cloudJobs = {};
+            try {
+                if (cloudText) cloudJobs = JSON.parse(cloudText);
+            } catch(e) {
+                console.error("Cloud JSON parse failed:", e);
+            }
+            
+            // Merge logic based on lastModified
+            const merged = {};
+            
+            // Add all local jobs
+            Object.keys(localJobs).forEach(name => {
+                merged[name] = localJobs[name];
+            });
+            
+            // Merge cloud jobs
+            Object.keys(cloudJobs).forEach(name => {
+                const cloudJob = cloudJobs[name];
+                const localJob = localJobs[name];
+                if (!localJob) {
+                    merged[name] = cloudJob;
+                } else {
+                    const cloudTime = cloudJob.lastModified || 0;
+                    const localTime = localJob.lastModified || 0;
+                    if (cloudTime > localTime) {
+                        merged[name] = cloudJob;
+                    }
+                }
+            });
+            
+            // Save merged list locally
+            localStorage.setItem('roomflow_jobs', JSON.stringify(merged));
+            
+            // Push merged back to cloud
+            await fetch(url, {
+                method: 'POST',
+                body: JSON.stringify(merged)
+            });
+            
+            if (status) status.textContent = "Status: Synced at " + new Date().toLocaleTimeString();
+            renderJobsList();
+        } else if (res.status === 404) {
+            // First time bucket creation
+            await fetch(url, {
+                method: 'POST',
+                body: JSON.stringify(localJobs)
+            });
+            if (status) status.textContent = "Status: Initialized cloud db";
+        } else {
+            if (status) status.textContent = "Status: Sync error " + res.status;
+        }
+    } catch(err) {
+        console.error("Cloud Sync error:", err);
+        if (status) status.textContent = "Status: Offline/Sync failed";
+    }
+}
+
+async function uploadLocalJobsToCloud() {
+    const config = getSyncConfig();
+    if (!config.enabled || !config.key) return;
+    
+    let localJobs = {};
+    try {
+        const stored = localStorage.getItem('roomflow_jobs');
+        if (stored) localJobs = JSON.parse(stored);
+    } catch(e) {
+        console.error(e);
+    }
+    
+    try {
+        const url = 'https://kvdb.io/roomflow_sync_' + config.key + '/jobs';
+        await fetch(url, {
+            method: 'POST',
+            body: JSON.stringify(localJobs)
+        });
+    } catch(e) {
+        console.error("Upload to cloud failed:", e);
+    }
+}
+
+// Wire up Cloud Sync listeners after DOMContentLoaded/startup
+window.addEventListener('load', () => {
+    const syncChk = document.getElementById('sync-enabled');
+    const syncInp = document.getElementById('sync-key-input');
+    const syncBtn = document.getElementById('btn-sync-now');
+    
+    if (syncChk) syncChk.addEventListener('change', syncCloudJobs);
+    if (syncInp) syncInp.addEventListener('change', syncCloudJobs);
+    if (syncBtn) syncBtn.addEventListener('click', syncCloudJobs);
+    
+    // Perform initial automatic sync if enabled on load
+    const config = getSyncConfig();
+    if (config.enabled && config.key) {
+        setTimeout(syncCloudJobs, 1000);
+    }
+});
+
 // --- JOB DATABASE ENGINE ---
 // Open/close jobs database
 document.getElementById('btn-jobs').addEventListener('click', () => {
     document.getElementById('jobs-modal').classList.remove('hidden');
+    updateSyncUI();
+    syncCloudJobs();
     renderJobsList();
 });
 
@@ -5524,7 +5683,7 @@ document.getElementById('btn-diagnostics-ok').addEventListener('click', () => {
 });
 
 // Save job helper
-document.getElementById('btn-save-job-submit').addEventListener('click', () => {
+document.getElementById('btn-save-job-submit').addEventListener('click', async () => {
     const input = document.getElementById('job-name-input');
     const name = input.value.trim();
     if (!name) {
@@ -5543,7 +5702,8 @@ document.getElementById('btn-save-job-submit').addEventListener('click', () => {
         mainBeams: state.mainBeams,
         currentLevelId: state.currentLevelId,
         capturedMeasurements: state.capturedMeasurements || [],
-        costing: state.costing
+        costing: state.costing,
+        lastModified: Date.now()
     };
     
     let jobs = {};
@@ -5558,6 +5718,8 @@ document.getElementById('btn-save-job-submit').addEventListener('click', () => {
     localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
     
     input.value = '';
+    
+    await uploadLocalJobsToCloud();
     renderJobsList();
 });
 
@@ -5698,10 +5860,11 @@ function renderJobsList() {
         btnDelete.style.borderRadius = '4px';
         btnDelete.style.color = '#ffffff';
         btnDelete.style.cursor = 'pointer';
-        btnDelete.addEventListener('click', () => {
+        btnDelete.addEventListener('click', async () => {
             if (confirm(`Are you sure you want to delete job "${name}"?`)) {
                 delete jobs[name];
                 localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+                await uploadLocalJobsToCloud();
                 renderJobsList();
             }
         });
