@@ -1,0 +1,235 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.roomflow.app"
+4    android:versionCode="1"
+5    android:versionName="1.0" >
+6
+7    <uses-sdk
+7-->INJECTED
+8        android:minSdkVersion="26"
+8-->INJECTED
+9        android:targetSdkVersion="35" />
+9-->INJECTED
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:6:5-67
+11-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:6:22-64
+12    <uses-permission android:name="android.permission.CAMERA" />
+12-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:7:5-65
+12-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:7:22-62
+13
+14    <uses-feature
+14-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:8:5-88
+15        android:name="android.hardware.camera.ar"
+15-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:8:19-60
+16        android:required="false" />
+16-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:8:61-85
+17
+18    <permission
+18-->[androidx.core:core:1.15.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6e581f425fc106b5964a2d264123fe7b\transformed\core-1.15.0\AndroidManifest.xml:22:5-24:47
+19        android:name="com.roomflow.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+19-->[androidx.core:core:1.15.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6e581f425fc106b5964a2d264123fe7b\transformed\core-1.15.0\AndroidManifest.xml:23:9-81
+20        android:protectionLevel="signature" />
+20-->[androidx.core:core:1.15.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6e581f425fc106b5964a2d264123fe7b\transformed\core-1.15.0\AndroidManifest.xml:24:9-44
+21
+22    <uses-permission android:name="com.roomflow.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+22-->[androidx.core:core:1.15.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6e581f425fc106b5964a2d264123fe7b\transformed\core-1.15.0\AndroidManifest.xml:26:5-97
+22-->[androidx.core:core:1.15.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6e581f425fc106b5964a2d264123fe7b\transformed\core-1.15.0\AndroidManifest.xml:26:22-94
+23
+24    <queries>
+24-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:20:5-27:15
+25        <package android:name="com.google.ar.core" />
+25-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:21:9-54
+25-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:21:18-51
+26        <package android:name="com.android.vending" />
+26-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:22:9-55
+26-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:22:18-52
+27
+28        <intent>
+28-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:24:9-26:18
+29            <action android:name="com.google.android.play.core.install.BIND_INSTALL_SERVICE" />
+29-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:25:13-96
+29-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:25:21-93
+30        </intent>
+31    </queries>
+32
+33    <application
+33-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:10:5-35:19
+34        android:allowBackup="true"
+34-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:11:9-35
+35        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+35-->[androidx.core:core:1.15.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6e581f425fc106b5964a2d264123fe7b\transformed\core-1.15.0\AndroidManifest.xml:28:18-86
+36        android:dataExtractionRules="@xml/data_extraction_rules"
+36-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:12:9-65
+37        android:debuggable="true"
+38        android:extractNativeLibs="false"
+38-->INJECTED
+39        android:fullBackupContent="@xml/backup_rules"
+39-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:13:9-54
+40        android:icon="@mipmap/ic_launcher"
+40-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:14:9-43
+41        android:label="@string/app_name"
+41-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:16:9-41
+42        android:largeHeap="true"
+42-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:18:9-33
+43        android:roundIcon="@mipmap/ic_launcher_round"
+43-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:15:9-54
+44        android:supportsRtl="true"
+44-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:17:9-35
+45        android:theme="@style/Theme.RoomFlow" >
+45-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:19:9-46
+46
+47        <!-- S-Pen Support -->
+48        <meta-data
+48-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:23:9-94
+49            android:name="com.samsung.android.sdk.spen.enable"
+49-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:23:20-70
+50            android:value="true" />
+50-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:23:71-91
+51        <meta-data
+51-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:24:9-81
+52            android:name="com.google.ar.core"
+52-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:24:20-53
+53            android:value="optional" />
+53-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:24:54-78
+54
+55        <activity
+55-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:26:9-34:20
+56            android:name="com.roomflow.app.MainActivity"
+56-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:27:13-41
+57            android:configChanges="orientation|screenSize|keyboardHidden"
+57-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:29:13-74
+58            android:exported="true" >
+58-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:28:13-36
+59            <intent-filter>
+59-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:30:13-33:29
+60                <action android:name="android.intent.action.MAIN" />
+60-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:31:17-69
+60-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:31:25-66
+61
+62                <category android:name="android.intent.category.LAUNCHER" />
+62-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:32:17-77
+62-->C:\Users\Ninjo\OneDrive\Desktop\Job Tracking\roomflow\app\src\main\AndroidManifest.xml:32:27-74
+63            </intent-filter>
+64        </activity>
+65        <!--
+66        Service for holding metadata. Cannot be instantiated.
+67        Metadata will be merged from other manifests.
+68        -->
+69        <service
+69-->[androidx.camera:camera-core:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\e56b0771f4d14187e25ead321836997f\transformed\jetified-camera-core-1.3.0\AndroidManifest.xml:29:9-33:78
+70            android:name="androidx.camera.core.impl.MetadataHolderService"
+70-->[androidx.camera:camera-core:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\e56b0771f4d14187e25ead321836997f\transformed\jetified-camera-core-1.3.0\AndroidManifest.xml:30:13-75
+71            android:enabled="false"
+71-->[androidx.camera:camera-core:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\e56b0771f4d14187e25ead321836997f\transformed\jetified-camera-core-1.3.0\AndroidManifest.xml:31:13-36
+72            android:exported="false" >
+72-->[androidx.camera:camera-core:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\e56b0771f4d14187e25ead321836997f\transformed\jetified-camera-core-1.3.0\AndroidManifest.xml:32:13-37
+73            <meta-data
+73-->[androidx.camera:camera-camera2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\12cec776a64ead8d0034f2812940c8f1\transformed\jetified-camera-camera2-1.3.0\AndroidManifest.xml:30:13-32:89
+74                android:name="androidx.camera.core.impl.MetadataHolderService.DEFAULT_CONFIG_PROVIDER"
+74-->[androidx.camera:camera-camera2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\12cec776a64ead8d0034f2812940c8f1\transformed\jetified-camera-camera2-1.3.0\AndroidManifest.xml:31:17-103
+75                android:value="androidx.camera.camera2.Camera2Config$DefaultProvider" />
+75-->[androidx.camera:camera-camera2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\12cec776a64ead8d0034f2812940c8f1\transformed\jetified-camera-camera2-1.3.0\AndroidManifest.xml:32:17-86
+76        </service>
+77
+78        <provider
+78-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\77ee2bd7ac31233134ab82b500b9b200\transformed\jetified-emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+79            android:name="androidx.startup.InitializationProvider"
+79-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\77ee2bd7ac31233134ab82b500b9b200\transformed\jetified-emoji2-1.3.0\AndroidManifest.xml:25:13-67
+80            android:authorities="com.roomflow.app.androidx-startup"
+80-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\77ee2bd7ac31233134ab82b500b9b200\transformed\jetified-emoji2-1.3.0\AndroidManifest.xml:26:13-68
+81            android:exported="false" >
+81-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\77ee2bd7ac31233134ab82b500b9b200\transformed\jetified-emoji2-1.3.0\AndroidManifest.xml:27:13-37
+82            <meta-data
+82-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\77ee2bd7ac31233134ab82b500b9b200\transformed\jetified-emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+83                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+83-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\77ee2bd7ac31233134ab82b500b9b200\transformed\jetified-emoji2-1.3.0\AndroidManifest.xml:30:17-75
+84                android:value="androidx.startup" />
+84-->[androidx.emoji2:emoji2:1.3.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\77ee2bd7ac31233134ab82b500b9b200\transformed\jetified-emoji2-1.3.0\AndroidManifest.xml:31:17-49
+85            <meta-data
+85-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6a7d8249b643f199179de9905fc299a6\transformed\jetified-lifecycle-process-2.6.2\AndroidManifest.xml:29:13-31:52
+86                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+86-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6a7d8249b643f199179de9905fc299a6\transformed\jetified-lifecycle-process-2.6.2\AndroidManifest.xml:30:17-78
+87                android:value="androidx.startup" />
+87-->[androidx.lifecycle:lifecycle-process:2.6.2] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\6a7d8249b643f199179de9905fc299a6\transformed\jetified-lifecycle-process-2.6.2\AndroidManifest.xml:31:17-49
+88            <meta-data
+88-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:29:13-31:52
+89                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+89-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:30:17-85
+90                android:value="androidx.startup" />
+90-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:31:17-49
+91        </provider>
+92
+93        <uses-library
+93-->[androidx.window:window:1.0.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\925a3402512841c35f6c01f0b6a08fa2\transformed\jetified-window-1.0.0\AndroidManifest.xml:25:9-27:40
+94            android:name="androidx.window.extensions"
+94-->[androidx.window:window:1.0.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\925a3402512841c35f6c01f0b6a08fa2\transformed\jetified-window-1.0.0\AndroidManifest.xml:26:13-54
+95            android:required="false" />
+95-->[androidx.window:window:1.0.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\925a3402512841c35f6c01f0b6a08fa2\transformed\jetified-window-1.0.0\AndroidManifest.xml:27:13-37
+96        <uses-library
+96-->[androidx.window:window:1.0.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\925a3402512841c35f6c01f0b6a08fa2\transformed\jetified-window-1.0.0\AndroidManifest.xml:28:9-30:40
+97            android:name="androidx.window.sidecar"
+97-->[androidx.window:window:1.0.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\925a3402512841c35f6c01f0b6a08fa2\transformed\jetified-window-1.0.0\AndroidManifest.xml:29:13-51
+98            android:required="false" /> <!-- The minimal version code of ARCore APK required for an app using this SDK. -->
+98-->[androidx.window:window:1.0.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\925a3402512841c35f6c01f0b6a08fa2\transformed\jetified-window-1.0.0\AndroidManifest.xml:30:13-37
+99        <meta-data
+99-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:32:9-34:41
+100            android:name="com.google.ar.core.min_apk_version"
+100-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:33:13-62
+101            android:value="232620000" /> <!-- This activity is critical for installing ARCore when it is not already present. -->
+101-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:34:13-38
+102        <activity
+102-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:36:9-42:80
+103            android:name="com.google.ar.core.InstallActivity"
+103-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:37:13-62
+104            android:configChanges="keyboardHidden|orientation|screenSize"
+104-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:38:13-74
+105            android:excludeFromRecents="true"
+105-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:39:13-46
+106            android:exported="false"
+106-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:40:13-37
+107            android:launchMode="singleTop"
+107-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:41:13-43
+108            android:theme="@android:style/Theme.Material.Light.Dialog.Alert" />
+108-->[com.google.ar:core:1.41.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\15053228c2918bec695e73c8822d121e\transformed\jetified-core-1.41.0\AndroidManifest.xml:42:13-77
+109
+110        <receiver
+110-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:34:9-52:20
+111            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+111-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:35:13-76
+112            android:directBootAware="false"
+112-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:36:13-44
+113            android:enabled="true"
+113-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:37:13-35
+114            android:exported="true"
+114-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:38:13-36
+115            android:permission="android.permission.DUMP" >
+115-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:39:13-57
+116            <intent-filter>
+116-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:40:13-42:29
+117                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+117-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:41:17-91
+117-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:41:25-88
+118            </intent-filter>
+119            <intent-filter>
+119-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:43:13-45:29
+120                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+120-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:44:17-85
+120-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:44:25-82
+121            </intent-filter>
+122            <intent-filter>
+122-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:46:13-48:29
+123                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+123-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:47:17-88
+123-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:47:25-85
+124            </intent-filter>
+125            <intent-filter>
+125-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:49:13-51:29
+126                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+126-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:50:17-95
+126-->[androidx.profileinstaller:profileinstaller:1.4.0] C:\Users\Ninjo\.gradle\caches\9.6.1\transforms\08cafadc2b232a615f417153eeba43e9\transformed\jetified-profileinstaller-1.4.0\AndroidManifest.xml:50:25-92
+127            </intent-filter>
+128        </receiver>
+129    </application>
+130
+131</manifest>

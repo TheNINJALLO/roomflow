@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent_blue">#3b82f6</color>
+    <color name="accent_teal">#00ffd1</color>
+    <color name="bg_main">#0a0d14</color>
+    <color name="primary_dark">#0f172a</color>
+    <color name="text_muted">#9ca3af</color>
+    <string name="app_name">RoomFlow</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="selection_details">Selection Details</string>
+    <style name="Theme.RoomFlow" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#3b82f6</item>
+        <item name="colorSecondary">#10b981</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

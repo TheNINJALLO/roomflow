@@ -51,6 +51,9 @@ const state = {
     initialMouseOffset: {}
 };
 
+// Initialize default costing state
+initDefaultCosting(state);
+
 // Preset dimensions (in feet)
 const PRESETS = {
     living: { name: 'Living Room', w: 16, l: 20, h: 8, color: '#3b82f6' },
@@ -1041,94 +1044,42 @@ function estimatePlumbingMaterials() {
 }
 
 function updateGlobalStats() {
-    const totalRooms = state.rooms.length;
-    let totalFloorArea = 0;
-    let totalWallArea = 0;
-
-    state.rooms.forEach(room => {
-        let floorArea, perimeter;
-        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
-            floorArea = getPolygonArea(room.vertices);
-            perimeter = getPolygonPerimeter(room.vertices);
-        } else {
-            floorArea = room.w * room.l;
-            perimeter = 2 * (room.w + room.l);
-        }
-        totalFloorArea += floorArea;
-        
-        let grossWallArea;
-        if (room.type === 'staircase') {
-            grossWallArea = (room.l * room.h) + (room.w * room.h);
-        } else {
-            grossWallArea = perimeter * room.h;
-        }
-        let deductions = 0;
-        room.openings.forEach(op => { deductions += op.w * op.h; });
-        totalWallArea += Math.max(0, grossWallArea - deductions);
-    });
-
-    document.getElementById('total-rooms-count').innerText = totalRooms;
-    document.getElementById('total-floor-area').innerText = `${totalFloorArea.toFixed(1)} sq ft`;
-    document.getElementById('total-wall-area').innerText = `${totalWallArea.toFixed(1)} sq ft`;
+    const q = calculateProjectQuantities(state);
     
-    // Sump & Discharge totals
+    document.getElementById('total-rooms-count').innerText = q.totalRooms;
+    document.getElementById('total-floor-area').innerText = `${q.totalFloorArea.toFixed(1)} sq ft`;
+    document.getElementById('total-wall-area').innerText = `${q.totalWallArea.toFixed(1)} sq ft`;
+    
     let totalSumpCount = state.sumpPumps.length;
     let totalDischargeLen = 0;
     state.dischargeLines.forEach(dl => { totalDischargeLen += dl.length; });
-    
     let totalInteriorPipeLen = 0;
     state.interiorPipes.forEach(ip => { totalInteriorPipeLen += ip.length; });
     
     document.getElementById('total-sumps-count').innerText = totalSumpCount;
     document.getElementById('total-discharge-length').innerText = `${totalDischargeLen.toFixed(1)} ft`;
     const intPipeText = document.getElementById('total-interior-pipe-length');
-    if (intPipeText) intPipeText.innerText = `${totalInteriorPipeLen.toFixed(1)} ft`;
-
-    // XPS Foam Board Sheets estimation
-    let totalXpsSheets = 0;
-    state.rooms.forEach(room => {
-        if (room.foamBoard) {
-            const extPerim = getRoomExteriorPerimeter(room);
-            let sheets = 0;
-            if (room.h <= 4) {
-                // Lay sheets horizontally (8' wide, 4' high)
-                sheets = extPerim / 8;
-            } else {
-                // Stand sheets vertically (4' wide, 8' high)
-                const columns = extPerim / 4;
-                const sheetsPerColumn = Math.ceil(room.h / 8);
-                sheets = columns * sheetsPerColumn;
-            }
-            let deductions = 0;
-            room.openings.forEach(op => { deductions += (op.w * op.h) / 32; });
-            totalXpsSheets += Math.max(0, sheets - deductions);
-        }
-    });
-
-    // Plumbing BOM (pvc sticks & fittings)
-    const plumbingEst = estimatePlumbingMaterials();
-
+    if (intPipeText) intPipeText.innerText = `${q.totalInteriorPipeLen !== undefined ? q.totalInteriorPipeLen.toFixed(1) : totalInteriorPipeLen.toFixed(1)} ft`;
+    
     const xpsText = document.getElementById('total-foam-sheets');
-    if (xpsText) xpsText.innerText = `${Math.ceil(totalXpsSheets)} sheets`;
-
+    if (xpsText) xpsText.innerText = `${Math.ceil(q.totalXpsSheets)} sheets`;
+    
     const sticksText = document.getElementById('total-pvc-sticks');
-    if (sticksText) sticksText.innerText = `${plumbingEst.sticks} sticks`;
-
+    if (sticksText) sticksText.innerText = `${q.plumbingEst.sticks} sticks`;
+    
     const elbows90Text = document.getElementById('total-pvc-90s');
-    if (elbows90Text) elbows90Text.innerText = plumbingEst.elbow90;
-
+    if (elbows90Text) elbows90Text.innerText = q.plumbingEst.elbow90;
+    
     const elbows45Text = document.getElementById('total-pvc-45s');
-    if (elbows45Text) elbows45Text.innerText = plumbingEst.elbow45;
-
+    if (elbows45Text) elbows45Text.innerText = q.plumbingEst.elbow45;
+    
     const tileText = document.getElementById('total-drain-tile');
-    if (tileText) tileText.innerText = `${plumbingEst.drainTile.toFixed(1)} ft`;
-
-    // Populate and show/hide Sump Install Fittings Package
+    if (tileText) tileText.innerText = `${q.plumbingEst.drainTile.toFixed(1)} ft`;
+    
     const sumpFittingsGroup = document.getElementById('sump-fittings-group');
     if (sumpFittingsGroup) {
         if (state.sumpPumps.length > 0) {
             sumpFittingsGroup.classList.remove('hidden');
-            
             const bText = document.getElementById('total-bushing-3-2');
             const tText = document.getElementById('total-tee-3-3-2');
             const e3Text = document.getElementById('total-elbow-3-90');
@@ -1136,145 +1087,32 @@ function updateGlobalStats() {
             const cText = document.getElementById('total-check-valve');
             const yText = document.getElementById('total-y-fitting');
             
-            if (bText) bText.innerText = plumbingEst.bushing3to2;
-            if (tText) tText.innerText = plumbingEst.tee3x3x2;
-            if (e3Text) e3Text.innerText = plumbingEst.elbow3in90;
-            if (sText) sText.innerText = plumbingEst.screwAdapter1_5;
-            if (cText) cText.innerText = plumbingEst.checkValve2;
-            if (yText) yText.innerText = plumbingEst.yFitting2;
+            if (bText) bText.innerText = q.plumbingEst.bushing3to2;
+            if (tText) tText.innerText = q.plumbingEst.tee3x3x2;
+            if (e3Text) e3Text.innerText = q.plumbingEst.elbow3in90;
+            if (sText) sText.innerText = q.plumbingEst.screwAdapter1_5;
+            if (cText) cText.innerText = q.plumbingEst.checkValve2;
+            if (yText) yText.innerText = q.plumbingEst.yFitting2;
         } else {
             sumpFittingsGroup.classList.add('hidden');
         }
     }
-
-    // Vapor Barrier Liner calculation
-    let totalLinerArea = 0;
-    state.rooms.forEach(room => {
-        let floorArea, perimeter;
-        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
-            floorArea = getPolygonArea(room.vertices);
-            perimeter = getPolygonPerimeter(room.vertices);
-        } else {
-            floorArea = room.w * room.l;
-            perimeter = 2 * (room.w + room.l);
-        }
-        
-        let grossWallArea;
-        if (room.type === 'staircase') {
-            grossWallArea = (room.l * room.h) + (room.w * room.h);
-        } else {
-            grossWallArea = perimeter * room.h;
-        }
-        let deductions = 0;
-        room.openings.forEach(op => { deductions += op.w * op.h; });
-        const netWallArea = Math.max(0, grossWallArea - deductions);
-        
-        totalLinerArea += floorArea + netWallArea;
-    });
-
-    state.stanchions.forEach(st => {
-        const stLevelId = st.levelId || 'basement';
-        const level = state.levels.find(l => l.id === stLevelId) || { height: 8 };
-        const room = getRoomAt(st.x, st.y, stLevelId);
-        const roomH = room ? room.h : (level.height || 8);
-        
-        let isUnderBeam = false;
-        const bHeight = 0.9;
-        for (let i = 0; i < state.mainBeams.length; i++) {
-            const bm = state.mainBeams[i];
-            if (bm.levelId !== stLevelId) continue;
-            const dist = getDistanceToSegment(st.x, st.y, bm.x1, bm.y1, bm.x2, bm.y2);
-            if (dist < 0.5) {
-                isUnderBeam = true;
-                break;
-            }
-        }
-        const postH = isUnderBeam ? Math.max(0.5, roomH - bHeight) : roomH;
-        
-        let perim = 0;
-        if (st.type === 'round') {
-            perim = 2 * Math.PI * 0.4;
-        } else if (st.type === 'square') {
-            perim = 4 * 0.8;
-        } else if (st.type === 'brick') {
-            perim = 4 * 1.0;
-        }
-        totalLinerArea += perim * postH;
-    });
-
-    const linerText = document.getElementById('total-barrier-liner');
-    if (linerText) linerText.innerText = `${totalLinerArea.toFixed(0)} sq ft`;
-
-    // Carbon Fiber and NB1 calculations
-    let totalCarbonFiberLen = 0;
-    let totalNb1Area = 0;
     
-    state.rooms.forEach(room => {
-        let perimeter;
-        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
-            perimeter = getPolygonPerimeter(room.vertices);
-        } else {
-            perimeter = 2 * (room.w + room.l);
-        }
-        
-        // Vertical straps
-        if (room.carbonStraps > 0) {
-            totalCarbonFiberLen += room.carbonStraps * room.h;
-        }
-        
-        // Floor perimeter strap
-        if (room.floorPerimeterStrap) {
-            totalCarbonFiberLen += perimeter;
-        }
-        
-        // NB1 Coating Area
-        if (room.nb1Height === '2ft') {
-            totalNb1Area += perimeter * 2;
-        } else if (room.nb1Height === '4ft') {
-            totalNb1Area += perimeter * 4;
-        } else if (room.nb1Height === 'full') {
-            // Use net wall area
-            let grossWallArea;
-            if (room.type === 'staircase') {
-                grossWallArea = (room.l * room.h) + (room.w * room.h);
-            } else {
-                grossWallArea = perimeter * room.h;
-            }
-            let deductions = 0;
-            room.openings.forEach(op => { deductions += op.w * op.h; });
-            totalNb1Area += Math.max(0, grossWallArea - deductions);
-        }
-    });
+    const linerText = document.getElementById('total-barrier-liner');
+    if (linerText) linerText.innerText = `${q.totalLinerArea.toFixed(0)} sq ft`;
     
     const carbonText = document.getElementById('total-carbon-fiber');
-    if (carbonText) carbonText.innerText = `${totalCarbonFiberLen.toFixed(1)} ft`;
+    if (carbonText) carbonText.innerText = `${q.totalCarbonFiberLen.toFixed(1)} ft`;
     
-    const nb1Bags = Math.ceil(totalNb1Area / 8);
     const nb1Text = document.getElementById('total-nb1-bags');
-    if (nb1Text) nb1Text.innerText = `${nb1Bags} bags (${totalNb1Area.toFixed(0)} sq ft)`;
-
-    // Spray Foam Cans calculation
-    let totalSprayFoamCans = 0;
-    state.rooms.forEach(room => {
-        if (room.foamBondPockets && room.joists && room.joists !== 'none') {
-            const segments = getRoomSegments(room);
-            let wallLen = 0;
-            segments.forEach(seg => {
-                const dx = seg.x2 - seg.x1;
-                const dy = seg.y2 - seg.y1;
-                if (room.joists === 'ns') {
-                    wallLen += Math.abs(dx);
-                } else if (room.joists === 'ew') {
-                    wallLen += Math.abs(dy);
-                }
-            });
-            const roomBF = wallLen * 1.5;
-            totalSprayFoamCans += Math.ceil(roomBF / 20);
-        }
-    });
-
+    if (nb1Text) {
+        const sqFtPerBag = (state.costing && state.costing.settings && state.costing.settings.nb1SqFtPerBag) || 8;
+        const nb1Bags = Math.ceil(q.totalNb1Area / sqFtPerBag);
+        nb1Text.innerText = `${nb1Bags} bags (${q.totalNb1Area.toFixed(0)} sq ft)`;
+    }
+    
     const foamCansText = document.getElementById('total-bond-pockets-cans');
-    if (foamCansText) foamCansText.innerText = `${totalSprayFoamCans} cans`;
+    if (foamCansText) foamCansText.innerText = `${q.totalSprayFoamCans} cans`;
 }
 
 // Delete Selected Items
@@ -4091,10 +3929,12 @@ document.getElementById('btn-grid-toggle').addEventListener('click', (e) => {
 const btn2D = document.getElementById('btn-view-2d');
 const btn3D = document.getElementById('btn-view-3d');
 const btnAR = document.getElementById('btn-view-ar');
+const btnCost = document.getElementById('btn-view-cost');
 
 const view2D = document.getElementById('canvas-container');
 const view3D = document.getElementById('three-container');
 const viewAR = document.getElementById('ar-container');
+const viewCost = document.getElementById('cost-container');
 
 function switchView(viewName) {
     state.activeView = viewName;
@@ -4102,10 +3942,12 @@ function switchView(viewName) {
     btn2D.classList.toggle('active', viewName === '2d');
     btn3D.classList.toggle('active', viewName === '3d');
     btnAR.classList.toggle('active', viewName === 'ar');
+    if (btnCost) btnCost.classList.toggle('active', viewName === 'cost');
     
     view2D.classList.toggle('active', viewName === '2d');
     view3D.classList.toggle('active', viewName === '3d');
     viewAR.classList.toggle('active', viewName === 'ar');
+    if (viewCost) viewCost.classList.toggle('active', viewName === 'cost');
 
     // Toggle AR transparency controls & solid overlays
     const appContainer = document.getElementById('app-container');
@@ -4118,6 +3960,12 @@ function switchView(viewName) {
         if (appContainer) appContainer.classList.remove('ar-mode-active');
         document.body.style.backgroundColor = '';
         if (viewportContainer) viewportContainer.style.backgroundColor = '';
+    }
+
+    // Toggle cost mode sidebar hiding class
+    const appBody = document.querySelector('.app-body');
+    if (appBody) {
+        appBody.classList.toggle('cost-mode-active', viewName === 'cost');
     }
 
     // Hide tools & details float buttons in AR mode to avoid overlap
@@ -4140,11 +3988,16 @@ function switchView(viewName) {
     if (viewName === '2d') {
         resizeCanvas();
     }
+
+    if (viewName === 'cost') {
+        if (window.renderCostUI) window.renderCostUI();
+    }
 }
 
 btn2D.addEventListener('click', () => switchView('2d'));
 btn3D.addEventListener('click', () => switchView('3d'));
 btnAR.addEventListener('click', () => switchView('ar'));
+if (btnCost) btnCost.addEventListener('click', () => switchView('cost'));
 
 // Save/Load/Export Actions
 document.getElementById('btn-new').addEventListener('click', () => {
@@ -4176,7 +4029,8 @@ document.getElementById('btn-save').addEventListener('click', () => {
         stanchions: state.stanchions || [],
         mainBeams: state.mainBeams || [],
         currentLevelId: state.currentLevelId,
-        capturedMeasurements: state.capturedMeasurements || []
+        capturedMeasurements: state.capturedMeasurements || [],
+        costing: state.costing
     };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(projectData, null, 2));
     const dlAnchorElem = document.createElement('a');
@@ -4218,6 +4072,10 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                 state.currentLevelId = data.currentLevelId || 'basement';
                 state.capturedMeasurements = data.capturedMeasurements || [];
                 
+                // Load costing system
+                state.costing = data.costing || null;
+                initDefaultCosting(state);
+                
                 state.rooms.forEach(r => {
                     if (!r.levelId) r.levelId = 'basement';
                     if (r.carbonStraps === undefined) r.carbonStraps = 0;
@@ -4236,6 +4094,10 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                 draw();
                 updateGlobalStats();
                 updateMeasurementsSidebar();
+                
+                // Rerender costing UI if active
+                if (window.renderCostUI) window.renderCostUI();
+                
                 if (window.sync3D) window.sync3D();
                 alert('Project loaded.');
             } else {
@@ -4363,156 +4225,17 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     // Redraw normal view
     draw(false);
 
-    const cName = document.getElementById('customer-name').value || 'Not Specified';
-    const cAddress = document.getElementById('customer-address').value || 'Not Specified';
-
-    // XPS Foam Board Sheets estimation
-    let totalXpsSheets = 0;
-    state.rooms.forEach(room => {
-        if (room.foamBoard) {
-            const extPerim = getRoomExteriorPerimeter(room);
-            let sheets = 0;
-            if (room.h <= 4) {
-                // Lay sheets horizontally (8' wide, 4' high)
-                sheets = extPerim / 8;
-            } else {
-                // Stand sheets vertically (4' wide, 8' high)
-                const columns = extPerim / 4;
-                const sheetsPerColumn = Math.ceil(room.h / 8);
-                sheets = columns * sheetsPerColumn;
-            }
-            let deductions = 0;
-            room.openings.forEach(op => { deductions += (op.w * op.h) / 32; });
-            totalXpsSheets += Math.max(0, sheets - deductions);
-        }
-    });
-
-    // Plumbing BOM (pvc sticks & fittings)
-    const plumbingEst = estimatePlumbingMaterials();
-
-    // Vapor Barrier Liner calculation
-    let totalLinerArea = 0;
-    state.rooms.forEach(room => {
-        let floorArea, perimeter;
-        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
-            floorArea = getPolygonArea(room.vertices);
-            perimeter = getPolygonPerimeter(room.vertices);
-        } else {
-            floorArea = room.w * room.l;
-            perimeter = 2 * (room.w + room.l);
-        }
-        
-        let grossWallArea;
-        if (room.type === 'staircase') {
-            grossWallArea = (room.l * room.h) + (room.w * room.h);
-        } else {
-            grossWallArea = perimeter * room.h;
-        }
-        let deductions = 0;
-        room.openings.forEach(op => { deductions += op.w * op.h; });
-        const netWallArea = Math.max(0, grossWallArea - deductions);
-        
-        totalLinerArea += floorArea + netWallArea;
-    });
-
-    state.stanchions.forEach(st => {
-        const stLevelId = st.levelId || 'basement';
-        const level = state.levels.find(l => l.id === stLevelId) || { height: 8 };
-        const room = getRoomAt(st.x, st.y, stLevelId);
-        const roomH = room ? room.h : (level.height || 8);
-        
-        let isUnderBeam = false;
-        const bHeight = 0.9;
-        for (let i = 0; i < state.mainBeams.length; i++) {
-            const bm = state.mainBeams[i];
-            if (bm.levelId !== stLevelId) continue;
-            const dist = getDistanceToSegment(st.x, st.y, bm.x1, bm.y1, bm.x2, bm.y2);
-            if (dist < 0.5) {
-                isUnderBeam = true;
-                break;
-            }
-        }
-        const postH = isUnderBeam ? Math.max(0.5, roomH - bHeight) : roomH;
-        
-        let perim = 0;
-        if (st.type === 'round') {
-            perim = 2 * Math.PI * 0.4;
-        } else if (st.type === 'square') {
-            perim = 4 * 0.8;
-        } else if (st.type === 'brick') {
-            perim = 4 * 1.0;
-        }
-        totalLinerArea += perim * postH;
-    });
-
-    // Carbon Fiber and NB1 calculations for export
-    let totalCarbonFiberLen = 0;
-    let totalNb1Area = 0;
+    // Build the sanitized customer export model
+    const customerModel = buildCustomerExportModel(state);
     
-    state.rooms.forEach(room => {
-        let perimeter;
-        if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
-            perimeter = getPolygonPerimeter(room.vertices);
-        } else {
-            perimeter = 2 * (room.w + room.l);
-        }
-        
-        // Vertical straps
-        if (room.carbonStraps > 0) {
-            totalCarbonFiberLen += room.carbonStraps * room.h;
-        }
-        
-        // Floor perimeter strap
-        if (room.floorPerimeterStrap) {
-            totalCarbonFiberLen += perimeter;
-        }
-        
-        // NB1 Coating Area
-        if (room.nb1Height === '2ft') {
-            totalNb1Area += perimeter * 2;
-        } else if (room.nb1Height === '4ft') {
-            totalNb1Area += perimeter * 4;
-        } else if (room.nb1Height === 'full') {
-            let grossWallArea;
-            if (room.type === 'staircase') {
-                grossWallArea = (room.l * room.h) + (room.w * room.h);
-            } else {
-                grossWallArea = perimeter * room.h;
-            }
-            let deductions = 0;
-            room.openings.forEach(op => { deductions += op.w * op.h; });
-            totalNb1Area += Math.max(0, grossWallArea - deductions);
-        }
-    });
-    
-    const nb1BagsCount = Math.ceil(totalNb1Area / 8);
+    const cName = customerModel.customerName;
+    const cAddress = customerModel.customerAddress;
+    const q = customerModel.quantities;
 
-    // Spray Foam Cans calculation
-    let totalSprayFoamCans = 0;
-    state.rooms.forEach(room => {
-        if (room.foamBondPockets && room.joists && room.joists !== 'none') {
-            const segments = getRoomSegments(room);
-            let wallLen = 0;
-            segments.forEach(seg => {
-                const dx = seg.x2 - seg.x1;
-                const dy = seg.y2 - seg.y1;
-                if (room.joists === 'ns') {
-                    wallLen += Math.abs(dx);
-                } else if (room.joists === 'ew') {
-                    wallLen += Math.abs(dy);
-                }
-            });
-            const roomBF = wallLen * 1.5;
-            totalSprayFoamCans += Math.ceil(roomBF / 20);
-        }
-    });
-
-    const printWindow = window.open('', '_blank');
-    
     let roomRows = '';
     let grandFloor = 0, grandWall = 0, grandCeiling = 0, grandVolume = 0;
     
-    state.rooms.forEach(room => {
+    customerModel.rooms.forEach(room => {
         let floorArea, perimeter;
         if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
             floorArea = getPolygonArea(room.vertices);
@@ -4555,7 +4278,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     });
 
     let sumpRows = '';
-    state.sumpPumps.forEach((sp, idx) => {
+    customerModel.sumpPumps.forEach((sp, idx) => {
         sumpRows += `
             <tr>
                 <td>${idx + 1}</td>
@@ -4564,13 +4287,13 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
             </tr>
         `;
     });
-    if (state.sumpPumps.length === 0) {
+    if (customerModel.sumpPumps.length === 0) {
         sumpRows = '<tr><td colspan="3" style="text-align:center; color:#9ca3af;">No sump pumps placed</td></tr>';
     }
 
     let lineRows = '';
     let totalLen = 0;
-    state.dischargeLines.forEach((dl, idx) => {
+    customerModel.dischargeLines.forEach((dl, idx) => {
         totalLen += dl.length;
         lineRows += `
             <tr>
@@ -4581,7 +4304,7 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
             </tr>
         `;
     });
-    if (state.dischargeLines.length === 0) {
+    if (customerModel.dischargeLines.length === 0) {
         lineRows = '<tr><td colspan="4" style="text-align:center; color:#9ca3af;">No discharge lines placed</td></tr>';
     }
 
@@ -4596,11 +4319,6 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 .meta-info { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 0.9rem; color: #4b5563; }
                 table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 30px; }
                 th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
-                th { background-color: #f3f4f6; color: #1e3a8a; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
-                tr.totals { font-weight: 700; background-color: #eff6ff; }
-                table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 25px; page-break-inside: avoid; }
-                tr { page-break-inside: avoid; }
-                th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
                 th { background-color: #f3f4f6; color: #1e3a8a; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
                 tr.totals { font-weight: 700; background-color: #eff6ff; }
                 .layout-preview { text-align: center; margin-bottom: 20px; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; background-color: #ffffff; }
@@ -4746,91 +4464,91 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                 <tbody>
                     <tr>
                         <td><strong>2" XPS Foam Board Sheets (4' x 8')</strong></td>
-                        <td>${Math.ceil(totalXpsSheets)} sheets</td>
+                        <td>${q.xpsSheets} sheets</td>
                         <td>Exposed exterior wall surfaces (minus openings)</td>
                     </tr>
                     <tr>
                         <td><strong>10ft PVC Pipe Sticks</strong></td>
-                        <td>${plumbingEst.sticks} sticks</td>
+                        <td>${q.pvcSticks} sticks</td>
                         <td>Overhead run + Sump riser runs (excludes discharge drain tile)</td>
                     </tr>
                     <tr>
                         <td><strong>90° PVC Elbow fittings</strong></td>
-                        <td>${plumbingEst.elbow90} pcs</td>
+                        <td>${q.pvc90s} pcs</td>
                         <td>Orthogonal turns and Sump riser transitions</td>
                     </tr>
                     <tr>
                         <td><strong>45° PVC Elbow fittings</strong></td>
-                        <td>${plumbingEst.elbow45} pcs</td>
+                        <td>${q.pvc45s} pcs</td>
                         <td>Snapping offset angle connections</td>
                     </tr>
                     <tr>
                         <td><strong>Drain Tile (Discharge)</strong></td>
-                        <td>${plumbingEst.drainTile.toFixed(1)} ft</td>
+                        <td>${q.drainTile.toFixed(1)} ft</td>
                         <td>Flexible drain tile used for horizontal discharge lines</td>
                     </tr>
                     <tr>
                         <td><strong>Carbon Fiber Straps</strong></td>
-                        <td>${totalCarbonFiberLen.toFixed(1)} ft</td>
+                        <td>${q.carbonFiberLen.toFixed(1)} ft</td>
                         <td>Vertical reinforcement and/or floor perimeter reinforcement</td>
                     </tr>
                     <tr>
                         <td><strong>NB1 Wall Coating</strong></td>
-                        <td>${nb1BagsCount} bags (${totalNb1Area.toFixed(0)} sq ft)</td>
-                        <td>Cementitious waterproofing/reinforcement wall coating (1 bag covers 8 sq ft)</td>
+                        <td>${q.nb1Bags} bags (${q.nb1Area.toFixed(0)} sq ft)</td>
+                        <td>Cementitious waterproofing/reinforcement wall coating</td>
                     </tr>
-                    ${totalSprayFoamCans > 0 ? `
+                    ${q.sprayFoamCans > 0 ? `
                     <tr>
                         <td><strong>Spray Foam Cans</strong></td>
-                        <td>${totalSprayFoamCans} cans</td>
+                        <td>${q.sprayFoamCans} cans</td>
                         <td>Rim joist / bond pockets insulation (1 can covers 20 board feet)</td>
                     </tr>
                     ` : ''}
-                    ${plumbingEst.bushing3to2 > 0 ? `
+                    ${q.sumpFittings.bushing3to2 > 0 ? `
                     <tr>
                         <td><strong>3" to 2" Bushing</strong></td>
-                        <td>${plumbingEst.bushing3to2} pcs</td>
+                        <td>${q.sumpFittings.bushing3to2} pcs</td>
                         <td>Sump pump discharge connection</td>
                     </tr>
                     ` : ''}
-                    ${plumbingEst.tee3x3x2 > 0 ? `
+                    ${q.sumpFittings.tee3x3x2 > 0 ? `
                     <tr>
                         <td><strong>3" x 3" x 2" T-Fitting</strong></td>
-                        <td>${plumbingEst.tee3x3x2} pcs</td>
+                        <td>${q.sumpFittings.tee3x3x2} pcs</td>
                         <td>Sump pump discharge connection</td>
                     </tr>
                     ` : ''}
-                    ${plumbingEst.elbow3in90 > 0 ? `
+                    ${q.sumpFittings.elbow3in90 > 0 ? `
                     <tr>
                         <td><strong>3" 90° PVC Elbow</strong></td>
-                        <td>${plumbingEst.elbow3in90} pcs</td>
+                        <td>${q.sumpFittings.elbow3in90} pcs</td>
                         <td>Sump pump discharge connection</td>
                     </tr>
                     ` : ''}
-                    ${plumbingEst.screwAdapter1_5 > 0 ? `
+                    ${q.sumpFittings.screwAdapter1_5 > 0 ? `
                     <tr>
                         <td><strong>1-1/2" Screw Adapter</strong></td>
-                        <td>${plumbingEst.screwAdapter1_5} pcs</td>
+                        <td>${q.sumpFittings.screwAdapter1_5} pcs</td>
                         <td>Sump pump connection adapter</td>
                     </tr>
                     ` : ''}
-                    ${plumbingEst.checkValve2 > 0 ? `
+                    ${q.sumpFittings.checkValve2 > 0 ? `
                     <tr>
                         <td><strong>2" PVC Check Valve</strong></td>
-                        <td>${plumbingEst.checkValve2} pcs</td>
+                        <td>${q.sumpFittings.checkValve2} pcs</td>
                         <td>Prevents backflow into the sump pump basin</td>
                     </tr>
                     ` : ''}
-                    ${plumbingEst.yFitting2 > 0 ? `
+                    ${q.sumpFittings.yFitting2 > 0 ? `
                     <tr>
                         <td><strong>2" PVC Y-Fitting</strong></td>
-                        <td>${plumbingEst.yFitting2} pcs</td>
+                        <td>${q.sumpFittings.yFitting2} pcs</td>
                         <td>Sump pump discharge assembly</td>
                     </tr>
                     ` : ''}
                     <tr class="totals">
                         <td>Vapor Barrier Liner Area</td>
-                        <td>${totalLinerArea.toFixed(0)} sq ft</td>
+                        <td>${q.vaporLinerArea.toFixed(0)} sq ft</td>
                         <td>Total floor, wall, and stanchion column surface coverage</td>
                     </tr>
                 </tbody>
@@ -4842,6 +4560,15 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
         </body>
         </html>
     `;
+
+    // Run development safety check to scan for leaking costing terms
+    const safetyCheck = scanCustomerReportForPricingData(htmlContent);
+    if (!safetyCheck.safe) {
+        alert("DEVELOPER ERROR: Prohibited costing term '" + safetyCheck.offendingTerm + "' detected in customer report! Export blocked.");
+        throw new Error("DEVELOPER EXPORT SECURITY ALERT: Costing leak detected for term: " + safetyCheck.offendingTerm);
+    }
+
+    const printWindow = window.open('', '_blank');
     printWindow.document.write(htmlContent);
     printWindow.document.close();
 });
@@ -5378,7 +5105,8 @@ document.getElementById('btn-save-job-submit').addEventListener('click', () => {
         stanchions: state.stanchions,
         mainBeams: state.mainBeams,
         currentLevelId: state.currentLevelId,
-        capturedMeasurements: state.capturedMeasurements || []
+        capturedMeasurements: state.capturedMeasurements || [],
+        costing: state.costing
     };
     
     let jobs = {};
@@ -5409,6 +5137,10 @@ function loadJobData(data) {
     state.currentLevelId = data.currentLevelId || 'basement';
     state.capturedMeasurements = data.capturedMeasurements || [];
     
+    // Load costing data
+    state.costing = data.costing || null;
+    initDefaultCosting(state);
+    
     state.rooms.forEach(r => {
         if (!r.levelId) r.levelId = 'basement';
         if (r.carbonStraps === undefined) r.carbonStraps = 0;
@@ -5429,6 +5161,10 @@ function loadJobData(data) {
     selectItem(null);
     draw();
     updateGlobalStats();
+    
+    // Refresh costing UI
+    if (window.renderCostUI) window.renderCostUI();
+    
     if (window.sync3D) window.sync3D();
     
     if (typeof saveHistoryState === 'function') saveHistoryState();

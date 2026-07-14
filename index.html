@@ -32,6 +32,9 @@
                 <button id="btn-view-ar" class="toggle-btn">
                     <i data-lucide="aperture"></i> <span>Camera AR</span>
                 </button>
+                <button id="btn-view-cost" class="toggle-btn">
+                    <i data-lucide="dollar-sign"></i> <span>Internal Costing</span>
+                </button>
             </div>
 
             <div class="level-selector-container">
@@ -295,6 +298,11 @@
                             </div>
                         </div>
                     </div>
+                </div>
+
+                <!-- Internal Contractor Estimating & Costing Viewport -->
+                <div id="cost-container" class="viewport">
+                    <!-- Dynamic costing layout populated by cost-ui.js -->
                 </div>
             </section>
 
@@ -772,8 +780,12 @@
     
     <!-- Application Logic Scripts -->
     <script src="spatial-engine.js?v=59"></script>
+    <script src="cost-catalog.js?v=59"></script>
+    <script src="cost-engine.js?v=59"></script>
     <script src="app.js?v=59"></script>
     <script src="renderer3d.js?v=59"></script>
     <script src="ar-estimator.js?v=59"></script>
+    <script src="cost-ui.js?v=59"></script>
+    <script src="cost-tests.js?v=59"></script>
 </body>
 </html>

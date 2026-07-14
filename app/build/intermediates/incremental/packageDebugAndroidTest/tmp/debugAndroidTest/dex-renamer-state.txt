@@ -1,0 +1,10 @@
+#Wed Jul 08 21:37:15 EDT 2026
+base.0=C\:\\Users\\Ninjo\\OneDrive\\Desktop\\Job Tracking\\roomflow\\app\\build\\intermediates\\dex\\debugAndroidTest\\mergeExtDexDebugAndroidTest\\classes.dex
+base.1=C\:\\Users\\Ninjo\\OneDrive\\Desktop\\Job Tracking\\roomflow\\app\\build\\intermediates\\dex\\debugAndroidTest\\mergeProjectDexDebugAndroidTest\\0\\classes.dex
+base.2=C\:\\Users\\Ninjo\\OneDrive\\Desktop\\Job Tracking\\roomflow\\app\\build\\intermediates\\global_synthetics_dex\\debugAndroidTest\\generateDebugAndroidTestGlobalSynthetics\\classes.dex
+path.0=classes.dex
+path.1=0/classes.dex
+path.2=classes.dex
+renamed.0=classes.dex
+renamed.1=classes2.dex
+renamed.2=classes3.dex
