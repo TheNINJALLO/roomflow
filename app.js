@@ -5499,18 +5499,21 @@ window.updateMeasurementsSidebar = updateMeasurementsSidebar;
 // --- CLOUD SYNC ENGINE ---
 function getSyncConfig() {
     const enabled = localStorage.getItem('roomflow_sync_enabled') === 'true';
+    const bucket = localStorage.getItem('roomflow_sync_bucket') || '';
     const key = localStorage.getItem('roomflow_sync_key') || '';
-    return { enabled, key };
+    return { enabled, bucket, key };
 }
 
 function updateSyncUI() {
     const config = getSyncConfig();
     const chk = document.getElementById('sync-enabled');
-    const inp = document.getElementById('sync-key-input');
+    const bucketInp = document.getElementById('sync-bucket-input');
+    const keyInp = document.getElementById('sync-key-input');
     const status = document.getElementById('sync-status');
     
     if (chk) chk.checked = config.enabled;
-    if (inp) inp.value = config.key;
+    if (bucketInp) bucketInp.value = config.bucket;
+    if (keyInp) keyInp.value = config.key;
     
     if (!config.enabled) {
         if (status) status.textContent = "Status: Offline/Local-only";
@@ -5519,22 +5522,29 @@ function updateSyncUI() {
 
 async function syncCloudJobs() {
     const chk = document.getElementById('sync-enabled');
-    const inp = document.getElementById('sync-key-input');
+    const bucketInp = document.getElementById('sync-bucket-input');
+    const keyInp = document.getElementById('sync-key-input');
     const status = document.getElementById('sync-status');
     
-    if (!chk || !inp) return;
+    if (!chk || !bucketInp || !keyInp) return;
     
     const enabled = chk.checked;
-    const key = inp.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    const bucket = bucketInp.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
+    const key = keyInp.value.trim().replace(/[^a-zA-Z0-9_-]/g, '');
     
     localStorage.setItem('roomflow_sync_enabled', enabled ? 'true' : 'false');
+    localStorage.setItem('roomflow_sync_bucket', bucket);
     localStorage.setItem('roomflow_sync_key', key);
     
-    if (!enabled || !key) {
+    if (!enabled || !bucket || !key) {
         if (status) status.textContent = "Status: Offline/Local-only";
         return;
     }
     
+    if (bucket.length < 5) {
+        if (status) status.textContent = "Status: Bucket ID too short";
+        return;
+    }
     if (key.length < 3) {
         if (status) status.textContent = "Status: Key too short (min 3 chars)";
         return;
@@ -5551,7 +5561,7 @@ async function syncCloudJobs() {
     }
     
     try {
-        const url = 'https://kvdb.io/36TH5L9G2VRt3EYUjzmLGa/jobs_' + key;
+        const url = 'https://kvdb.io/' + bucket + '/jobs_' + key;
         const res = await fetch(url);
         
         if (res.ok) {
@@ -5590,22 +5600,33 @@ async function syncCloudJobs() {
             localStorage.setItem('roomflow_jobs', JSON.stringify(merged));
             
             // Push merged back to cloud
-            await fetch(url, {
+            const postRes = await fetch(url, {
                 method: 'POST',
                 body: JSON.stringify(merged)
             });
             
-            if (status) status.textContent = "Status: Synced at " + new Date().toLocaleTimeString();
+            if (postRes.ok) {
+                if (status) status.textContent = "Status: Synced at " + new Date().toLocaleTimeString();
+            } else {
+                const errText = await postRes.text();
+                if (status) status.textContent = "Status: Write failed: " + errText;
+            }
             renderJobsList();
         } else if (res.status === 404) {
             // First time bucket creation
-            await fetch(url, {
+            const postRes = await fetch(url, {
                 method: 'POST',
                 body: JSON.stringify(localJobs)
             });
-            if (status) status.textContent = "Status: Initialized cloud db";
+            if (postRes.ok) {
+                if (status) status.textContent = "Status: Initialized cloud db";
+            } else {
+                const errText = await postRes.text();
+                if (status) status.textContent = "Status: Write failed: " + errText;
+            }
         } else {
-            if (status) status.textContent = "Status: Sync error " + res.status;
+            const errText = await res.text();
+            if (status) status.textContent = "Status: Read error: " + (errText || res.status);
         }
     } catch(err) {
         console.error("Cloud Sync error:", err);
@@ -5615,7 +5636,7 @@ async function syncCloudJobs() {
 
 async function uploadLocalJobsToCloud() {
     const config = getSyncConfig();
-    if (!config.enabled || !config.key) return;
+    if (!config.enabled || !config.bucket || !config.key) return;
     
     let localJobs = {};
     try {
@@ -5626,7 +5647,7 @@ async function uploadLocalJobsToCloud() {
     }
     
     try {
-        const url = 'https://kvdb.io/36TH5L9G2VRt3EYUjzmLGa/jobs_' + config.key;
+        const url = 'https://kvdb.io/' + config.bucket + '/jobs_' + config.key;
         await fetch(url, {
             method: 'POST',
             body: JSON.stringify(localJobs)
@@ -5639,16 +5660,18 @@ async function uploadLocalJobsToCloud() {
 // Wire up Cloud Sync listeners after DOMContentLoaded/startup
 window.addEventListener('load', () => {
     const syncChk = document.getElementById('sync-enabled');
+    const syncBucket = document.getElementById('sync-bucket-input');
     const syncInp = document.getElementById('sync-key-input');
     const syncBtn = document.getElementById('btn-sync-now');
     
     if (syncChk) syncChk.addEventListener('change', syncCloudJobs);
+    if (syncBucket) syncBucket.addEventListener('change', syncCloudJobs);
     if (syncInp) syncInp.addEventListener('change', syncCloudJobs);
     if (syncBtn) syncBtn.addEventListener('click', syncCloudJobs);
     
     // Perform initial automatic sync if enabled on load
     const config = getSyncConfig();
-    if (config.enabled && config.key) {
+    if (config.enabled && config.bucket && config.key) {
         setTimeout(syncCloudJobs, 1000);
     }
 });

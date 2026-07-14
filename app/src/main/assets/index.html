@@ -748,18 +748,24 @@
 
             <!-- Cloud Synchronization Setup -->
             <div style="background: rgba(15, 23, 42, 0.3); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
                     <h4 style="margin: 0; font-size: 0.9rem; font-weight: 600; color: #e2e8f0;">Cloud Sync across Devices</h4>
                     <div style="display: flex; align-items: center; gap: 0.25rem;">
                         <input type="checkbox" id="sync-enabled" style="margin: 0; width: auto; cursor: pointer;">
                         <label for="sync-enabled" style="margin: 0; font-size: 0.8rem; font-weight: 500; color: #94a3b8; cursor: pointer;">Enable</label>
                     </div>
                 </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                    <input type="text" id="sync-key-input" placeholder="Enter Company Sync Key" style="flex: 1; padding: 0.5rem 0.75rem; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #ffffff; font-size: 0.85rem;">
-                    <button id="btn-sync-now" class="btn-accent" style="padding: 0.5rem 0.75rem; font-size: 0.8rem; background-color: var(--accent-teal); border-color: var(--accent-teal);"><i data-lucide="refresh-cw"></i> Sync</button>
+                <div style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.75rem; line-height: 1.3;">
+                    To sync, create a free bucket on <a href="https://kvdb.io/" target="_blank" style="color: var(--accent-teal); text-decoration: underline; font-weight: 600;">kvdb.io</a> and click the link in your email.
                 </div>
-                <div id="sync-status" style="margin-top: 0.4rem; font-size: 0.7rem; color: #94a3b8; font-style: italic;">Status: Offline/Local-only</div>
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <input type="text" id="sync-bucket-input" placeholder="Enter kvdb.io Bucket ID (e.g. KFXatW...)" style="padding: 0.5rem 0.75rem; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #ffffff; font-size: 0.85rem;">
+                    <input type="text" id="sync-key-input" placeholder="Enter Custom Sync Key (e.g. smith_job)" style="padding: 0.5rem 0.75rem; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #ffffff; font-size: 0.85rem;">
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span id="sync-status" style="font-size: 0.7rem; color: #94a3b8; font-style: italic;">Status: Offline/Local-only</span>
+                    <button id="btn-sync-now" class="btn-accent" style="padding: 0.4rem 0.75rem; font-size: 0.8rem; background-color: var(--accent-teal); border-color: var(--accent-teal);"><i data-lucide="refresh-cw"></i> Sync Now</button>
+                </div>
             </div>
             
             <!-- Saved Jobs List -->
