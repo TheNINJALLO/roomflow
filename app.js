@@ -5551,7 +5551,7 @@ async function syncCloudJobs() {
     }
     
     try {
-        const url = 'https://kvdb.io/roomflow_sync_' + key + '/jobs';
+        const url = 'https://kvdb.io/36TH5L9G2VRt3EYUjzmLGa/jobs_' + key;
         const res = await fetch(url);
         
         if (res.ok) {
@@ -5626,7 +5626,7 @@ async function uploadLocalJobsToCloud() {
     }
     
     try {
-        const url = 'https://kvdb.io/roomflow_sync_' + config.key + '/jobs';
+        const url = 'https://kvdb.io/36TH5L9G2VRt3EYUjzmLGa/jobs_' + config.key;
         await fetch(url, {
             method: 'POST',
             body: JSON.stringify(localJobs)
