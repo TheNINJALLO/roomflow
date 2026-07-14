@@ -534,8 +534,9 @@ function calculateProjectCosts(projState, catalogList) {
         extraRemaining: 0
     };
 
-    // Calculate permanent dehumidifiers from settings/overrides
-    let permDehumCalc = 0;
+    // Calculate permanent dehumidifiers from placed elements and settings/overrides
+    let totalPlacedDehums = (projState.dehumidifiers || []).length;
+    let permDehumCalc = totalPlacedDehums;
     if (costing.projectOverrides && costing.projectOverrides.permanentDehumQty !== undefined) {
         permDehumCalc = Math.max(0, parseInt(costing.projectOverrides.permanentDehumQty) || 0);
     }
@@ -943,6 +944,7 @@ function buildCustomerExportModel(projState) {
             openings: (r.openings || []).map(o => ({ type: o.type, wall: o.wall, w: o.w, h: o.h, offset: o.offset }))
         })),
         sumpPumps: (projState.sumpPumps || []).map(sp => ({ id: sp.id, name: sp.name, x: sp.x, y: sp.y, levelId: sp.levelId })),
+        dehumidifiers: (projState.dehumidifiers || []).map(dh => ({ id: dh.id, name: dh.name, x: dh.x, y: dh.y, levelId: dh.levelId })),
         dischargeLines: (projState.dischargeLines || []).map(dl => ({ id: dl.id, label: dl.label, length: dl.length, x1: dl.x1, y1: dl.y1, x2: dl.x2, y2: dl.y2, levelId: dl.levelId })),
         interiorPipes: (projState.interiorPipes || []).map(ip => ({ id: ip.id, length: ip.length, x1: ip.x1, y1: ip.y1, x2: ip.x2, y2: ip.y2, levelId: ip.levelId })),
         stanchions: (projState.stanchions || []).map(st => ({ id: st.id, type: st.type, x: st.x, y: st.y, levelId: st.levelId })),

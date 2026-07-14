@@ -701,6 +701,27 @@ window.sync3D = function() {
         roomMeshes.push(mesh);
     });
 
+    // 4b. Render Dehumidifiers
+    if (state.dehumidifiers) {
+        state.dehumidifiers.forEach(dehum => {
+            const dehumLevelId = dehum.levelId || 'basement';
+            if (dehumLevelId !== state.currentLevelId) return;
+            const level = state.levels.find(l => l.id === dehumLevelId) || { elevation: 0, height: 8 };
+            const elevation = level.elevation || 0;
+            
+            const dehumGeo = new THREE.BoxGeometry(1.0, 0.8, 1.2);
+            const dehumMat = new THREE.MeshStandardMaterial({ color: '#9333ea', roughness: 0.5, metalness: 0.1 });
+            const dehumMesh = new THREE.Mesh(dehumGeo, dehumMat);
+            
+            dehumMesh.position.set(dehum.x, elevation + 0.4, dehum.y);
+            dehumMesh.castShadow = true;
+            dehumMesh.receiveShadow = true;
+            
+            scene.add(dehumMesh);
+            roomMeshes.push(dehumMesh);
+        });
+    }
+
     // Render Floor Hatches (Access ports)
     state.floorHatches.forEach(h => {
         const hLevelId = h.levelId || 'basement';

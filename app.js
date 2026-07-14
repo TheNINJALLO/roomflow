@@ -2,11 +2,13 @@
 const state = {
     rooms: [],
     sumpPumps: [],
+    dehumidifiers: [],
     dischargeLines: [],
     floorHatches: [],
     capturedMeasurements: [],
     selectedRoomId: null,
     selectedSumpPumpId: null,
+    selectedDehumidifierId: null,
     selectedDischargeLineId: null,
     selectedFloorHatchId: null,
     activeView: '2d', // '2d', '3d', 'ar'
@@ -19,6 +21,7 @@ const state = {
     draggedRoomId: null,
     draggedHandle: null, // 'w', 'e', 'n', 's', 'nw', 'ne', 'se', 'sw' or 'move'
     draggedSumpPumpId: null,
+    draggedDehumidifierId: null,
     draggedFloorHatchId: null,
     draggedDischargeHandle: null, // { id, point: 'p1' | 'p2' | 'move' }
     draggedOpening: null,        // { roomId, openingId }
@@ -190,6 +193,22 @@ function addSumpPump() {
     updateGlobalStats();
 }
 
+// Add Dehumidifier
+function addDehumidifier() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const newDehum = {
+        id: generateId(),
+        levelId: state.currentLevelId,
+        name: `Dehumidifier ${state.dehumidifiers.length + 1}`,
+        x: snap(toWorldX(canvas.width / 2)),
+        y: snap(toWorldY(canvas.height / 2))
+    };
+    state.dehumidifiers.push(newDehum);
+    selectItem('dehumidifier', newDehum.id);
+    draw();
+    updateGlobalStats();
+}
+
 // Add Discharge Line
 function addDischargeLine() {
     if (typeof saveHistoryState === 'function') saveHistoryState();
@@ -299,6 +318,7 @@ function updateToolboxReinforcementLabels(room) {
 function selectItem(type, id) {
     state.selectedRoomId = (type === 'room') ? id : null;
     state.selectedSumpPumpId = (type === 'sump') ? id : null;
+    state.selectedDehumidifierId = (type === 'dehumidifier') ? id : null;
     state.selectedDischargeLineId = (type === 'discharge') ? id : null;
     state.selectedInteriorPipeId = (type === 'interiorPipe') ? id : null;
     state.selectedStanchionId = (type === 'stanchion') ? id : null;
@@ -307,6 +327,7 @@ function selectItem(type, id) {
     
     const roomFields = document.getElementById('room-edit-fields');
     const sumpFields = document.getElementById('sump-edit-fields');
+    const dehumidifierFields = document.getElementById('dehumidifier-edit-fields');
     const dischargeFields = document.getElementById('discharge-edit-fields');
     const interiorPipeFields = document.getElementById('interior-pipe-edit-fields');
     const stanchionFields = document.getElementById('stanchion-edit-fields');
@@ -325,6 +346,7 @@ function selectItem(type, id) {
     // Hide all
     roomFields.classList.add('hidden');
     sumpFields.classList.add('hidden');
+    if (dehumidifierFields) dehumidifierFields.classList.add('hidden');
     dischargeFields.classList.add('hidden');
     if (interiorPipeFields) interiorPipeFields.classList.add('hidden');
     if (stanchionFields) stanchionFields.classList.add('hidden');
@@ -473,6 +495,13 @@ function selectItem(type, id) {
             noSel.classList.add('hidden');
             sumpFields.classList.remove('hidden');
             document.getElementById('sump-name-input').value = sump.name;
+        }
+    } else if (type === 'dehumidifier' && id) {
+        const dehum = state.dehumidifiers.find(p => p.id === id);
+        if (dehum && dehumidifierFields) {
+            noSel.classList.add('hidden');
+            dehumidifierFields.classList.remove('hidden');
+            document.getElementById('dehumidifier-name-input').value = dehum.name;
         }
     } else if (type === 'discharge' && id) {
         const dl = state.dischargeLines.find(l => l.id === id);
@@ -1135,6 +1164,15 @@ function deleteSelectedSump() {
     updateGlobalStats();
 }
 
+function deleteSelectedDehumidifier() {
+    if (!state.selectedDehumidifierId) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.dehumidifiers = state.dehumidifiers.filter(p => p.id !== state.selectedDehumidifierId);
+    selectItem(null);
+    draw();
+    updateGlobalStats();
+}
+
 function deleteSelectedDischarge() {
     if (!state.selectedDischargeLineId) return;
     if (typeof saveHistoryState === 'function') saveHistoryState();
@@ -1427,6 +1465,49 @@ function draw(isPrinting = false) {
         ctx.font = '600 9px var(--font-sans)';
         ctx.fillText(sp.name, cx, cy - radius - 6);
     });
+
+    // 3b. Draw Dehumidifiers
+    if (state.dehumidifiers) {
+        state.dehumidifiers.forEach(dehum => {
+            if (dehum.levelId && dehum.levelId !== state.currentLevelId) return;
+            const cx = toCanvasX(dehum.x);
+            const cy = toCanvasY(dehum.y);
+            const isSelected = dehum.id === state.selectedDehumidifierId;
+            const width = 1.0 * state.scale;  // 1ft wide
+            const height = 1.2 * state.scale; // 1.2ft long
+            
+            // Outer glow on select
+            if (isSelected) {
+                ctx.shadowColor = varColor('--accent-teal');
+                ctx.shadowBlur = 10;
+            }
+            
+            // Dehum box
+            ctx.fillStyle = isSelected ? 'rgba(147, 51, 234, 0.2)' : 'rgba(147, 51, 234, 0.75)';
+            ctx.strokeStyle = isSelected ? varColor('--accent-teal') : '#c084fc';
+            ctx.lineWidth = isSelected ? 3 : 2;
+            
+            ctx.beginPath();
+            ctx.rect(cx - width/2, cy - height/2, width, height);
+            ctx.fill();
+            ctx.stroke();
+            
+            // Reset shadow
+            ctx.shadowBlur = 0;
+            
+            // Text tag inside
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '700 8px var(--font-sans)';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('DH', cx, cy);
+            
+            // Floating label
+            ctx.fillStyle = isSelected ? varColor('--accent-teal') : c(varColor('--text-muted'), '#475569');
+            ctx.font = '600 9px var(--font-sans)';
+            ctx.fillText(dehum.name, cx, cy - height/2 - 6);
+        });
+    }
 
     // Draw Stanchions
     state.stanchions.forEach(st => {
@@ -2534,6 +2615,23 @@ canvas.addEventListener('mousedown', (e) => {
         }
     }
 
+    // Check Dehumidifiers click
+    if (state.dehumidifiers) {
+        for (let i = state.dehumidifiers.length - 1; i >= 0; i--) {
+            const dehum = state.dehumidifiers[i];
+            if (dehum.levelId && dehum.levelId !== state.currentLevelId) continue;
+            const dcx = toCanvasX(dehum.x);
+            const dcy = toCanvasY(dehum.y);
+            const wPix = 1.0 * state.scale;
+            const hPix = 1.2 * state.scale;
+            if (Math.abs(mx - dcx) < wPix / 2 + 5 && Math.abs(my - dcy) < hPix / 2 + 5) {
+                selectItem('dehumidifier', dehum.id);
+                state.draggedDehumidifierId = dehum.id;
+                return;
+            }
+        }
+    }
+
     // Check Stanchions click
     for (let i = state.stanchions.length - 1; i >= 0; i--) {
         const st = state.stanchions[i];
@@ -2814,6 +2912,18 @@ canvas.addEventListener('mousemove', (e) => {
         }
     }
 
+    // Dehumidifier Dragging
+    if (state.draggedDehumidifierId) {
+        const dehum = state.dehumidifiers.find(p => p.id === state.draggedDehumidifierId);
+        if (dehum) {
+            dehum.x = snap(wx);
+            dehum.y = snap(wy);
+            draw();
+            updateGlobalStats();
+        }
+        return;
+    }
+
     // Stanchion Dragging
     if (state.draggedStanchionId) {
         const st = state.stanchions.find(p => p.id === state.draggedStanchionId);
@@ -3069,6 +3179,7 @@ canvas.addEventListener('mouseup', () => {
     state.draggedRoomId = null;
     state.draggedHandle = null;
     state.draggedSumpPumpId = null;
+    state.draggedDehumidifierId = null;
     state.draggedFloorHatchId = null;
     state.draggedDischargeHandle = null;
     state.draggedInteriorPipeHandle = null;
@@ -3149,6 +3260,17 @@ document.getElementById('sump-name-input').addEventListener('input', (e) => {
     }
 });
 document.getElementById('btn-delete-sump').addEventListener('click', deleteSelectedSump);
+
+// Dehumidifier listeners
+document.getElementById('dehumidifier-name-input').addEventListener('input', (e) => {
+    if (!state.selectedDehumidifierId) return;
+    const dehum = state.dehumidifiers.find(p => p.id === state.selectedDehumidifierId);
+    if (dehum) {
+        dehum.name = e.target.value;
+        draw();
+    }
+});
+document.getElementById('btn-delete-dehumidifier').addEventListener('click', deleteSelectedDehumidifier);
 
 // Discharge line listeners
 document.getElementById('discharge-label-input').addEventListener('input', (e) => {
@@ -3887,6 +4009,10 @@ document.getElementById('btn-add-sump').addEventListener('click', () => {
     addSumpPump();
     if (typeof closeAllDrawers === 'function') closeAllDrawers();
 });
+document.getElementById('btn-add-dehumidifier').addEventListener('click', () => {
+    addDehumidifier();
+    if (typeof closeAllDrawers === 'function') closeAllDrawers();
+});
 document.getElementById('btn-add-discharge').addEventListener('click', () => {
     addDischargeLine();
     if (typeof closeAllDrawers === 'function') closeAllDrawers();
@@ -4004,6 +4130,7 @@ document.getElementById('btn-new').addEventListener('click', () => {
     if (confirm('Clear project?')) {
         state.rooms = [];
         state.sumpPumps = [];
+        state.dehumidifiers = [];
         state.dischargeLines = [];
         state.floorHatches = [];
         state.interiorPipes = [];
@@ -4023,6 +4150,7 @@ document.getElementById('btn-save').addEventListener('click', () => {
         customerAddress: document.getElementById('customer-address').value,
         rooms: state.rooms,
         sumpPumps: state.sumpPumps,
+        dehumidifiers: state.dehumidifiers || [],
         dischargeLines: state.dischargeLines,
         floorHatches: state.floorHatches || [],
         interiorPipes: state.interiorPipes || [],
@@ -4064,6 +4192,7 @@ document.getElementById('file-input').addEventListener('change', (e) => {
             if (data && (data.rooms || Array.isArray(data))) {
                 state.rooms = Array.isArray(data) ? data : (data.rooms || []);
                 state.sumpPumps = data.sumpPumps || [];
+                state.dehumidifiers = data.dehumidifiers || [];
                 state.dischargeLines = data.dischargeLines || [];
                 state.floorHatches = data.floorHatches || [];
                 state.interiorPipes = data.interiorPipes || [];
@@ -4083,6 +4212,12 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                     if (r.nb1Height === undefined) r.nb1Height = 'none';
                     if (r.foamBondPockets === undefined) r.foamBondPockets = false;
                 });
+                
+                if (state.dehumidifiers) {
+                    state.dehumidifiers.forEach(dh => {
+                        if (!dh.levelId) dh.levelId = 'basement';
+                    });
+                }
                 
                 // Sync UI level select dropdown
                 const lvlSelect = document.getElementById('level-select');
@@ -4818,6 +4953,7 @@ function getHistorySnapshot() {
     return {
         rooms: JSON.parse(JSON.stringify(state.rooms)),
         sumpPumps: JSON.parse(JSON.stringify(state.sumpPumps)),
+        dehumidifiers: JSON.parse(JSON.stringify(state.dehumidifiers || [])),
         dischargeLines: JSON.parse(JSON.stringify(state.dischargeLines)),
         floorHatches: JSON.parse(JSON.stringify(state.floorHatches || [])),
         interiorPipes: JSON.parse(JSON.stringify(state.interiorPipes || [])),
@@ -4885,6 +5021,7 @@ function undo() {
     const previous = state.undoStack.pop();
     state.rooms = previous.rooms;
     state.sumpPumps = previous.sumpPumps;
+    state.dehumidifiers = previous.dehumidifiers || [];
     state.dischargeLines = previous.dischargeLines;
     state.floorHatches = previous.floorHatches || [];
     state.interiorPipes = previous.interiorPipes || [];
@@ -4927,6 +5064,7 @@ function redo() {
     const nextState = state.redoStack.pop();
     state.rooms = nextState.rooms;
     state.sumpPumps = nextState.sumpPumps;
+    state.dehumidifiers = nextState.dehumidifiers || [];
     state.dischargeLines = nextState.dischargeLines;
     state.floorHatches = nextState.floorHatches || [];
     state.interiorPipes = nextState.interiorPipes || [];
@@ -5099,6 +5237,7 @@ document.getElementById('btn-save-job-submit').addEventListener('click', () => {
     const projectData = {
         rooms: state.rooms,
         sumpPumps: state.sumpPumps,
+        dehumidifiers: state.dehumidifiers || [],
         dischargeLines: state.dischargeLines,
         floorHatches: state.floorHatches,
         interiorPipes: state.interiorPipes,
@@ -5129,6 +5268,7 @@ function loadJobData(data) {
     if (!data) return;
     state.rooms = data.rooms || [];
     state.sumpPumps = data.sumpPumps || [];
+    state.dehumidifiers = data.dehumidifiers || [];
     state.dischargeLines = data.dischargeLines || [];
     state.floorHatches = data.floorHatches || [];
     state.interiorPipes = data.interiorPipes || [];
@@ -5154,6 +5294,7 @@ function loadJobData(data) {
     state.interiorPipes.forEach(ip => { if (!ip.levelId) ip.levelId = 'basement'; });
     state.stanchions.forEach(st => { if (!st.levelId) st.levelId = 'basement'; });
     state.mainBeams.forEach(bm => { if (!bm.levelId) bm.levelId = 'basement'; });
+    if (state.dehumidifiers) state.dehumidifiers.forEach(dh => { if (!dh.levelId) dh.levelId = 'basement'; });
     
     const levelSelect = document.getElementById('level-select');
     if (levelSelect) levelSelect.value = state.currentLevelId;

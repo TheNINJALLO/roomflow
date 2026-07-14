@@ -284,6 +284,13 @@ function runCostingTests() {
     assert("30. Global vapor barrier disable toggle", report30.items.vapor_barrier.purchaseQty === 0 && report30.items.vapor_barrier_tape.purchaseQty === 0,
         `Expected 0 vapor barrier and tape when disabled, got vb: ${report30.items.vapor_barrier.purchaseQty}, tape: ${report30.items.vapor_barrier_tape.purchaseQty}`);
 
+    // 31. Placed dehumidifier on canvas auto-calculation
+    let state31 = { rooms: [], sumpPumps: [], dehumidifiers: [{ id: "dh31", levelId: "basement", x: 5, y: 5 }], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [] };
+    initDefaultCosting(state31);
+    let report31 = calculateProjectCosts(state31, testCatalog);
+    assert("31. Placed dehumidifier auto-calculation", report31.items.permanent_dehumidifier.purchaseQty === 1 && report31.items.dehumidifier_stands.purchaseQty === 1,
+        `Expected 1 dehumidifier and 1 stand pack from placed element, got dehum: ${report31.items.permanent_dehumidifier.purchaseQty}, stands: ${report31.items.dehumidifier_stands.purchaseQty}`);
+
     // Verification Scenario from prompt
     // 1 sump basin, 2 sump pumps, 2 Wi-Fi floats, 1 sump basin and drain stone package.
     // 1 permanent dehumidifier, 1 stand (results in 1 pack).
