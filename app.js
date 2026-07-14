@@ -4708,6 +4708,286 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
     printWindow.document.close();
 });
 
+// --- PRINTING & EXPORTS ---
+function printInternalCostSheet() {
+    const costEl = document.getElementById('cost-container');
+    if (!costEl) return;
+    
+    // Create a printable clone of the costing workspace
+    const clone = costEl.cloneNode(true);
+    
+    // Replace all inputs with text nodes or spans for clean printing
+    clone.querySelectorAll('input, select, textarea').forEach(inp => {
+        const span = document.createElement('span');
+        span.className = 'print-input-val';
+        if (inp.type === 'checkbox') {
+            span.innerText = inp.checked ? '[X]' : '[ ]';
+        } else {
+            span.innerText = inp.value;
+        }
+        inp.parentNode.replaceChild(span, inp);
+    });
+    
+    // Hide action buttons and controls
+    clone.querySelectorAll('button, .cost-header-actions, .cat-item-active, .treatment-sel').forEach(btn => {
+        btn.style.display = 'none';
+    });
+    
+    const htmlContent = `
+        <html>
+        <head>
+            <title>RoomFlow - Internal Estimating & Costing Sheet</title>
+            <style>
+                body { font-family: 'Outfit', sans-serif; padding: 30px; color: #111827; background: #ffffff; line-height: 1.4; }
+                h2 { color: #1e3a8a; border-bottom: 2px solid #3b82f6; padding-bottom: 8px; margin-bottom: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 10px; margin-bottom: 20px; font-size: 0.85rem; }
+                th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+                th { background-color: #f1f5f9; color: #1e3a8a; font-weight: 600; }
+                .print-input-val { font-weight: 600; color: #0f172a; }
+                .cost-summary-card { background: #f8fafc; border: 1px solid #e2e8f0; padding: 15px; border-radius: 8px; margin-top: 20px; }
+                .summary-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 0.9rem; }
+                .summary-row.total { font-weight: 700; border-bottom: none; font-size: 1.1rem; color: #1e3a8a; }
+                @media print {
+                    button { display: none; }
+                    body { padding: 10px; }
+                }
+            </style>
+        </head>
+        <body>
+            <button onclick="window.print()" style="float:right; padding:8px 16px; background:#3b82f6; color:white; border:none; border-radius:4px; cursor:pointer;">Print Page</button>
+            <h2>RoomFlow - Internal Job Estimating & Costing Sheet</h2>
+            <div style="margin-bottom:20px; font-size:0.9rem; color:#4b5563;">
+                <strong>Date:</strong> ${new Date().toLocaleDateString()}<br>
+                <strong>Customer Name:</strong> ${document.getElementById('customer-name').value || 'Not Specified'}<br>
+                <strong>Customer Address:</strong> ${document.getElementById('customer-address').value || 'Not Specified'}
+            </div>
+            ${clone.innerHTML}
+        </body>
+        </html>
+    `;
+    
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+}
+
+function printCustomerProposal() {
+    // Save current selections
+    const oldSelRoom = state.selectedRoomId;
+    const oldSelSump = state.selectedSumpPumpId;
+    const oldSelDischarge = state.selectedDischargeLineId;
+    
+    // Temporarily clear selections for high-fidelity export
+    state.selectedRoomId = null;
+    state.selectedSumpPumpId = null;
+    state.selectedDischargeLineId = null;
+    
+    // Automatically focus layout scale and center view on the canvas
+    const originalView = fitLayoutToCanvas();
+    
+    // Draw with solid print background, then grab image URL
+    draw(true);
+    const layoutImage = canvas.toDataURL('image/png');
+    
+    // Grab 3D screenshot
+    const screenshot3D = (typeof window.get3DScreenshot === 'function') ? window.get3DScreenshot() : null;
+    
+    // Restore original viewport settings
+    state.scale = originalView.scale;
+    state.offsetX = originalView.offsetX;
+    state.offsetY = originalView.offsetY;
+    
+    // Restore selections
+    state.selectedRoomId = oldSelRoom;
+    state.selectedSumpPumpId = oldSelSump;
+    state.selectedDischargeLineId = oldSelDischarge;
+    
+    // Redraw normal view
+    draw(false);
+
+    // Calculate costs
+    const catalog = RoomFlowCatalog.loadCatalog();
+    const report = calculateProjectCosts(state, catalog);
+    const totalSellingPrice = report.subtotals.sellingPrice;
+    
+    // Build list of active items to price
+    const proposalItems = [];
+    let sumRawCosts = 0;
+    
+    // Add regular catalog items
+    Object.keys(report.items).forEach(id => {
+        const item = report.items[id];
+        if (item.purchaseQty > 0 && !item.excluded) {
+            proposalItems.push({
+                name: item.data.name,
+                notes: item.data.notes,
+                qty: item.purchaseQty,
+                unit: item.data.purchaseUnit,
+                rawCost: item.cost
+            });
+            sumRawCosts += item.cost;
+        }
+    });
+    
+    // Add custom items
+    if (state.costing && Array.isArray(state.costing.customItems)) {
+        state.costing.customItems.forEach(item => {
+            const qty = Math.max(0, parseFloat(item.qty) || 0);
+            if (qty > 0) {
+                const cost = Math.max(0, parseFloat(item.unitCost) || 0);
+                const waste = 1 + (Math.max(0, parseFloat(item.waste) || 0) / 100);
+                const baseCost = qty * cost * waste;
+                
+                const lHours = Math.max(0, parseFloat(item.laborHours) || 0);
+                const lRate = Math.max(0, parseFloat(item.laborRate) || 0);
+                const itemLaborCost = lHours * lRate;
+                const totalItemCost = baseCost + itemLaborCost;
+                
+                proposalItems.push({
+                    name: item.name || 'Custom Item',
+                    notes: item.notes || 'Custom contractor line item',
+                    qty: qty,
+                    unit: item.unit || 'pcs',
+                    rawCost: totalItemCost
+                });
+                sumRawCosts += totalItemCost;
+            }
+        });
+    }
+
+    // Distribute labor and markup proportionally
+    const multiplier = sumRawCosts > 0 ? (totalSellingPrice / sumRawCosts) : 1;
+    
+    let itemsRows = '';
+    if (proposalItems.length > 0) {
+        proposalItems.forEach(item => {
+            const customerTotal = item.rawCost * multiplier;
+            const customerUnitPrice = customerTotal / item.qty;
+            itemsRows += `
+                <tr>
+                    <td><strong>${item.name}</strong><br><small style="color:#64748b;">${item.notes}</small></td>
+                    <td>${item.qty} ${item.unit}</td>
+                    <td>$${customerUnitPrice.toFixed(2)}</td>
+                    <td><strong>$${customerTotal.toFixed(2)}</strong></td>
+                </tr>
+            `;
+        });
+    } else {
+        // Fallback for labor-only or empty projects
+        itemsRows = `
+            <tr>
+                <td><strong>Waterproofing / Restoration Structural Services</strong><br><small style="color:#64748b;">Comprehensive labor, equipment, and structural layout installation</small></td>
+                <td>1 job</td>
+                <td>$${totalSellingPrice.toFixed(2)}</td>
+                <td><strong>$${totalSellingPrice.toFixed(2)}</strong></td>
+            </tr>
+        `;
+    }
+
+    const cName = document.getElementById('customer-name').value || 'Not Specified';
+    const cAddress = document.getElementById('customer-address').value || 'Not Specified';
+
+    const htmlContent = `
+        <html>
+        <head>
+            <title>RoomFlow - Customer Estimating Proposal</title>
+            <style>
+                body { font-family: 'Outfit', sans-serif; padding: 40px; color: #111827; line-height: 1.5; background: #ffffff; }
+                h1 { color: #1e3a8a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; margin-top: 20px; margin-bottom: 30px; }
+                h2 { color: #1e3a8a; font-size: 1.25rem; margin-top: 35px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
+                .meta-info { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 0.95rem; color: #374151; }
+                table { width: 100%; border-collapse: collapse; margin-top: 15px; margin-bottom: 35px; }
+                th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+                th { background-color: #f8fafc; color: #1e3a8a; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; }
+                tr.totals { font-weight: 700; background-color: #eff6ff; font-size: 1.1rem; color: #1e3a8a; }
+                .layout-preview { text-align: center; margin-bottom: 20px; border: 1px dashed #cbd5e1; border-radius: 8px; padding: 10px; background-color: #ffffff; }
+                .layout-preview img { max-width: 100%; max-height: 260px; object-fit: contain; }
+                .footer { margin-top: 40px; text-align: center; font-size: 0.8rem; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 15px; }
+                @media print {
+                    button { display: none; }
+                    body { padding: 15px; margin: 0; }
+                    .page-break { page-break-before: always; break-before: page; }
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+                }
+                .print-btn { background-color: #14b8a6; color: white; padding: 10px 20px; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; float: right; font-weight: 600; }
+                .print-btn:hover { background-color: #0d9488; }
+            </style>
+        </head>
+        <body>
+            <button class="print-btn" onclick="window.print()">Print Pricing Proposal</button>
+            <h1>Waterproofing & Structural Proposal</h1>
+            <div class="meta-info">
+                <div>
+                    <strong>Date:</strong> ${new Date().toLocaleDateString()}<br>
+                    <strong>Prepared For:</strong> ${cName}<br>
+                    <strong>Project Site Address:</strong> ${cAddress}
+                </div>
+            </div>
+
+            <h2>Project Blueprint Layout</h2>
+            <div class="layout-preview 2d-preview" style="margin-bottom: 0;">
+                <img src="${layoutImage}" alt="Blueprint Layout" style="max-height: 480px;">
+            </div>
+
+            ${screenshot3D ? `
+            <div class="page-break"></div>
+            <h2>Project 3D Visualization Model</h2>
+            <div class="layout-preview 3d-preview" style="margin-bottom: 20px;">
+                <img src="${screenshot3D}" alt="3D Model Visual" style="max-height: 400px;">
+            </div>
+            ` : ''}
+
+            <div class="page-break"></div>
+
+            <h2>Itemized Pricing Proposal Breakdown</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Recommended Solution / Scope Item</th>
+                        <th>Quantity</th>
+                        <th>Unit Price</th>
+                        <th>Line Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${itemsRows}
+                    <tr class="totals">
+                        <td>TOTAL PROPOSAL INVESTMENT</td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td>$${totalSellingPrice.toFixed(2)}</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="footer">
+                Proposal generated via RoomFlow. All recommended specifications are customized based on structural blueprint requirements.
+            </div>
+        </body>
+        </html>
+    `;
+    
+    // Run safety scanner to ensure NO costing details leak
+    const safetyCheck = scanCustomerReportForPricingData(htmlContent);
+    if (!safetyCheck.safe) {
+        alert("DEVELOPER ERROR: Prohibited costing term '" + safetyCheck.offendingTerm + "' detected in customer proposal! Export blocked.");
+        throw new Error("DEVELOPER EXPORT SECURITY ALERT: Costing leak detected for term: " + safetyCheck.offendingTerm);
+    }
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+}
+
+// Expose printing functions globally
+window.printInternalCostSheet = printInternalCostSheet;
+window.printCustomerProposal = printCustomerProposal;
+
+document.getElementById('btn-export-proposal').addEventListener('click', printCustomerProposal);
+
 // --- ANGLED WALL SKETCHER & DRAWING LOGIC ---
 function toggleDrawWallsMode() {
     const drawWallsPanel = document.getElementById('custom-wall-drawer-panel');

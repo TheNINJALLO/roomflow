@@ -291,6 +291,13 @@ function runCostingTests() {
     assert("31. Placed dehumidifier auto-calculation", report31.items.permanent_dehumidifier.purchaseQty === 1 && report31.items.dehumidifier_stands.purchaseQty === 1,
         `Expected 1 dehumidifier and 1 stand pack from placed element, got dehum: ${report31.items.permanent_dehumidifier.purchaseQty}, stands: ${report31.items.dehumidifier_stands.purchaseQty}`);
 
+    // 32. NB-1 Primer quantity calculation (1 bucket per 30 bags of NB-1)
+    let state32 = { rooms: [{ id: "r1", name: "Room 1", w: 30, l: 30, h: 8, levelId: "basement", nb1Height: "2ft", openings: [] }], sumpPumps: [], dehumidifiers: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [] };
+    initDefaultCosting(state32);
+    let report32 = calculateProjectCosts(state32, testCatalog);
+    assert("32. NB-1 Primer coverage matching 30 bags of NB-1", report32.items.nb1_primer.purchaseQty === 1,
+        `Expected 1 bucket of NB-1 Primer for 30 bags of NB-1, got: ${report32.items.nb1_primer.purchaseQty}`);
+
     // Verification Scenario from prompt
     // 1 sump basin, 2 sump pumps, 2 Wi-Fi floats, 1 sump basin and drain stone package.
     // 1 permanent dehumidifier, 1 stand (results in 1 pack).

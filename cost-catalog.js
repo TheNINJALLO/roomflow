@@ -65,13 +65,13 @@ const DEFAULT_CATALOG = [
         id: "rmr",
         name: "RMR Treatment",
         packagePrice: 56.39,
-        packageQuantity: 1.5, // 3 bottles = 1.5 gallons total per pack
-        purchaseUnit: "three-pack",
+        packageQuantity: 2.5,
+        purchaseUnit: "container",
         usageUnit: "gallon",
         taxable: true,
         defaultWaste: 10,
         active: true,
-        notes: "Mold removal treatment. 3 bottles of 64oz (1.5 gal total)."
+        notes: "RMR Mold removal treatment. 2.5 gallon container."
     },
     {
         id: "n95_masks",
@@ -192,6 +192,18 @@ const DEFAULT_CATALOG = [
         defaultWaste: 0,
         active: true,
         notes: "Basin and aggregate stone kit for sump pit construction."
+    },
+    {
+        id: "nb1_primer",
+        name: "NB-1 Primer",
+        packagePrice: 120.00,
+        packageQuantity: 1,
+        purchaseUnit: "bucket",
+        usageUnit: "bucket",
+        taxable: true,
+        defaultWaste: 10,
+        active: true,
+        notes: "NB-1 Primer (2.5 gallon). Covers roughly 30 bags of NB-1 worth of area."
     }
 ];
 

@@ -6,13 +6,13 @@ const DEFAULT_COST_SETTINGS = {
     generalWaste: 10.0,    // General material waste %
     overhead: 15.0,        // Overhead %
     markup: 30.0,          // Markup %
-    loadedLaborRate: 65.0, // Loaded labor rate ($/hour)
+    loadedLaborRate: 120.0, // Loaded labor rate ($/hour)
     hoursPerWorkday: 8,    // Workday duration
 
     // Catalog coverage / configurations
-    tapeCoveragePerRoll: 0,     // 0 means unconfigured
-    benefectSqFtPerGallon: 0,   // 0 means unconfigured
-    rmrSqFtPerGallon: 0,        // 0 means unconfigured
+    tapeCoveragePerRoll: 250,     // 1 roll covers 250 ft of seams and corners by default
+    benefectSqFtPerGallon: 1000,  // 1 pail (5 gal) covers 5000 sq ft by default
+    rmrSqFtPerGallon: 2000,       // 1 container (2.5 gal) covers 5000 sq ft by default
     masksPerPack: 0,            // 0 means unconfigured
     nb1SqFtPerBag: 8,           // default legacy is 8 sq ft per bag
 
@@ -41,7 +41,7 @@ function initDefaultCosting(projState) {
                 projectCrewSize: 1,
                 projectWorkdays: 1,
                 projectHoursPerDay: 8,
-                projectLaborRate: 65,
+                projectLaborRate: 120,
                 projectNotes: '',
                 detailedLines: []
             },
@@ -590,6 +590,21 @@ function calculateProjectCosts(projState, catalogList) {
         extraRemaining: 0
     };
 
+    // 12b. NB-1 Primer
+    const primerItem = getItemData('nb1_primer');
+    const primerBucketsCalc = Math.ceil(nb1BagsData.quantity / 30);
+    const primerBucketsData = getQuantity('nb1_primer', primerBucketsCalc);
+    const primerCost = primerBucketsData.quantity * primerItem.packagePrice;
+    report.items['nb1_primer'] = {
+        data: primerItem,
+        measured: nb1BagsData.quantity,
+        adjusted: nb1BagsData.quantity,
+        purchaseQty: primerBucketsData.quantity,
+        cost: primerCost,
+        overrideEnabled: primerBucketsData.overrideEnabled,
+        extraRemaining: (primerBucketsData.quantity * 30) - nb1BagsData.quantity
+    };
+
     // 13. Waterstop
     const wsItem = getItemData('waterstop');
     const wsWasteMultiplier = 1 + (settings.generalWaste / 100);
@@ -677,6 +692,7 @@ function calculateProjectCosts(projState, catalogList) {
         permanent_dehumidifier: 'equipment',
         garbage_bags: 'supply',
         nb1: 'material',
+        nb1_primer: 'material',
         waterstop: 'material',
         floor_epoxy: 'material',
         dehumidifier_stands: 'supply',

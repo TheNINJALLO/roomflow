@@ -37,7 +37,9 @@ function renderCostUI() {
                     <i data-lucide="alert-triangle"></i> Tax, labor, overhead, markup, and coverage settings are internal estimating assumptions and should be verified for the specific project.
                 </div>
             </div>
-            <div class="cost-header-actions">
+            <div class="cost-header-actions" style="display: flex; gap: 0.5rem; align-items: center;">
+                <button id="btn-print-internal-cost" class="btn-tool-secondary"><i data-lucide="printer"></i> Print Cost Sheet</button>
+                <button id="btn-cost-export-proposal" class="btn-tool-primary" style="background: var(--accent-teal); border-color: var(--accent-teal); color: white;"><i data-lucide="file-text"></i> Customer Proposal</button>
                 <button id="btn-run-cost-tests" class="btn-tool-secondary"><i data-lucide="play-circle"></i> Run Cost Tests</button>
             </div>
         </div>
@@ -645,6 +647,7 @@ function renderLaborSection(report) {
                     <div class="input-group">
                         <label>Hourly Rate ($)</label>
                         <input type="number" id="input-labor-rate" value="${labor.projectLaborRate}" min="0">
+                        <small style="color: #94a3b8; font-size: 0.7rem; margin-top: 2px;">Typical: $89 - $140/hr</small>
                     </div>
                 </div>
                 <div class="input-group" style="margin-top:0.5rem;">
@@ -1686,6 +1689,25 @@ function bindCostUIEvents() {
                 window.runCostingTests();
             } else {
                 alert("Cost tests script not loaded yet.");
+            }
+        });
+    }
+
+    // Costing actions: print internal costing, export customer friendly proposal
+    const btnPrintInternal = document.getElementById('btn-print-internal-cost');
+    if (btnPrintInternal) {
+        btnPrintInternal.addEventListener('click', () => {
+            if (typeof window.printInternalCostSheet === 'function') {
+                window.printInternalCostSheet();
+            }
+        });
+    }
+
+    const btnCostProposal = document.getElementById('btn-cost-export-proposal');
+    if (btnCostProposal) {
+        btnCostProposal.addEventListener('click', () => {
+            if (typeof window.printCustomerProposal === 'function') {
+                window.printCustomerProposal();
             }
         });
     }
