@@ -1028,6 +1028,14 @@ document.getElementById('btn-3d-roof').addEventListener('click', (e) => {
 });
 
 window.get3DScreenshot = function() {
+    // Force initialize scene if not already initialized
+    if (!scene) {
+        init3D();
+    }
+    
+    // Force a sync3D to build/update the meshes to the latest state of the project
+    window.sync3D();
+    
     if (!renderer || !scene || !camera) return null;
     
     // Save original settings
@@ -1035,6 +1043,20 @@ window.get3DScreenshot = function() {
     const origFog = scene.fog;
     const origCamPos = camera.position.clone();
     const origTarget = controls ? controls.target.clone() : new THREE.Vector3();
+    
+    // Save original size/aspect
+    const originalWidth = renderer.domElement.width;
+    const originalHeight = renderer.domElement.height;
+    const originalAspect = camera.aspect;
+    
+    // Check if container is hidden/collapsed
+    const targetW = container3d.clientWidth || 800;
+    const targetH = container3d.clientHeight || 600;
+    
+    // Set rendering size to ensure a valid canvas size
+    renderer.setSize(targetW, targetH, false);
+    camera.aspect = targetW / targetH;
+    camera.updateProjectionMatrix();
     
     // Temporarily swap to white print background and clear fog
     scene.background = new THREE.Color('#ffffff');
@@ -1086,7 +1108,23 @@ window.get3DScreenshot = function() {
         controls.target.copy(origTarget);
         controls.update();
     }
-    renderer.render(scene, camera);
+    
+    // Restore renderer size
+    const restoreW = container3d.clientWidth;
+    const restoreH = container3d.clientHeight;
+    if (restoreW > 0 && restoreH > 0) {
+        renderer.setSize(restoreW, restoreH);
+        camera.aspect = restoreW / restoreH;
+    } else {
+        renderer.setSize(originalWidth, originalHeight, false);
+        camera.aspect = originalAspect;
+    }
+    camera.updateProjectionMatrix();
+    
+    // Render normal view once
+    if (restoreW > 0 && restoreH > 0 && state.activeView === '3d') {
+        renderer.render(scene, camera);
+    }
     
     return dataUrl;
 };
