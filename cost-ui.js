@@ -861,9 +861,16 @@ function renderSettingsSection(report) {
                     <input type="number" id="settings-nb1-cov" value="${s.nb1SqFtPerBag}" min="0.1" step="0.5">
                 </div>
                 <div class="input-group">
+                    <label>Internal Labor Wage/Cost ($/hr)</label>
+                    <input type="number" id="settings-labor-cost-rate" value="${s.loadedLaborRate}" min="0" step="0.5">
+                </div>
+                <div class="input-group">
                     <label>N95 Masks Per Pack</label>
                     <input type="number" id="settings-masks-pack" value="${s.masksPerPack}" min="0" step="1">
                 </div>
+            </div>
+
+            <div class="rentals-grid-inputs" style="grid-template-columns: repeat(3, 1fr); gap:1rem;">
                 <div class="input-group">
                     <label>Masks Calculation Mode</label>
                     <select id="settings-masks-mode" style="padding:0.5rem;">
@@ -993,6 +1000,18 @@ function renderStickySummaryCard(report) {
             <div class="sticky-metric-row margin-row">
                 <span class="label">Gross-Margin Percentage</span>
                 <span class="value">${s.actualMarginPercent.toFixed(1)}%</span>
+            </div>
+            <div class="sticky-metric-row" style="border-top:1px dashed rgba(255,255,255,0.08); padding-top:0.5rem; margin-top:0.5rem;">
+                <span class="label" style="color: #94a3b8; font-size: 0.8rem;">Billed Labor (to Customer)</span>
+                <span class="value" style="font-size: 0.8rem;">${formatCurrency(report.subtotals.labor)}</span>
+            </div>
+            <div class="sticky-metric-row">
+                <span class="label" style="color: #94a3b8; font-size: 0.8rem;">Paid Crew Cost (Internal)</span>
+                <span class="value" style="font-size: 0.8rem; color:#ef4444;">-${formatCurrency(report.subtotals.internalLabor)}</span>
+            </div>
+            <div class="sticky-metric-row" style="background: rgba(16,185,129,0.08); border-radius: 4px; padding: 4px 6px;">
+                <span class="label" style="color: #10b981; font-weight: 600; font-size: 0.85rem;">True Net Cash Profit</span>
+                <span class="value" style="color: #10b981; font-weight: 700; font-size: 0.95rem;">${formatCurrency(report.subtotals.trueNetProfit)}</span>
             </div>
             <div style="margin-top:1.5rem; text-align:center;">
                 <small class="text-muted" style="font-size:0.75rem; display:block;">Calculations run instantly when canvas or cost inputs are modified.</small>
@@ -1514,6 +1533,13 @@ function bindCostUIEvents() {
     if (setNb1Cov) {
         setNb1Cov.addEventListener('change', (e) => {
             state.costing.settings.nb1SqFtPerBag = Math.max(0.1, parseFloat(e.target.value) || 8);
+            updateCostDataAndUI();
+        });
+    }
+    const setLaborCostRate = document.getElementById('settings-labor-cost-rate');
+    if (setLaborCostRate) {
+        setLaborCostRate.addEventListener('change', (e) => {
+            state.costing.settings.loadedLaborRate = Math.max(0, parseFloat(e.target.value) || 0);
             updateCostDataAndUI();
         });
     }

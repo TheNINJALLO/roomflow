@@ -6,7 +6,7 @@ const DEFAULT_COST_SETTINGS = {
     generalWaste: 10.0,    // General material waste %
     overhead: 15.0,        // Overhead %
     markup: 30.0,          // Markup %
-    loadedLaborRate: 120.0, // Loaded labor rate ($/hour)
+    loadedLaborRate: 45.0,  // Loaded labor rate ($/hour)
     hoursPerWorkday: 8,    // Workday duration
 
     // Catalog coverage / configurations
@@ -924,6 +924,13 @@ function calculateProjectCosts(projState, catalogList) {
 
     expectedProfit = sellingPrice - report.subtotals.costBasis;
     actualMargin = sellingPrice > 0 ? (expectedProfit / sellingPrice * 100) : 0;
+
+    const internalLaborCost = report.laborHours * settings.loadedLaborRate;
+    const actualDirectCost = report.subtotals.direct - report.subtotals.labor + internalLaborCost;
+    
+    report.subtotals.internalLabor = internalLaborCost;
+    report.subtotals.actualDirectCost = actualDirectCost;
+    report.subtotals.trueNetProfit = sellingPrice - actualDirectCost - report.subtotals.overhead; // subtract overhead as it is an internal cost/expense
 
     report.subtotals.markup = markupAmount;
     report.subtotals.sellingPrice = sellingPrice;
