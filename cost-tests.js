@@ -17,14 +17,14 @@ function runCostingTests() {
     const testCatalog = RoomFlowCatalog.getDefaults();
 
     // 1. Vapor-barrier roll rounding
-    // 3,001 sq ft / 3,000 = 1.0003 rolls -> should ceil to 2 rolls before waste is added
+    // 901 sq ft / 900 = 1.001 rolls -> should ceil to 2 rolls before waste is added
     // Let's create a mock state
-    let state1 = { rooms: [{ id: "r1", w: 10, l: 300.1, h: 0, levelId: "basement", openings: [] }], sumpPumps: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [{ id: "basement", height: 8 }] };
+    let state1 = { rooms: [{ id: "r1", w: 10, l: 90.1, h: 0, levelId: "basement", openings: [] }], sumpPumps: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [{ id: "basement", height: 8 }] };
     initDefaultCosting(state1);
     state1.costing.settings.generalWaste = 0; // disable waste for this specific check
     let report1 = calculateProjectCosts(state1, testCatalog);
     assert("1. Vapor-barrier roll rounding", report1.items.vapor_barrier.purchaseQty === 2, 
-        `Expected 2 rolls for 3001 sq ft, got ${report1.items.vapor_barrier.purchaseQty}`);
+        `Expected 2 rolls for 901 sq ft, got ${report1.items.vapor_barrier.purchaseQty}`);
 
     // 2. Tape case rounding
     // 13 rolls -> Math.ceil(13/12) = 2 cases
@@ -39,7 +39,7 @@ function runCostingTests() {
 
     // 3. Spray-foam case rounding
     // 25 cans -> Math.ceil(25/24) = 2 cases
-    let state3 = { rooms: [{ id: "r3", w: 165, l: 10, h: 8, foamBondPockets: true, joists: 'ns', levelId: "basement", openings: [] }], sumpPumps: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [{ id: "basement", height: 8 }] };
+    let state3 = { rooms: [{ id: "r3", x: 0, y: 0, w: 165, l: 10, h: 8, foamBondPockets: true, joists: 'ns', levelId: "basement", openings: [] }], sumpPumps: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [{ id: "basement", height: 8 }] };
     initDefaultCosting(state3);
     let report3 = calculateProjectCosts(state3, testCatalog);
     assert("3. Spray-foam case rounding", report3.items.spray_foam.purchaseQty === 2,
@@ -371,6 +371,78 @@ function runCostingTests() {
     assert("VS Rental Dehum Cost ($600)", dehumRental === 600, `Got ${dehumRental}`);
     assert("VS Rental Air Movers Cost ($456)", moverRental === 456, `Got ${moverRental}`);
     assert("VS Total Rental Cost ($1056.00)", totalRental === 1056, `Got ${totalRental}`);
+
+    // 33. Drywall cutting tests
+    let state33 = { rooms: [{ id: "r1", name: "Room 1", w: 10, l: 20, h: 8, levelId: "basement", drywallHeight: "2ft", openings: [] }], sumpPumps: [], dehumidifiers: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [] };
+    initDefaultCosting(state33);
+    let report33 = calculateProjectCosts(state33, testCatalog);
+    // Perimeter = 2 * (10 + 20) = 60 ft.
+    // 2 ft height -> 60 * 2 = 120 sq ft drywall cut.
+    // Cost = 120 * 1.98 = 237.60.
+    assert("33. Drywall Cutting 2ft area calculation", report33.items.drywall_cut.measured === 120,
+        `Expected 120 sq ft measured, got: ${report33.items.drywall_cut.measured}`);
+    assert("34. Drywall Cutting 2ft cost calculation", Math.abs(report33.items.drywall_cut.cost - 237.60) < 0.01,
+        `Expected $237.60 cost, got: ${report33.items.drywall_cut.cost}`);
+
+    let state34 = { rooms: [{ id: "r1", name: "Room 1", w: 10, l: 20, h: 8, levelId: "basement", drywallHeight: "full", openings: [{ w: 3, h: 7 }] }], sumpPumps: [], dehumidifiers: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [] };
+    initDefaultCosting(state34);
+    let report34 = calculateProjectCosts(state34, testCatalog);
+    // Perimeter = 60 ft. Gross wall area = 60 * 8 = 480.
+    // Deductions = 3 * 7 = 21. Net wall area = 459.
+    // Cost = 459 * 1.98 = 908.82.
+    assert("35. Drywall Cutting full wall area calculation with opening", report34.items.drywall_cut.measured === 459,
+        `Expected 459 sq ft measured, got: ${report34.items.drywall_cut.measured}`);
+    assert("36. Drywall Cutting full wall cost calculation with opening", Math.abs(report34.items.drywall_cut.cost - 908.82) < 0.01,
+        `Expected $908.82 cost, got: ${report34.items.drywall_cut.cost}`);
+
+    // 37. Air Scrubber rental tests
+    let state37 = { rooms: [], sumpPumps: [], dehumidifiers: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [] };
+    initDefaultCosting(state37);
+    state37.costing.rentals.airScrubberUnits = 3;
+    state37.costing.rentals.airScrubberDays = 4;
+    state37.costing.rentals.airScrubberTaxable = false;
+    let report37 = calculateProjectCosts(state37, testCatalog);
+    // Cost = 3 * 4 * 105 = 1260.00
+    assert("37. Air Scrubber rental cost calculation", report37.subtotals.rental === 1260,
+        `Expected $1260 rental subtotal, got: ${report37.subtotals.rental}`);
+    assert("38. Air Scrubber non-taxable verification", report37.subtotals.taxable === 0,
+        `Expected $0 taxable subtotal, got: ${report37.subtotals.taxable}`);
+
+    // 39. Attic level room elevation in state calculation
+    const atticLevel = state.levels.find(l => l.id === 'attic');
+    assert("39. Attic level preset existence", !!atticLevel, "Expected attic level preset to exist");
+    assert("40. Attic level elevation is 25ft", atticLevel && atticLevel.elevation === 25, `Expected 25 elevation, got ${atticLevel ? atticLevel.elevation : 'none'}`);
+
+    // 41. Attic Insulation Removal and Blowing costs
+    let state41 = { rooms: [{ id: "r1", name: "Attic Room", w: 10, l: 20, h: 8, levelId: "attic", removeInsulation: true, blowInInsulation: true, openings: [] }], sumpPumps: [], dehumidifiers: [], dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], levels: [] };
+    initDefaultCosting(state41);
+    let report41 = calculateProjectCosts(state41, testCatalog);
+    // Area = 10 * 20 = 200 sq ft.
+    // Removal cost = 200 * 1.75 = $350.00.
+    // Blowing cost = 200 * 2.25 = $450.00.
+    assert("41. Insulation removal area", report41.items.insulation_removal.measured === 200, `Expected 200 sq ft, got: ${report41.items.insulation_removal.measured}`);
+    assert("42. Insulation removal cost", Math.abs(report41.items.insulation_removal.cost - 350.00) < 0.01, `Expected $350.00, got: ${report41.items.insulation_removal.cost}`);
+    assert("43. Insulation blowing area", report41.items.insulation_blowing.measured === 200, `Expected 200 sq ft, got: ${report41.items.insulation_blowing.measured}`);
+    assert("44. Insulation blowing cost", Math.abs(report41.items.insulation_blowing.cost - 450.00) < 0.01, `Expected $450.00, got: ${report41.items.insulation_blowing.cost}`);
+
+    // 45. Estimating Checklist DOM Existence
+    const checklistDiv = document.getElementById('checklist-container');
+    assert("45. Estimating Checklist Container exists", !!checklistDiv, "Expected checklist container viewport to exist");
+
+    // 46. Room Checklist Addition Action
+    const initialRoomsCount = state.rooms.length;
+    if (typeof window.addRoomFromChecklist === 'function') {
+        window.addRoomFromChecklist('basement');
+        assert("46. Add room from checklist action updates state", state.rooms.length === initialRoomsCount + 1, "Expected rooms count to increase by 1");
+        
+        // 47. Room Checklist Deletion Action
+        const addedRoomId = state.rooms[state.rooms.length - 1].id;
+        window.removeRoomFromChecklist(addedRoomId);
+        assert("47. Remove room from checklist action cleans state", state.rooms.length === initialRoomsCount, "Expected rooms count to revert to original");
+    } else {
+        assert("46. Add room from checklist action updates state", false, "addRoomFromChecklist is not defined");
+        assert("47. Remove room from checklist action cleans state", false, "removeRoomFromChecklist is not defined");
+    }
 
     // Display results in the UI banner if it exists
     const banner = document.getElementById('cost-test-results-banner');

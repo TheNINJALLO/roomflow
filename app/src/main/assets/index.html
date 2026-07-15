@@ -23,7 +23,10 @@
             </div>
             
             <div class="view-toggles">
-                <button id="btn-view-2d" class="toggle-btn active">
+                <button id="btn-view-checklist" class="toggle-btn active">
+                    <i data-lucide="check-square"></i> <span>Estimating Checklist</span>
+                </button>
+                <button id="btn-view-2d" class="toggle-btn">
                     <i data-lucide="edit-3"></i> <span>2D Sketch</span>
                 </button>
                 <button id="btn-view-3d" class="toggle-btn">
@@ -44,6 +47,7 @@
                     <option value="basement" selected>Basement</option>
                     <option value="main">Main Floor</option>
                     <option value="second">2nd Floor</option>
+                    <option value="attic">Attic</option>
                 </select>
             </div>
 
@@ -168,6 +172,9 @@
                         <button id="btn-add-nb1" class="tool-btn" disabled style="width: 100%; text-align: left; padding: 0.55rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-direction: row; justify-content: flex-start;">
                             <i data-lucide="layers" style="flex-shrink: 0;"></i> <span id="btn-add-nb1-label" style="font-size: 0.75rem;">NB1 Coating (Cycle Height)</span>
                         </button>
+                        <button id="btn-add-drywall" class="tool-btn" disabled style="width: 100%; text-align: left; padding: 0.55rem 0.75rem; display: flex; align-items: center; gap: 0.5rem; flex-direction: row; justify-content: flex-start; margin-top: 0.25rem;">
+                            <i data-lucide="scissors" style="flex-shrink: 0;"></i> <span id="btn-add-drywall-label" style="font-size: 0.75rem;">Drywall Cut (Cycle Height)</span>
+                        </button>
                     </div>
                 </div>
 
@@ -219,11 +226,20 @@
                         <i data-lucide="sliders"></i>
                         <span>Details</span>
                     </button>
+                    <button id="mobile-toggle-checklist" class="floating-toggle-btn">
+                        <i data-lucide="check-square"></i>
+                        <span>Checklist</span>
+                    </button>
                 </div>
                 <div id="mobile-sidebar-backdrop" class="sidebar-backdrop hidden"></div>
 
+                <!-- Unified Estimating Checklist Viewport -->
+                <div id="checklist-container" class="viewport active">
+                    <!-- Dynamic checklist layout populated by cost-ui.js -->
+                </div>
+
                 <!-- 2D Sketch Board -->
-                <div id="canvas-container" class="viewport active">
+                <div id="canvas-container" class="viewport">
                     <canvas id="sketch-canvas"></canvas>
                     <div class="canvas-zoom-controls" style="position: absolute; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 0.5rem; z-index: 10; pointer-events: auto;">
                         <button id="btn-2d-zoom-in" style="background: rgba(16, 22, 35, 0.85); border: 1px solid var(--border-color); color: white; width: 44px; height: 44px; border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.2s;" title="Zoom In"><i data-lucide="zoom-in"></i></button>
@@ -454,6 +470,29 @@
                                 <option value="4ft">4 ft high</option>
                                 <option value="full">Floor to Ceiling</option>
                             </select>
+                        </div>
+
+                        <!-- Drywall Cutting -->
+                        <div class="input-group" style="margin-top: 0.75rem;">
+                            <label for="room-drywall-select">Drywall Cutting</label>
+                            <select id="room-drywall-select">
+                                <option value="none">None / Not Applied</option>
+                                <option value="1ft">1 ft high</option>
+                                <option value="2ft">2 ft high</option>
+                                <option value="4ft">4 ft high</option>
+                                <option value="6ft">6 ft high</option>
+                                <option value="full">Floor to Ceiling (Full Wall)</option>
+                            </select>
+                        </div>
+
+                        <!-- Attic Insulation removal and blowing -->
+                        <div class="input-group-checkbox" style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;">
+                            <input type="checkbox" id="room-remove-insulation-checkbox" style="width: auto; margin: 0;">
+                            <label for="room-remove-insulation-checkbox" style="margin-bottom: 0; font-weight: 500; font-size: 0.85rem; color: var(--text-color); cursor: pointer;">Remove Attic Insulation</label>
+                        </div>
+                        <div class="input-group-checkbox" style="margin-top: 0.5rem; display: flex; align-items: center; gap: 0.5rem; justify-content: flex-start;">
+                            <input type="checkbox" id="room-blow-insulation-checkbox" style="width: auto; margin: 0;">
+                            <label for="room-blow-insulation-checkbox" style="margin-bottom: 0; font-weight: 500; font-size: 0.85rem; color: var(--text-color); cursor: pointer;">Blow-in Attic Insulation</label>
                         </div>
                         
                         <!-- Staircase Properties -->
@@ -694,6 +733,18 @@
                     <div class="metric-row summary-row">
                         <span class="metric-label" style="font-weight:700; color:#facc15;">NB1 Coating</span>
                         <span class="metric-value" id="total-nb1-bags" style="font-weight:700; color:#facc15;">0 bags (0 sq ft)</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label" style="font-weight:700; color:#38bdf8;">Drywall Cut</span>
+                        <span class="metric-value" id="total-drywall-cut" style="font-weight:700; color:#38bdf8;">0 sq ft</span>
+                    </div>
+                    <div class="metric-row summary-row" style="margin-top: 0.5rem; border-top: 1px dashed var(--border-color); padding-top: 0.5rem;">
+                        <span class="metric-label" style="font-weight:700; color:#10b981;">Insulation Remove</span>
+                        <span class="metric-value" id="total-insulation-remove" style="font-weight:700; color:#10b981;">0 sq ft</span>
+                    </div>
+                    <div class="metric-row summary-row">
+                        <span class="metric-label" style="font-weight:700; color:#10b981;">Insulation Blow</span>
+                        <span class="metric-value" id="total-insulation-blow" style="font-weight:700; color:#10b981;">0 sq ft</span>
                     </div>
                     
                     <!-- Sump Installation Fittings Pack -->

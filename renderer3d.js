@@ -406,6 +406,60 @@ window.sync3D = function() {
             });
         }
 
+        // --- Render 3D Drywall Cut ---
+        if (room.drywallHeight && room.drywallHeight !== 'none') {
+            const segments = getRoomSegments(room);
+            const drywallMat = new THREE.MeshStandardMaterial({
+                color: '#fb7185', // Warm light red/rose
+                roughness: 0.8,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide
+            });
+            const cutH = room.drywallHeight === '1ft' ? 1.0 : 
+                          (room.drywallHeight === '2ft' ? 2.0 : 
+                          (room.drywallHeight === '4ft' ? 4.0 : 
+                          (room.drywallHeight === '6ft' ? 6.0 : room.h)));
+            const dcThick = 0.025; // thicker than NB1 to sit on top / avoid z-fighting
+            
+            segments.forEach(seg => {
+                const len = Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
+                if (len < 0.05) return;
+                
+                const geometry = new THREE.BoxGeometry(len, cutH, dcThick);
+                const mesh = new THREE.Mesh(geometry, drywallMat);
+                
+                const dx = seg.x2 - seg.x1;
+                const dy = seg.y2 - seg.y1;
+                const nx = -dy / len;
+                const ny = dx / len;
+                
+                const mx = (seg.x1 + seg.x2) / 2;
+                const my = (seg.y1 + seg.y2) / 2;
+                
+                const testDist = 0.5;
+                const testX = mx + nx * testDist;
+                const testY = my + ny * testDist;
+                const inRoom = getRoomAt(testX, testY, room.levelId);
+                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                
+                const offsetDist = wallThickness / 2 + 0.015; // slightly offset from NB1
+                mesh.position.set(
+                    mx + nx * offsetDist * mul,
+                    elevation + cutH / 2,
+                    my + ny * offsetDist * mul
+                );
+                
+                const angle = Math.atan2(dy, dx);
+                mesh.rotation.y = -angle;
+                mesh.receiveShadow = true;
+                
+                scene.add(mesh);
+                roomMeshes.push(mesh);
+            });
+        }
+
         // --- Render 3D Floor Perimeter Carbon Fiber Strap ---
         if (room.floorPerimeterStrap) {
             const segments = getRoomSegments(room);

@@ -17,13 +17,13 @@ const DEFAULT_CATALOG = [
         id: "vapor_barrier",
         name: "6-Foot Vapor Barrier",
         packagePrice: 213.88,
-        packageQuantity: 3000, // 3000 sq ft coverage per roll (500ft by 6ft)
+        packageQuantity: 900, // 900 sq ft coverage per roll (150ft by 6ft)
         purchaseUnit: "roll",
         usageUnit: "square foot",
         taxable: true,
         defaultWaste: 10,
         active: true,
-        notes: "500 feet by 6 feet roll. Covers 3,000 sq ft."
+        notes: "150 feet by 6 feet roll. Covers 900 sq ft."
     },
     {
         id: "spray_foam",
@@ -204,6 +204,42 @@ const DEFAULT_CATALOG = [
         defaultWaste: 10,
         active: true,
         notes: "NB-1 Primer (2.5 gallon). Covers roughly 30 bags of NB-1 worth of area."
+    },
+    {
+        id: "drywall_cut",
+        name: "Drywall Cutting",
+        packagePrice: 1.98,
+        packageQuantity: 1,
+        purchaseUnit: "sq ft",
+        usageUnit: "square foot",
+        taxable: false,
+        defaultWaste: 0,
+        active: true,
+        notes: "Cutting drywall at specified height. Charged per sq ft."
+    },
+    {
+        id: "insulation_removal",
+        name: "Attic Insulation Removal",
+        packagePrice: 1.75,
+        packageQuantity: 1,
+        purchaseUnit: "sq ft",
+        usageUnit: "square foot",
+        taxable: false,
+        defaultWaste: 0,
+        active: true,
+        notes: "Attic insulation removal. Charged per sq ft."
+    },
+    {
+        id: "insulation_blowing",
+        name: "Blown-in Attic Insulation",
+        packagePrice: 2.25,
+        packageQuantity: 1,
+        purchaseUnit: "sq ft",
+        usageUnit: "square foot",
+        taxable: false,
+        defaultWaste: 0,
+        active: true,
+        notes: "Blowing back in new cellulose or fiberglass attic insulation. Charged per sq ft."
     }
 ];
 

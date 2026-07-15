@@ -54,6 +54,10 @@ function initDefaultCosting(projState) {
                 airMoverDays: 0,
                 airMoverTaxable: true,
                 airMoverNotes: '',
+                airScrubberUnits: 0,
+                airScrubberDays: 0,
+                airScrubberTaxable: true,
+                airScrubberNotes: '',
                 optionalCharges: []
             },
             customItems: [],
@@ -96,8 +100,17 @@ function initDefaultCosting(projState) {
                 airMoverDays: 0,
                 airMoverTaxable: true,
                 airMoverNotes: '',
+                airScrubberUnits: 0,
+                airScrubberDays: 0,
+                airScrubberTaxable: true,
+                airScrubberNotes: '',
                 optionalCharges: []
             };
+        } else {
+            if (costing.rentals.airScrubberUnits === undefined) costing.rentals.airScrubberUnits = 0;
+            if (costing.rentals.airScrubberDays === undefined) costing.rentals.airScrubberDays = 0;
+            if (costing.rentals.airScrubberTaxable === undefined) costing.rentals.airScrubberTaxable = true;
+            if (costing.rentals.airScrubberNotes === undefined) costing.rentals.airScrubberNotes = '';
         }
         if (!costing.customItems) costing.customItems = [];
         if (!costing.treatmentSelections) costing.treatmentSelections = {};
@@ -130,6 +143,9 @@ function calculateProjectQuantities(projState) {
         totalLinerArea: 0,
         totalCarbonFiberLen: 0,
         totalNb1Area: 0,
+        totalDrywallCutArea: 0,
+        totalInsulationRemoveArea: 0,
+        totalInsulationBlowArea: 0,
         totalSprayFoamCans: 0,
         
         // Treatments (Waterstop, Floor Epoxy, Mold)
@@ -199,6 +215,27 @@ function calculateProjectQuantities(projState) {
             q.totalNb1Area += perimeter * 4;
         } else if (room.nb1Height === 'full') {
             q.totalNb1Area += netWallArea;
+        }
+
+        // Drywall Cut Area
+        if (room.drywallHeight === '1ft') {
+            q.totalDrywallCutArea += perimeter * 1;
+        } else if (room.drywallHeight === '2ft') {
+            q.totalDrywallCutArea += perimeter * 2;
+        } else if (room.drywallHeight === '4ft') {
+            q.totalDrywallCutArea += perimeter * 4;
+        } else if (room.drywallHeight === '6ft') {
+            q.totalDrywallCutArea += perimeter * 6;
+        } else if (room.drywallHeight === 'full') {
+            q.totalDrywallCutArea += netWallArea;
+        }
+
+        // Attic Insulation
+        if (room.removeInsulation) {
+            q.totalInsulationRemoveArea += floorArea;
+        }
+        if (room.blowInInsulation) {
+            q.totalInsulationBlowArea += floorArea;
         }
 
         // Spray Foam cans
@@ -371,7 +408,7 @@ function calculateProjectCosts(projState, catalogList) {
     const vbItem = getItemData('vapor_barrier');
     const vbWasteMultiplier = 1 + (settings.generalWaste / 100);
     const vbCoverageCalc = q.totalLinerArea * vbWasteMultiplier;
-    const vbRollsCalc = Math.ceil(vbCoverageCalc / 3000);
+    const vbRollsCalc = Math.ceil(vbCoverageCalc / vbItem.packageQuantity);
     const vbRollsData = getQuantity('vapor_barrier', vbRollsCalc);
     const vbCost = vbRollsData.quantity * vbItem.packagePrice;
     report.items['vapor_barrier'] = {
@@ -381,7 +418,7 @@ function calculateProjectCosts(projState, catalogList) {
         purchaseQty: vbRollsData.quantity,
         cost: vbCost,
         overrideEnabled: vbRollsData.overrideEnabled,
-        extraRemaining: (vbRollsData.quantity * 3000) - vbCoverageCalc
+        extraRemaining: (vbRollsData.quantity * vbItem.packageQuantity) - vbCoverageCalc
     };
 
     // 3. Spray Foam
@@ -605,6 +642,51 @@ function calculateProjectCosts(projState, catalogList) {
         extraRemaining: (primerBucketsData.quantity * 30) - nb1BagsData.quantity
     };
 
+    // 12c. Drywall Cutting
+    const dcItem = getItemData('drywall_cut');
+    const dcAreaCalc = q.totalDrywallCutArea;
+    const dcData = getQuantity('drywall_cut', Math.ceil(dcAreaCalc));
+    const dcCost = dcData.quantity * dcItem.packagePrice;
+    report.items['drywall_cut'] = {
+        data: dcItem,
+        measured: q.totalDrywallCutArea,
+        adjusted: q.totalDrywallCutArea,
+        purchaseQty: dcData.quantity,
+        cost: dcCost,
+        overrideEnabled: dcData.overrideEnabled,
+        extraRemaining: 0
+    };
+
+    // 12d. Attic Insulation Removal
+    const irItem = getItemData('insulation_removal');
+    const irAreaCalc = q.totalInsulationRemoveArea;
+    const irData = getQuantity('insulation_removal', Math.ceil(irAreaCalc));
+    const irCost = irData.quantity * irItem.packagePrice;
+    report.items['insulation_removal'] = {
+        data: irItem,
+        measured: q.totalInsulationRemoveArea,
+        adjusted: q.totalInsulationRemoveArea,
+        purchaseQty: irData.quantity,
+        cost: irCost,
+        overrideEnabled: irData.overrideEnabled,
+        extraRemaining: 0
+    };
+
+    // 12e. Blown-in Attic Insulation
+    const ibItem = getItemData('insulation_blowing');
+    const ibAreaCalc = q.totalInsulationBlowArea;
+    const ibData = getQuantity('insulation_blowing', Math.ceil(ibAreaCalc));
+    const ibCost = ibData.quantity * ibItem.packagePrice;
+    report.items['insulation_blowing'] = {
+        data: ibItem,
+        measured: q.totalInsulationBlowArea,
+        adjusted: q.totalInsulationBlowArea,
+        purchaseQty: ibData.quantity,
+        cost: ibCost,
+        overrideEnabled: ibData.overrideEnabled,
+        extraRemaining: 0
+    };
+
     // 13. Waterstop
     const wsItem = getItemData('waterstop');
     const wsWasteMultiplier = 1 + (settings.generalWaste / 100);
@@ -693,6 +775,9 @@ function calculateProjectCosts(projState, catalogList) {
         garbage_bags: 'supply',
         nb1: 'material',
         nb1_primer: 'material',
+        drywall_cut: 'material',
+        insulation_removal: 'material',
+        insulation_blowing: 'material',
         waterstop: 'material',
         floor_epoxy: 'material',
         dehumidifier_stands: 'supply',
@@ -745,6 +830,14 @@ function calculateProjectCosts(projState, catalogList) {
     rentalSubtotal += airMoverCost;
     if (costing.rentals.airMoverTaxable && airMoverCost > 0) {
         report.subtotals.taxable += airMoverCost;
+    }
+
+    const airScrubberUnits = Math.max(0, parseInt(costing.rentals.airScrubberUnits) || 0);
+    const airScrubberDays = Math.max(0, parseInt(costing.rentals.airScrubberDays) || 0);
+    const airScrubberCost = airScrubberUnits * airScrubberDays * 105;
+    rentalSubtotal += airScrubberCost;
+    if (costing.rentals.airScrubberTaxable && airScrubberCost > 0) {
+        report.subtotals.taxable += airScrubberCost;
     }
 
     // Optional rental charges
@@ -963,6 +1056,9 @@ function buildCustomerExportModel(projState) {
             carbonStraps: r.carbonStraps,
             floorPerimeterStrap: r.floorPerimeterStrap,
             nb1Height: r.nb1Height,
+            drywallHeight: r.drywallHeight,
+            removeInsulation: r.removeInsulation,
+            blowInInsulation: r.blowInInsulation,
             joists: r.joists || 'none',
             openings: (r.openings || []).map(o => ({ type: o.type, wall: o.wall, w: o.w, h: o.h, offset: o.offset }))
         })),
@@ -1001,6 +1097,9 @@ function buildCustomerExportModel(projState) {
             carbonFiberLen: rawQuantities.totalCarbonFiberLen,
             nb1Bags: Math.ceil(rawQuantities.totalNb1Area / ((projState.costing && projState.costing.settings && projState.costing.settings.nb1SqFtPerBag) || 8)),
             nb1Area: rawQuantities.totalNb1Area,
+            drywallCutArea: rawQuantities.totalDrywallCutArea,
+            insulationRemoveArea: rawQuantities.totalInsulationRemoveArea,
+            insulationBlowArea: rawQuantities.totalInsulationBlowArea,
             sprayFoamCans: rawQuantities.totalSprayFoamCans
         }
     };

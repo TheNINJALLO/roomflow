@@ -11,7 +11,7 @@ const state = {
     selectedDehumidifierId: null,
     selectedDischargeLineId: null,
     selectedFloorHatchId: null,
-    activeView: '2d', // '2d', '3d', 'ar'
+    activeView: 'checklist', // 'checklist', '2d', '3d', 'ar'
     scale: 15,        // Pixels per foot
     offsetX: 0,       // Canvas pan offset X
     offsetY: 0,       // Canvas pan offset Y
@@ -37,7 +37,8 @@ const state = {
         { id: 'crawlspace', name: 'Crawl Space', height: 4, elevation: 0 },
         { id: 'basement', name: 'Basement', height: 8, elevation: 0 },
         { id: 'main', name: 'Main Floor', height: 9, elevation: 8 },
-        { id: 'second', name: '2nd Floor', height: 8, elevation: 17 }
+        { id: 'second', name: '2nd Floor', height: 8, elevation: 17 },
+        { id: 'attic', name: 'Attic', height: 8, elevation: 25 }
     ],
     currentLevelId: 'basement',
     interiorPipes: [],
@@ -156,7 +157,8 @@ function addRoom(type) {
         carbonFiberWalls: [],
         customCarbonStraps: [],
         floorPerimeterStrap: false,
-        nb1Height: 'none'
+        nb1Height: 'none',
+        drywallHeight: 'none'
     };
     if (preset.steps) {
         newRoom.steps = preset.steps;
@@ -297,20 +299,25 @@ function updateToolboxReinforcementLabels(room) {
     const strapLabel = document.getElementById('btn-add-strap-label');
     const perimLabel = document.getElementById('btn-add-perimeter-strap-label');
     const nb1Label = document.getElementById('btn-add-nb1-label');
+    const drywallLabel = document.getElementById('btn-add-drywall-label');
     
     if (room) {
         const straps = room.carbonStraps || 0;
         const hasPerim = !!room.floorPerimeterStrap;
         const nb1Val = room.nb1Height || 'none';
         const nb1HeightLabels = { 'none': 'None', '2ft': '2 ft', '4ft': '4 ft', 'full': 'Full' };
+        const drywallVal = room.drywallHeight || 'none';
+        const drywallHeightLabels = { 'none': 'None', '1ft': '1 ft', '2ft': '2 ft', '4ft': '4 ft', '6ft': '6 ft', 'full': 'Full' };
         
         if (strapLabel) strapLabel.innerText = `Vertical Strap (${straps})`;
         if (perimLabel) perimLabel.innerText = `Perimeter: ${hasPerim ? 'ON' : 'OFF'}`;
         if (nb1Label) nb1Label.innerText = `NB1: ${nb1HeightLabels[nb1Val]}`;
+        if (drywallLabel) drywallLabel.innerText = `Drywall: ${drywallHeightLabels[drywallVal]}`;
     } else {
         if (strapLabel) strapLabel.innerText = 'Vertical Strap (+1)';
         if (perimLabel) perimLabel.innerText = 'Floor Perimeter';
         if (nb1Label) nb1Label.innerText = 'NB1 Coating (Cycle)';
+        if (drywallLabel) drywallLabel.innerText = 'Drywall Cut (Cycle)';
     }
 }
 
@@ -342,6 +349,7 @@ function selectItem(type, id) {
     const btnAddStrap = document.getElementById('btn-add-strap');
     const btnAddPerim = document.getElementById('btn-add-perimeter-strap');
     const btnAddNb1 = document.getElementById('btn-add-nb1');
+    const btnAddDrywall = document.getElementById('btn-add-drywall');
     
     // Hide all
     roomFields.classList.add('hidden');
@@ -360,6 +368,7 @@ function selectItem(type, id) {
     if (btnAddStrap) btnAddStrap.disabled = true;
     if (btnAddPerim) btnAddPerim.disabled = true;
     if (btnAddNb1) btnAddNb1.disabled = true;
+    if (btnAddDrywall) btnAddDrywall.disabled = true;
     updateToolboxReinforcementLabels(null);
     
     if (type === 'room' && id) {
@@ -398,6 +407,15 @@ function selectItem(type, id) {
 
             const nb1Select = document.getElementById('room-nb1-select');
             if (nb1Select) nb1Select.value = room.nb1Height || 'none';
+            
+            const drywallSelect = document.getElementById('room-drywall-select');
+            if (drywallSelect) drywallSelect.value = room.drywallHeight || 'none';
+
+            const removeInsulationCheckbox = document.getElementById('room-remove-insulation-checkbox');
+            if (removeInsulationCheckbox) removeInsulationCheckbox.checked = !!room.removeInsulation;
+
+            const blowInsulationCheckbox = document.getElementById('room-blow-insulation-checkbox');
+            if (blowInsulationCheckbox) blowInsulationCheckbox.checked = !!room.blowInInsulation;
             
             const rectInputs = document.getElementById('room-rect-inputs');
             const customInputs = document.getElementById('room-custom-walls-inputs');
@@ -486,6 +504,7 @@ function selectItem(type, id) {
             if (btnAddStrap) btnAddStrap.disabled = false;
             if (btnAddPerim) btnAddPerim.disabled = false;
             if (btnAddNb1) btnAddNb1.disabled = false;
+            if (btnAddDrywall) btnAddDrywall.disabled = false;
             updateToolboxReinforcementLabels(room);
             updateRoomEstimates(room);
         }
@@ -1138,6 +1157,21 @@ function updateGlobalStats() {
         const sqFtPerBag = (state.costing && state.costing.settings && state.costing.settings.nb1SqFtPerBag) || 8;
         const nb1Bags = Math.ceil(q.totalNb1Area / sqFtPerBag);
         nb1Text.innerText = `${nb1Bags} bags (${q.totalNb1Area.toFixed(0)} sq ft)`;
+    }
+    
+    const drywallText = document.getElementById('total-drywall-cut');
+    if (drywallText) {
+        drywallText.innerText = `${q.totalDrywallCutArea.toFixed(0)} sq ft`;
+    }
+
+    const insRemoveText = document.getElementById('total-insulation-remove');
+    if (insRemoveText) {
+        insRemoveText.innerText = `${(q.totalInsulationRemoveArea || 0).toFixed(0)} sq ft`;
+    }
+
+    const insBlowText = document.getElementById('total-insulation-blow');
+    if (insBlowText) {
+        insBlowText.innerText = `${(q.totalInsulationBlowArea || 0).toFixed(0)} sq ft`;
     }
     
     const foamCansText = document.getElementById('total-bond-pockets-cans');
@@ -3749,6 +3783,46 @@ document.getElementById('room-nb1-select').addEventListener('change', (e) => {
     }
 });
 
+// Room Drywall Cutting change
+document.getElementById('room-drywall-select').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.drywallHeight = e.target.value;
+        draw();
+        updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+// Room Remove Attic Insulation change
+document.getElementById('room-remove-insulation-checkbox').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.removeInsulation = e.target.checked;
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
+// Room Blow-in Attic Insulation change
+document.getElementById('room-blow-insulation-checkbox').addEventListener('change', (e) => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        room.blowInInsulation = e.target.checked;
+        draw();
+        updateGlobalStats();
+        if (window.sync3D) window.sync3D();
+    }
+});
+
 // Staircase orientation change
 document.getElementById('stair-orientation-select').addEventListener('change', (e) => {
     if (!state.selectedRoomId) return;
@@ -4002,6 +4076,24 @@ document.getElementById('btn-add-nb1').addEventListener('click', () => {
     }
 });
 
+document.getElementById('btn-add-drywall').addEventListener('click', () => {
+    if (!state.selectedRoomId) return;
+    const room = state.rooms.find(r => r.id === state.selectedRoomId);
+    if (room) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        const next = { 'none': '1ft', '1ft': '2ft', '2ft': '4ft', '4ft': '6ft', '6ft': 'full', 'full': 'none' };
+        room.drywallHeight = next[room.drywallHeight || 'none'];
+        
+        const drywallSelect = document.getElementById('room-drywall-select');
+        if (drywallSelect) drywallSelect.value = room.drywallHeight;
+        
+        draw();
+        updateGlobalStats();
+        updateToolboxReinforcementLabels(room);
+        if (window.sync3D) window.sync3D();
+    }
+});
+
 document.getElementById('btn-delete-room').addEventListener('click', deleteSelectedRoom);
 
 // Add Sump & Discharge actions
@@ -4052,11 +4144,13 @@ document.getElementById('btn-grid-toggle').addEventListener('click', (e) => {
 });
 
 // View toggles
+const btnChecklist = document.getElementById('btn-view-checklist');
 const btn2D = document.getElementById('btn-view-2d');
 const btn3D = document.getElementById('btn-view-3d');
 const btnAR = document.getElementById('btn-view-ar');
 const btnCost = document.getElementById('btn-view-cost');
 
+const viewChecklist = document.getElementById('checklist-container');
 const view2D = document.getElementById('canvas-container');
 const view3D = document.getElementById('three-container');
 const viewAR = document.getElementById('ar-container');
@@ -4065,11 +4159,13 @@ const viewCost = document.getElementById('cost-container');
 function switchView(viewName) {
     state.activeView = viewName;
     
+    if (btnChecklist) btnChecklist.classList.toggle('active', viewName === 'checklist');
     btn2D.classList.toggle('active', viewName === '2d');
     btn3D.classList.toggle('active', viewName === '3d');
     btnAR.classList.toggle('active', viewName === 'ar');
     if (btnCost) btnCost.classList.toggle('active', viewName === 'cost');
     
+    if (viewChecklist) viewChecklist.classList.toggle('active', viewName === 'checklist');
     view2D.classList.toggle('active', viewName === '2d');
     view3D.classList.toggle('active', viewName === '3d');
     viewAR.classList.toggle('active', viewName === 'ar');
@@ -4091,14 +4187,17 @@ function switchView(viewName) {
     // Toggle cost mode sidebar hiding class
     const appBody = document.querySelector('.app-body');
     if (appBody) {
-        appBody.classList.toggle('cost-mode-active', viewName === 'cost');
+        appBody.classList.toggle('cost-mode-active', viewName === 'cost' || viewName === 'checklist');
     }
 
-    // Hide tools & details float buttons in AR mode to avoid overlap
+    // Hide tools & details float buttons on non-canvas views to keep UI clean
     const mobileToggleTools = document.getElementById('mobile-toggle-tools');
     const mobileToggleDetails = document.getElementById('mobile-toggle-details');
-    if (mobileToggleTools) mobileToggleTools.style.display = (viewName === 'ar') ? 'none' : '';
-    if (mobileToggleDetails) mobileToggleDetails.style.display = (viewName === 'ar') ? 'none' : '';
+    const mobileToggleChecklist = document.getElementById('mobile-toggle-checklist');
+    const showFloatingToggles = (viewName === '2d' || viewName === '3d');
+    if (mobileToggleTools) mobileToggleTools.style.display = showFloatingToggles ? '' : 'none';
+    if (mobileToggleDetails) mobileToggleDetails.style.display = showFloatingToggles ? '' : 'none';
+    if (mobileToggleChecklist) mobileToggleChecklist.style.display = (viewName !== 'checklist' && viewName !== 'ar') ? '' : 'none';
 
     if (viewName === 'ar') {
         if (window.startCamera) window.startCamera();
@@ -4118,8 +4217,13 @@ function switchView(viewName) {
     if (viewName === 'cost') {
         if (window.renderCostUI) window.renderCostUI();
     }
+    
+    if (viewName === 'checklist') {
+        if (window.renderChecklistUI) window.renderChecklistUI();
+    }
 }
 
+if (btnChecklist) btnChecklist.addEventListener('click', () => switchView('checklist'));
 btn2D.addEventListener('click', () => switchView('2d'));
 btn3D.addEventListener('click', () => switchView('3d'));
 btnAR.addEventListener('click', () => switchView('ar'));
@@ -4210,7 +4314,10 @@ document.getElementById('file-input').addEventListener('change', (e) => {
                     if (r.carbonStraps === undefined) r.carbonStraps = 0;
                     if (r.floorPerimeterStrap === undefined) r.floorPerimeterStrap = false;
                     if (r.nb1Height === undefined) r.nb1Height = 'none';
+                    if (r.drywallHeight === undefined) r.drywallHeight = 'none';
                     if (r.foamBondPockets === undefined) r.foamBondPockets = false;
+                    if (r.removeInsulation === undefined) r.removeInsulation = false;
+                    if (r.blowInInsulation === undefined) r.blowInInsulation = false;
                 });
                 
                 if (state.dehumidifiers) {
@@ -4632,6 +4739,13 @@ document.getElementById('btn-export-pdf').addEventListener('click', () => {
                         <td>${q.nb1Bags} bags (${q.nb1Area.toFixed(0)} sq ft)</td>
                         <td>Cementitious waterproofing/reinforcement wall coating</td>
                     </tr>
+                    ${q.drywallCutArea > 0 ? `
+                    <tr>
+                        <td><strong>Drywall Cutting</strong></td>
+                        <td>${q.drywallCutArea.toFixed(0)} sq ft</td>
+                        <td>Drywall cut and removal at specified height</td>
+                    </tr>
+                    ` : ''}
                     ${q.sprayFoamCans > 0 ? `
                     <tr>
                         <td><strong>Spray Foam Cans</strong></td>
@@ -5081,7 +5195,8 @@ function finishCustomRoomDrawing() {
         carbonFiberWalls: [],
         customCarbonStraps: [],
         floorPerimeterStrap: false,
-        nb1Height: 'none'
+        nb1Height: 'none',
+        drywallHeight: 'none'
     };
 
     state.rooms.push(newRoom);
@@ -5947,7 +6062,10 @@ function loadJobData(data) {
         if (r.carbonStraps === undefined) r.carbonStraps = 0;
         if (r.floorPerimeterStrap === undefined) r.floorPerimeterStrap = false;
         if (r.nb1Height === undefined) r.nb1Height = 'none';
+        if (r.drywallHeight === undefined) r.drywallHeight = 'none';
         if (r.foamBondPockets === undefined) r.foamBondPockets = false;
+        if (r.removeInsulation === undefined) r.removeInsulation = false;
+        if (r.blowInInsulation === undefined) r.blowInInsulation = false;
     });
     state.sumpPumps.forEach(sp => { if (!sp.levelId) sp.levelId = 'basement'; });
     state.dischargeLines.forEach(dl => { if (!dl.levelId) dl.levelId = 'basement'; });
@@ -6172,4 +6290,13 @@ document.getElementById('btn-2d-zoom-out').addEventListener('click', () => {
     state.scale = Math.max(5, state.scale - 2.5);
     draw();
 });
+
+// Bind mobile toggle checklist button
+const btnToggleChecklist = document.getElementById('mobile-toggle-checklist');
+if (btnToggleChecklist) {
+    btnToggleChecklist.addEventListener('click', () => {
+        if (typeof closeAllDrawers === 'function') closeAllDrawers();
+        switchView('checklist');
+    });
+}
 

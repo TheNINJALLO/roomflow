@@ -215,6 +215,12 @@ function renderMaterialsSection(report) {
             roundingInfo = `<small class="text-muted">Roll of 75 ft</small>`;
         } else if (id === 'nb1') {
             roundingInfo = `<small class="text-muted">Bag covers ${state.costing.settings.nb1SqFtPerBag} sq ft</small>`;
+        } else if (id === 'drywall_cut') {
+            roundingInfo = `<small class="text-muted">Charged per sq ft</small>`;
+        } else if (id === 'insulation_removal') {
+            roundingInfo = `<small class="text-muted">Removal & Disposal (MI Avg: $1.00 - $2.50/sq ft)</small>`;
+        } else if (id === 'insulation_blowing') {
+            roundingInfo = `<small class="text-muted">Blown-in cellulose/fiberglass (MI Avg: $1.50 - $3.50/sq ft)</small>`;
         } else if (id === 'waterstop') {
             roundingInfo = `<small class="text-muted">Pail covers 2000 sq ft</small>`;
         } else if (id === 'floor_epoxy') {
@@ -538,6 +544,29 @@ function renderRentalsSection(report) {
                     </div>
                     <div class="rental-rate-note">Rate: $38.00 / unit / day</div>
                 </div>
+
+                <div class="rental-card">
+                    <h4><i data-lucide="filter"></i> Air Scrubbers</h4>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; margin-top:0.5rem;">
+                        <div class="input-group">
+                            <label>Units</label>
+                            <input type="number" id="input-rental-scrubber-units" value="${rentals.airScrubberUnits}" min="0">
+                        </div>
+                        <div class="input-group">
+                            <label>Days</label>
+                            <input type="number" id="input-rental-scrubber-days" value="${rentals.airScrubberDays}" min="0">
+                        </div>
+                    </div>
+                    <div style="margin-top:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+                        <input type="checkbox" id="input-rental-scrubber-taxable" ${rentals.airScrubberTaxable ? 'checked' : ''}>
+                        <label for="input-rental-scrubber-taxable" style="margin:0;">Taxable</label>
+                    </div>
+                    <div class="input-group" style="margin-top:0.5rem;">
+                        <label>Notes</label>
+                        <input type="text" id="input-rental-scrubber-notes" value="${rentals.airScrubberNotes || ''}" placeholder="Air scrubber rental notes">
+                    </div>
+                    <div class="rental-rate-note">Rate: $105.00 / unit / day</div>
+                </div>
             </div>
 
             <div>
@@ -573,8 +602,8 @@ function renderLaborSection(report) {
     
     // Suggest labor categories
     const categories = [
-        "Vapor-barrier installation", "Mold treatment", "Cleaning and preparation", "Carbon-fiber installation",
-        "NB-1 application", "Waterstop application", "Floor-epoxy preparation", "Floor-epoxy application",
+        "Vapor-barrier installation", "Vapor-barrier tape installation", "Mold treatment", "Cleaning and preparation", "Carbon-fiber installation",
+        "NB-1 primer application", "NB-1 application", "Waterstop application", "Floor-epoxy preparation", "Floor-epoxy application",
         "Sump excavation", "Sump-basin installation", "Pump installation", "Wi-Fi float installation",
         "Plumbing installation", "Discharge-line installation", "Permanent dehumidifier installation",
         "Equipment delivery", "Rental-equipment setup", "Rental-equipment monitoring", "Debris removal",
@@ -1203,6 +1232,35 @@ function bindCostUIEvents() {
         });
     }
 
+    // Rentals Air Scrubber inputs
+    const rScrubberUnits = document.getElementById('input-rental-scrubber-units');
+    if (rScrubberUnits) {
+        rScrubberUnits.addEventListener('change', (e) => {
+            state.costing.rentals.airScrubberUnits = Math.max(0, parseInt(e.target.value) || 0);
+            updateCostDataAndUI();
+        });
+    }
+    const rScrubberDays = document.getElementById('input-rental-scrubber-days');
+    if (rScrubberDays) {
+        rScrubberDays.addEventListener('change', (e) => {
+            state.costing.rentals.airScrubberDays = Math.max(0, parseInt(e.target.value) || 0);
+            updateCostDataAndUI();
+        });
+    }
+    const rScrubberTax = document.getElementById('input-rental-scrubber-taxable');
+    if (rScrubberTax) {
+        rScrubberTax.addEventListener('change', (e) => {
+            state.costing.rentals.airScrubberTaxable = e.target.checked;
+            updateCostDataAndUI();
+        });
+    }
+    const rScrubberNotes = document.getElementById('input-rental-scrubber-notes');
+    if (rScrubberNotes) {
+        rScrubberNotes.addEventListener('change', (e) => {
+            state.costing.rentals.airScrubberNotes = e.target.value;
+        });
+    }
+
     // Add optional rental charge
     const btnAddOptRental = document.getElementById('btn-add-optional-rental');
     if (btnAddOptRental) {
@@ -1319,7 +1377,22 @@ function bindCostUIEvents() {
     document.querySelectorAll('.labor-line-category').forEach(sel => {
         sel.addEventListener('change', (e) => {
             const idx = parseInt(e.target.getAttribute('data-idx'));
-            state.costing.labor.detailedLines[idx].category = e.target.value;
+            const cat = e.target.value;
+            state.costing.labor.detailedLines[idx].category = cat;
+            
+            // Suggest default hours based on the category
+            let defaultHours = 8;
+            if (cat === "Vapor-barrier tape installation") {
+                defaultHours = 2; // less labor
+            } else if (cat === "NB-1 primer application") {
+                defaultHours = 2; // less labor
+            } else if (cat === "NB-1 application") {
+                defaultHours = 12; // more labor
+            } else if (cat === "Vapor-barrier installation") {
+                defaultHours = 8; // more labor
+            }
+            state.costing.labor.detailedLines[idx].hours = defaultHours;
+            updateCostDataAndUI();
         });
     });
     document.querySelectorAll('.labor-line-desc').forEach(inp => {
@@ -1743,7 +1816,9 @@ function bindCostUIEvents() {
 window.updateCostDataAndUI = function() {
     // 1. Rerender costing UI
     renderCostUI();
-    // 2. Refresh top-level stats
+    // 2. Rerender checklist UI
+    renderChecklistUI();
+    // 3. Refresh top-level stats
     if (typeof updateGlobalStats === 'function') {
         updateGlobalStats();
     }
@@ -1790,3 +1865,889 @@ window.removeCustomItem = function(idx) {
 
 // Expose render function to global namespace
 window.renderCostUI = renderCostUI;
+
+// --- ESTIMATING CHECKLIST SYSTEM ---
+
+window.addRoomFromChecklist = function(type) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const presetNames = {
+        crawlspace: "Crawl Space",
+        basement: "Basement Room",
+        main: "Main Room",
+        second: "2nd Floor Room",
+        attic: "Attic Area"
+    };
+    const newRoom = {
+        id: generateId(),
+        levelId: type || 'basement',
+        name: (presetNames[type] || 'Room') + ' ' + (state.rooms.length + 1),
+        w: 12,
+        l: 12,
+        h: type === 'crawlspace' ? 4 : 8,
+        color: '#1e293b',
+        x: 0,
+        y: 0,
+        openings: [],
+        foamBoard: false,
+        foamBondPockets: false,
+        carbonStraps: 0,
+        carbonFiberScope: 'full',
+        carbonFiberWalls: [],
+        customCarbonStraps: [],
+        floorPerimeterStrap: false,
+        nb1Height: 'none',
+        drywallHeight: 'none'
+    };
+    state.rooms.push(newRoom);
+    updateCostDataAndUI();
+    if (window.sync3D) window.sync3D();
+};
+
+window.removeRoomFromChecklist = function(roomId) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.rooms = state.rooms.filter(r => r.id !== roomId);
+    updateCostDataAndUI();
+    if (window.sync3D) window.sync3D();
+};
+
+window.removeSumpPumpFromChecklist = function(sumpId) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.sumpPumps = state.sumpPumps.filter(sp => sp.id !== sumpId);
+    updateCostDataAndUI();
+    if (window.sync3D) window.sync3D();
+};
+
+window.removeDehumidifierFromChecklist = function(dhId) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.dehumidifiers = state.dehumidifiers.filter(dh => dh.id !== dhId);
+    updateCostDataAndUI();
+    if (window.sync3D) window.sync3D();
+};
+
+window.setRoomJoists = function(roomId, dir) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const room = state.rooms.find(r => r.id === roomId);
+    if (room) {
+        room.joists = dir;
+        updateCostDataAndUI();
+    }
+};
+
+window.setRoomNb1Height = function(roomId, height) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const room = state.rooms.find(r => r.id === roomId);
+    if (room) {
+        room.nb1Height = height;
+        updateCostDataAndUI();
+    }
+};
+
+window.setRoomDrywallHeight = function(roomId, height) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const room = state.rooms.find(r => r.id === roomId);
+    if (room) {
+        room.drywallHeight = height;
+        updateCostDataAndUI();
+    }
+};
+
+window.setRoomWaterstop = function(roomId, ws) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    if (!state.costing.treatmentSelections) state.costing.treatmentSelections = {};
+    if (!state.costing.treatmentSelections[roomId]) {
+        state.costing.treatmentSelections[roomId] = { waterstop: 'none', waterstopCustomArea: 0, epoxy: 'none', epoxyCustomArea: 0, moldArea: 0 };
+    }
+    state.costing.treatmentSelections[roomId].waterstop = ws;
+    updateCostDataAndUI();
+};
+
+window.setRoomEpoxy = function(roomId, ep) {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    if (!state.costing.treatmentSelections) state.costing.treatmentSelections = {};
+    if (!state.costing.treatmentSelections[roomId]) {
+        state.costing.treatmentSelections[roomId] = { waterstop: 'none', waterstopCustomArea: 0, epoxy: 'none', epoxyCustomArea: 0, moldArea: 0 };
+    }
+    state.costing.treatmentSelections[roomId].epoxy = ep;
+    updateCostDataAndUI();
+};
+
+window.addSumpPumpFromChecklist = function() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const newPump = {
+        id: generateId(),
+        levelId: 'basement',
+        name: `Sump Pump ${state.sumpPumps.length + 1}`,
+        x: 0,
+        y: 0
+    };
+    state.sumpPumps.push(newPump);
+    updateCostDataAndUI();
+    if (window.sync3D) window.sync3D();
+};
+
+window.addDehumidifierFromChecklist = function() {
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const newDehum = {
+        id: generateId(),
+        levelId: 'basement',
+        name: `Dehumidifier ${state.dehumidifiers.length + 1}`,
+        x: 0,
+        y: 0
+    };
+    state.dehumidifiers.push(newDehum);
+    updateCostDataAndUI();
+    if (window.sync3D) window.sync3D();
+};
+
+function bindChecklistEvents() {
+    const container = document.getElementById('checklist-container');
+    if (!container || container.dataset.listenersBound === 'true') return;
+    
+    container.addEventListener('change', (e) => {
+        const target = e.target;
+        
+        // 1. Room Name Change
+        if (target.classList.contains('room-checklist-name-input')) {
+            const roomId = target.getAttribute('data-room-id');
+            const room = state.rooms.find(r => r.id === roomId);
+            if (room) {
+                if (typeof saveHistoryState === 'function') saveHistoryState();
+                room.name = target.value;
+                updateCostDataAndUI();
+            }
+        }
+        
+        // 2. Room Level Change
+        if (target.classList.contains('room-checklist-level-select')) {
+            const roomId = target.getAttribute('data-room-id');
+            const room = state.rooms.find(r => r.id === roomId);
+            if (room) {
+                if (typeof saveHistoryState === 'function') saveHistoryState();
+                room.levelId = target.value;
+                updateCostDataAndUI();
+                if (window.sync3D) window.sync3D();
+            }
+        }
+        
+        // 3. Room Dimensions Change
+        if (target.classList.contains('room-checklist-dim-input')) {
+            const dim = target.getAttribute('data-dim');
+            const roomId = target.getAttribute('data-room-id');
+            const room = state.rooms.find(r => r.id === roomId);
+            if (room) {
+                if (typeof saveHistoryState === 'function') saveHistoryState();
+                room[dim] = Math.max(1, parseFloat(target.value) || 1);
+                updateCostDataAndUI();
+                if (window.sync3D) window.sync3D();
+            }
+        }
+
+        // 4. Room Carbon Fiber Straps Count
+        if (target.classList.contains('room-checklist-carbon-count')) {
+            const roomId = target.getAttribute('data-room-id');
+            const room = state.rooms.find(r => r.id === roomId);
+            if (room) {
+                if (typeof saveHistoryState === 'function') saveHistoryState();
+                room.carbonStraps = Math.max(0, parseInt(target.value) || 0);
+                updateCostDataAndUI();
+            }
+        }
+
+        // 5. Room Carbon Fiber Scope
+        if (target.classList.contains('room-checklist-carbon-scope')) {
+            const roomId = target.getAttribute('data-room-id');
+            const room = state.rooms.find(r => r.id === roomId);
+            if (room) {
+                if (typeof saveHistoryState === 'function') saveHistoryState();
+                room.carbonFiberScope = target.value;
+                updateCostDataAndUI();
+            }
+        }
+
+        // 6. Mold Area
+        if (target.classList.contains('room-checklist-mold-area')) {
+            const roomId = target.getAttribute('data-room-id');
+            if (!state.costing.treatmentSelections) state.costing.treatmentSelections = {};
+            if (!state.costing.treatmentSelections[roomId]) {
+                state.costing.treatmentSelections[roomId] = { waterstop: 'none', waterstopCustomArea: 0, epoxy: 'none', epoxyCustomArea: 0, moldArea: 0 };
+            }
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.treatmentSelections[roomId].moldArea = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+
+        // 7. Waterstop Custom Area
+        if (target.classList.contains('room-checklist-waterstop-custom')) {
+            const roomId = target.getAttribute('data-room-id');
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.treatmentSelections[roomId].waterstopCustomArea = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+
+        // 8. Epoxy Custom Area
+        if (target.classList.contains('room-checklist-epoxy-custom')) {
+            const roomId = target.getAttribute('data-room-id');
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.treatmentSelections[roomId].epoxyCustomArea = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+
+        // 9. Sump Pumps Count Override
+        if (target.classList.contains('sump-checklist-pumps-count')) {
+            const sumpId = target.getAttribute('data-sump-id');
+            if (!state.costing.projectOverrides) state.costing.projectOverrides = {};
+            if (!state.costing.projectOverrides[sumpId]) state.costing.projectOverrides[sumpId] = {};
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.projectOverrides[sumpId].pumps = Math.max(0, parseInt(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        
+        // 10. Rentals Air Mover units/days
+        if (target.id === 'rental-checklist-mover-units') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.rentals.airMoverUnits = Math.max(0, parseInt(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        if (target.id === 'rental-checklist-mover-days') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.rentals.airMoverDays = Math.max(0, parseInt(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        
+        // 11. Rentals Air Scrubber units/days
+        if (target.id === 'rental-checklist-scrubber-units') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.rentals.airScrubberUnits = Math.max(0, parseInt(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        if (target.id === 'rental-checklist-scrubber-days') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.rentals.airScrubberDays = Math.max(0, parseInt(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        
+        // 12. Rentals Dehumidifier units/days
+        if (target.id === 'rental-checklist-dehum-units') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.rentals.dehumidifierUnits = Math.max(0, parseInt(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        if (target.id === 'rental-checklist-dehum-days') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.rentals.dehumidifierDays = Math.max(0, parseInt(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        
+        // 13. Settings margin/tax
+        if (target.id === 'checklist-settings-margin') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.settings.targetGrossMargin = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        if (target.id === 'checklist-settings-tax') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.settings.salesTaxRate = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        
+        // 14. Labor crew/days/hours/rate
+        if (target.id === 'labor-checklist-crew') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.labor.projectCrewSize = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        if (target.id === 'labor-checklist-workdays') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.labor.projectWorkdays = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        if (target.id === 'labor-checklist-hours') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.labor.projectHoursPerDay = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+        if (target.id === 'labor-checklist-rate') {
+            if (typeof saveHistoryState === 'function') saveHistoryState();
+            state.costing.labor.projectLaborRate = Math.max(0, parseFloat(target.value) || 0);
+            updateCostDataAndUI();
+        }
+    });
+
+    // Checkbox click delegation
+    container.addEventListener('click', (e) => {
+        const target = e.target;
+        if (target.type === 'checkbox') {
+            const roomId = target.getAttribute('data-room-id');
+            const prop = target.getAttribute('data-prop');
+            
+            if (roomId && prop) {
+                if (typeof saveHistoryState === 'function') saveHistoryState();
+                const room = state.rooms.find(r => r.id === roomId);
+                
+                if (prop === 'spray_foam') {
+                    room.joists = target.checked ? 'ns' : 'none';
+                } else if (prop === 'carbon_fiber') {
+                    room.carbonStraps = target.checked ? 4 : 0;
+                } else if (prop === 'nb1') {
+                    room.nb1Height = target.checked ? 'full' : 'none';
+                } else if (prop === 'drywall') {
+                    room.drywallHeight = target.checked ? '2ft' : 'none';
+                } else if (prop === 'mold') {
+                    if (!state.costing.treatmentSelections) state.costing.treatmentSelections = {};
+                    if (!state.costing.treatmentSelections[roomId]) {
+                        state.costing.treatmentSelections[roomId] = { waterstop: 'none', waterstopCustomArea: 0, epoxy: 'none', epoxyCustomArea: 0, moldArea: 0 };
+                    }
+                    state.costing.treatmentSelections[roomId].moldArea = target.checked ? 100 : 0;
+                } else if (prop === 'waterstop') {
+                    if (!state.costing.treatmentSelections) state.costing.treatmentSelections = {};
+                    if (!state.costing.treatmentSelections[roomId]) {
+                        state.costing.treatmentSelections[roomId] = { waterstop: 'none', waterstopCustomArea: 0, epoxy: 'none', epoxyCustomArea: 0, moldArea: 0 };
+                    }
+                    state.costing.treatmentSelections[roomId].waterstop = target.checked ? 'floor' : 'none';
+                } else if (prop === 'epoxy') {
+                    if (!state.costing.treatmentSelections) state.costing.treatmentSelections = {};
+                    if (!state.costing.treatmentSelections[roomId]) {
+                        state.costing.treatmentSelections[roomId] = { waterstop: 'none', waterstopCustomArea: 0, epoxy: 'none', epoxyCustomArea: 0, moldArea: 0 };
+                    }
+                    state.costing.treatmentSelections[roomId].epoxy = target.checked ? 'entire' : 'none';
+                } else {
+                    room[prop] = target.checked;
+                }
+                updateCostDataAndUI();
+                if (window.sync3D) window.sync3D();
+            }
+        }
+    });
+
+    container.dataset.listenersBound = 'true';
+}
+
+function renderChecklistUI() {
+    const checklistContainer = document.getElementById('checklist-container');
+    if (!checklistContainer) return;
+
+    initDefaultCosting(state);
+    const catalog = RoomFlowCatalog.loadCatalog();
+    const report = calculateProjectCosts(state, catalog);
+
+    // Build the grid
+    let html = `
+        <div class="cost-header-row" style="margin-bottom: 1.5rem;">
+            <div class="cost-title-block">
+                <h2><i data-lucide="check-square"></i> Estimating Checklist (Room-by-Room Setup)</h2>
+                <div class="cost-disclaimer" style="margin-top: 0.25rem;">
+                    <i data-lucide="info"></i> Configure dimensions, insulation, wall coatings, sumps, and treatments room-by-room. Everything updates instantly.
+                </div>
+            </div>
+        </div>
+        
+        <div class="checklist-body-grid">
+            <!-- Left Column: Checklist Forms -->
+            <div class="checklist-main-column">
+    `;
+
+    // Rooms list
+    if (state.rooms.length === 0) {
+        html += `
+            <div class="checklist-room-card" style="text-align: center; padding: 3rem 1.5rem; background: rgba(30, 41, 59, 0.2);">
+                <i data-lucide="layout" style="width: 48px; height: 48px; color: #64748b; margin-bottom: 1rem; display:block; margin-left:auto; margin-right:auto;"></i>
+                <h3 style="color: #cbd5e1; margin-bottom: 0.5rem;">No rooms added to the blueprint yet</h3>
+                <p style="color: #64748b; font-size: 0.85rem; margin-bottom: 1.5rem;">Add predefined rooms below to configure their dimensions and options directly.</p>
+                <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+                    <button onclick="window.addRoomFromChecklist('basement')" class="btn-primary" style="padding:0.5rem 1rem;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem;"></i> + Basement Room</button>
+                    <button onclick="window.addRoomFromChecklist('crawlspace')" class="btn-primary" style="padding:0.5rem 1rem;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem;"></i> + Crawl Space</button>
+                    <button onclick="window.addRoomFromChecklist('attic')" class="btn-primary" style="padding:0.5rem 1rem;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem;"></i> + Attic Area</button>
+                </div>
+            </div>
+        `;
+    } else {
+        // Loop over rooms
+        state.rooms.forEach((room) => {
+            if (!state.costing.treatmentSelections) state.costing.treatmentSelections = {};
+            if (!state.costing.treatmentSelections[room.id]) {
+                state.costing.treatmentSelections[room.id] = { waterstop: 'none', waterstopCustomArea: 0, epoxy: 'none', epoxyCustomArea: 0, moldArea: 0 };
+            }
+            const ts = state.costing.treatmentSelections[room.id];
+            
+            const hasSprayFoam = room.joists && room.joists !== 'none';
+            const hasCarbonFiber = room.carbonStraps > 0;
+            const hasNb1 = room.nb1Height && room.nb1Height !== 'none';
+            const hasDrywall = room.drywallHeight && room.drywallHeight !== 'none';
+            const hasMold = ts.moldArea > 0;
+            const hasWaterstop = ts.waterstop && ts.waterstop !== 'none';
+            const hasEpoxy = ts.epoxy && ts.epoxy !== 'none';
+
+            html += `
+                <div class="checklist-room-card" data-room-id="${room.id}">
+                    <div class="checklist-room-header">
+                        <div class="checklist-room-title">
+                            <input type="text" class="room-checklist-name-input" data-room-id="${room.id}" value="${room.name}" style="background:transparent; border:none; border-bottom:1px dashed rgba(255,255,255,0.3); color:white; font-size:1.1rem; font-weight:bold; width:220px; padding:0 0 2px 0;">
+                            <select class="room-checklist-level-select" data-room-id="${room.id}" style="background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.15); border-radius:6px; color:#cbd5e1; font-size:0.75rem; padding:0.2rem 0.5rem; cursor:pointer;">
+                                ${state.levels.map(l => `<option value="${l.id}" ${room.levelId === l.id ? 'selected' : ''}>${l.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button onclick="window.removeRoomFromChecklist('${room.id}')" class="btn-table-action btn-table-delete" title="Delete Room" style="background:rgba(239, 68, 68, 0.1); border:none; border-radius:6px; padding:0.4rem; cursor:pointer; color:#ef4444; display:flex; align-items:center; justify-content:center;"><i data-lucide="trash-2" style="width:16px; height:16px;"></i></button>
+                    </div>
+                    
+                    <div class="checklist-grid-3col">
+                        <div class="input-group">
+                            <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Width (ft)</label>
+                            <input type="number" class="room-checklist-dim-input" data-dim="w" data-room-id="${room.id}" value="${room.w}" min="1" step="0.5" style="width:100%; padding:0.4rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                        <div class="input-group">
+                            <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Length (ft)</label>
+                            <input type="number" class="room-checklist-dim-input" data-dim="l" data-room-id="${room.id}" value="${room.l}" min="1" step="0.5" style="width:100%; padding:0.4rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                        <div class="input-group">
+                            <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Height (ft)</label>
+                            <input type="number" class="room-checklist-dim-input" data-dim="h" data-room-id="${room.id}" value="${room.h}" min="1" step="0.5" style="width:100%; padding:0.4rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                    </div>
+
+                    <div class="checklist-group">
+                        <h5 style="margin:0 0 0.5rem 0; font-size:0.8rem; text-transform:uppercase; color:#3b82f6; letter-spacing:0.05em;">Basement & Crawlspace Scope</h5>
+                        
+                        <!-- Spray Foam -->
+                        <div class="checklist-item-wrapper" style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-toggle" data-prop="spray_foam" data-room-id="${room.id}" ${hasSprayFoam ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Rim Joist Spray Foam</span>
+                                    <span class="checklist-item-desc">Insulate the perimeter rim joist cavities.</span>
+                                </div>
+                            </label>
+                            ${hasSprayFoam ? `
+                                <div class="checklist-sub-options">
+                                    <div style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem;">Joist Direction:</div>
+                                    <div class="checklist-pill-group">
+                                        <span class="checklist-pill ${room.joists === 'ns' ? 'active' : ''}" onclick="window.setRoomJoists('${room.id}', 'ns')">North-South</span>
+                                        <span class="checklist-pill ${room.joists === 'ew' ? 'active' : ''}" onclick="window.setRoomJoists('${room.id}', 'ew')">East-West</span>
+                                    </div>
+                                    <label class="checklist-item" style="padding:0.25rem 0; margin-top:0.4rem;">
+                                        <input type="checkbox" class="room-checklist-sub-toggle" data-prop="foamBondPockets" data-room-id="${room.id}" ${room.foamBondPockets ? 'checked' : ''}>
+                                        <div class="checklist-item-content">
+                                            <span class="checklist-item-title" style="font-size:0.8rem; font-weight:normal;">Include Foam Bond Pockets</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- XPS Foam Board -->
+                        <div style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-sub-toggle" data-prop="foamBoard" data-room-id="${room.id}" ${room.foamBoard ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Wall Vapor Barrier (XPS Foam Board)</span>
+                                    <span class="checklist-item-desc">Rigid foam board insulation sheets on foundation walls.</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Carbon Fiber Straps -->
+                        <div class="checklist-item-wrapper" style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-toggle" data-prop="carbon_fiber" data-room-id="${room.id}" ${hasCarbonFiber ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Carbon Fiber Wall Straps</span>
+                                    <span class="checklist-item-desc">Structural reinforcement straps for bowing foundation walls.</span>
+                                </div>
+                            </label>
+                            ${hasCarbonFiber ? `
+                                <div class="checklist-sub-options">
+                                    <div style="display:flex; align-items:center; gap:0.75rem; font-size:0.8rem;">
+                                        <span>Strap Count:</span>
+                                        <input type="number" class="room-checklist-carbon-count" data-room-id="${room.id}" value="${room.carbonStraps}" min="1" step="1" style="width:60px; padding:0.25rem; border-radius:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                                    </div>
+                                    <div style="margin-top:0.4rem; display:flex; align-items:center; gap:0.5rem; font-size:0.8rem;">
+                                        <span>Scope:</span>
+                                        <select class="room-checklist-carbon-scope" data-room-id="${room.id}" style="background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:white; padding:0.25rem; font-size:0.75rem;">
+                                            <option value="full" ${room.carbonFiberScope === 'full' ? 'selected' : ''}>Full Room Perimeter</option>
+                                            <option value="crack" ${room.carbonFiberScope === 'crack' ? 'selected' : ''}>Specific Crack Area</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Floor Perimeter Carbon Strap -->
+                        <div style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-sub-toggle" data-prop="floorPerimeterStrap" data-room-id="${room.id}" ${room.floorPerimeterStrap ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Floor Perimeter Carbon Fiber Strap</span>
+                                    <span class="checklist-item-desc">Secure base of foundation walls.</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- NB-1 Wall Coating -->
+                        <div class="checklist-item-wrapper" style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-toggle" data-prop="nb1" data-room-id="${room.id}" ${hasNb1 ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">NB-1 Structural Wall Coating</span>
+                                    <span class="checklist-item-desc">Apply NB-1 waterproof coating on walls.</span>
+                                </div>
+                            </label>
+                            ${hasNb1 ? `
+                                <div class="checklist-sub-options">
+                                    <div style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem;">Coating Height:</div>
+                                    <div class="checklist-pill-group">
+                                        <span class="checklist-pill ${room.nb1Height === '2ft' ? 'active' : ''}" onclick="window.setRoomNb1Height('${room.id}', '2ft')">2 Feet</span>
+                                        <span class="checklist-pill ${room.nb1Height === '4ft' ? 'active' : ''}" onclick="window.setRoomNb1Height('${room.id}', '4ft')">4 Feet</span>
+                                        <span class="checklist-pill ${room.nb1Height === 'full' ? 'active' : ''}" onclick="window.setRoomNb1Height('${room.id}', 'full')">Full Wall</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Drywall Cutting -->
+                        <div class="checklist-item-wrapper">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-toggle" data-prop="drywall" data-room-id="${room.id}" ${hasDrywall ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Drywall Cutting / Flood Cut</span>
+                                    <span class="checklist-item-desc">Cut and remove damaged drywall at a set height.</span>
+                                </div>
+                            </label>
+                            ${hasDrywall ? `
+                                <div class="checklist-sub-options">
+                                    <div style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem;">Cut Height:</div>
+                                    <div class="checklist-pill-group">
+                                        <span class="checklist-pill ${room.drywallHeight === '1ft' ? 'active' : ''}" onclick="window.setRoomDrywallHeight('${room.id}', '1ft')">1 Foot</span>
+                                        <span class="checklist-pill ${room.drywallHeight === '2ft' ? 'active' : ''}" onclick="window.setRoomDrywallHeight('${room.id}', '2ft')">2 Feet</span>
+                                        <span class="checklist-pill ${room.drywallHeight === '4ft' ? 'active' : ''}" onclick="window.setRoomDrywallHeight('${room.id}', '4ft')">4 Feet</span>
+                                        <span class="checklist-pill ${room.drywallHeight === '6ft' ? 'active' : ''}" onclick="window.setRoomDrywallHeight('${room.id}', '6ft')">6 Feet</span>
+                                        <span class="checklist-pill ${room.drywallHeight === 'full' ? 'active' : ''}" onclick="window.setRoomDrywallHeight('${room.id}', 'full')">Full Wall</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <div class="checklist-group">
+                        <h5 style="margin:0 0 0.5rem 0; font-size:0.8rem; text-transform:uppercase; color:#10b981; letter-spacing:0.05em;">Attic Scope</h5>
+                        
+                        <!-- Remove Attic Insulation -->
+                        <div style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-sub-toggle" data-prop="removeInsulation" data-room-id="${room.id}" ${room.removeInsulation ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Remove Attic Insulation</span>
+                                    <span class="checklist-item-desc">Suck out and dispose of existing insulation material.</span>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Blow-in Attic Insulation -->
+                        <label class="checklist-item">
+                            <input type="checkbox" class="room-checklist-sub-toggle" data-prop="blowInInsulation" data-room-id="${room.id}" ${room.blowInInsulation ? 'checked' : ''}>
+                            <div class="checklist-item-content">
+                                <span class="checklist-item-title">Blow-in Attic Insulation</span>
+                                <span class="checklist-item-desc">Blow new insulation back in.</span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="checklist-group">
+                        <h5 style="margin:0 0 0.5rem 0; font-size:0.8rem; text-transform:uppercase; color:#8b5cf6; letter-spacing:0.05em;">Treatments & Chemical Scope</h5>
+
+                        <!-- Mold Chemical Treatment -->
+                        <div class="checklist-item-wrapper" style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-toggle" data-prop="mold" data-room-id="${room.id}" ${hasMold ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Mold Sanitization & Treatment</span>
+                                    <span class="checklist-item-desc">Benefect and RMR mold stain remover spray treatment.</span>
+                                </div>
+                            </label>
+                            ${hasMold ? `
+                                <div class="checklist-sub-options">
+                                    <div style="display:flex; align-items:center; gap:0.75rem; font-size:0.8rem;">
+                                        <span>Treatment Area:</span>
+                                        <input type="number" class="room-checklist-mold-area" data-room-id="${room.id}" value="${ts.moldArea}" min="1" step="1" style="width:80px; padding:0.25rem; border-radius:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                                        <span>sq ft</span>
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Waterstop Treatment -->
+                        <div class="checklist-item-wrapper" style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-toggle" data-prop="waterstop" data-room-id="${room.id}" ${hasWaterstop ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Waterstop Sealant Application</span>
+                                    <span class="checklist-item-desc">Apply waterstop vapor block sealant to floor or walls.</span>
+                                </div>
+                            </label>
+                            ${hasWaterstop ? `
+                                <div class="checklist-sub-options">
+                                    <div style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem;">Application Area:</div>
+                                    <div class="checklist-pill-group">
+                                        <span class="checklist-pill ${ts.waterstop === 'floor' ? 'active' : ''}" onclick="window.setRoomWaterstop('${room.id}', 'floor')">Floor Area</span>
+                                        <span class="checklist-pill ${ts.waterstop === 'walls' ? 'active' : ''}" onclick="window.setRoomWaterstop('${room.id}', 'walls')">Wall Area</span>
+                                        <span class="checklist-pill ${ts.waterstop === 'both' ? 'active' : ''}" onclick="window.setRoomWaterstop('${room.id}', 'both')">Both Floor & Walls</span>
+                                        <span class="checklist-pill ${ts.waterstop === 'custom' ? 'active' : ''}" onclick="window.setRoomWaterstop('${room.id}', 'custom')">Custom Sq Ft</span>
+                                    </div>
+                                    ${ts.waterstop === 'custom' ? `
+                                        <div style="display:flex; align-items:center; gap:0.75rem; font-size:0.8rem; margin-top:0.4rem;">
+                                            <span>Custom Area:</span>
+                                            <input type="number" class="room-checklist-waterstop-custom" data-room-id="${room.id}" value="${ts.waterstopCustomArea || 0}" min="0" step="1" style="width:80px; padding:0.25rem; border-radius:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                                            <span>sq ft</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- Epoxy Floor Coating -->
+                        <div class="checklist-item-wrapper">
+                            <label class="checklist-item">
+                                <input type="checkbox" class="room-checklist-toggle" data-prop="epoxy" data-room-id="${room.id}" ${hasEpoxy ? 'checked' : ''}>
+                                <div class="checklist-item-content">
+                                    <span class="checklist-item-title">Epoxy Floor Coating</span>
+                                    <span class="checklist-item-desc">Apply epoxy coating to concrete floor.</span>
+                                </div>
+                            </label>
+                            ${hasEpoxy ? `
+                                <div class="checklist-sub-options">
+                                    <div style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem;">Application Area:</div>
+                                    <div class="checklist-pill-group">
+                                        <span class="checklist-pill ${ts.epoxy === 'entire' ? 'active' : ''}" onclick="window.setRoomEpoxy('${room.id}', 'entire')">Entire Floor</span>
+                                        <span class="checklist-pill ${ts.epoxy === 'custom' ? 'active' : ''}" onclick="window.setRoomEpoxy('${room.id}', 'custom')">Custom Sq Ft</span>
+                                    </div>
+                                    ${ts.epoxy === 'custom' ? `
+                                        <div style="display:flex; align-items:center; gap:0.75rem; font-size:0.8rem; margin-top:0.4rem;">
+                                            <span>Custom Area:</span>
+                                            <input type="number" class="room-checklist-epoxy-custom" data-room-id="${room.id}" value="${ts.epoxyCustomArea || 0}" min="0" step="1" style="width:80px; padding:0.25rem; border-radius:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                                            <span>sq ft</span>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // Hardware Card
+    if (state.sumpPumps.length > 0 || state.dehumidifiers.length > 0) {
+        html += `
+            <div class="checklist-room-card" style="border-color: rgba(59, 130, 246, 0.3);">
+                <div class="checklist-room-header" style="margin-bottom:0.5rem; border:none; padding:0;">
+                    <h4 style="margin:0; font-size:1.1rem; color:#60a5fa;"><i data-lucide="shield" style="display:inline-block; vertical-align:middle; margin-right:0.5rem; width:18px; height:18px;"></i> Installed Hardware Details</h4>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:0.75rem;">
+        `;
+        
+        state.sumpPumps.forEach(sp => {
+            let pumpsCount = state.costing.settings.sumpPumpsPerBasin || 2;
+            if (state.costing.projectOverrides && state.costing.projectOverrides[sp.id] && state.costing.projectOverrides[sp.id].pumps !== undefined) {
+                pumpsCount = state.costing.projectOverrides[sp.id].pumps;
+            }
+            
+            html += `
+                <div class="checklist-group" style="border-left: 3px solid #3b82f6; margin:0; background:rgba(0,0,0,0.15);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <strong style="font-size:0.9rem; color:white;">Sump Basin: ${sp.name}</strong>
+                        <button onclick="window.removeSumpPumpFromChecklist('${sp.id}')" class="btn-table-action btn-table-delete" style="background:none; border:none; color:#ef4444; padding:0.2rem 0.4rem; cursor:pointer;"><i data-lucide="trash-2" style="width:14px; height:14px;"></i></button>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:0.5rem; font-size:0.8rem;">
+                        <div style="display:flex; align-items:center; gap:0.5rem;">
+                            <span>Pumps installed in basin:</span>
+                            <input type="number" class="sump-checklist-pumps-count" data-sump-id="${sp.id}" value="${pumpsCount}" min="0" max="4" style="width:50px; padding:0.15rem; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:4px; text-align:center;">
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        state.dehumidifiers.forEach(dh => {
+            html += `
+                <div class="checklist-group" style="border-left: 3px solid #10b981; margin:0; background:rgba(0,0,0,0.15);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+                        <strong style="font-size:0.9rem; color:white;">Dehumidifier: ${dh.name}</strong>
+                        <button onclick="window.removeDehumidifierFromChecklist('${dh.id}')" class="btn-table-action btn-table-delete" style="background:none; border:none; color:#ef4444; padding:0.2rem 0.4rem; cursor:pointer;"><i data-lucide="trash-2" style="width:14px; height:14px;"></i></button>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += `
+                </div>
+            </div>
+        `;
+    }
+
+    // Rentals Card
+    html += `
+        <div class="checklist-room-card" style="border-color: rgba(167, 139, 250, 0.3);">
+            <div class="checklist-room-header" style="margin-bottom:0.5rem; border:none; padding:0;">
+                <h4 style="margin:0; font-size:1.1rem; color:#a78bfa;"><i data-lucide="clock" style="display:inline-block; vertical-align:middle; margin-right:0.5rem; width:18px; height:18px;"></i> Water Damage Equipment Rentals</h4>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:0.75rem;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem; font-size:0.85rem;">
+                    <div>
+                        <strong style="font-size:0.9rem; color:white;">Air Movers Rental</strong>
+                        <div style="font-size:0.75rem; color:#94a3b8;">$38.00 per unit per day</div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="number" id="rental-checklist-mover-units" value="${state.costing.rentals.airMoverUnits || 0}" placeholder="Qty" min="0" style="width:55px; padding:0.25rem; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:4px; text-align:center;">
+                        <span style="font-size:0.75rem; color:#94a3b8;">x</span>
+                        <input type="number" id="rental-checklist-mover-days" value="${state.costing.rentals.airMoverDays || 0}" placeholder="Days" min="0" style="width:55px; padding:0.25rem; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:4px; text-align:center;">
+                        <span style="font-size:0.75rem; color:#94a3b8;">days</span>
+                    </div>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem; font-size:0.85rem;">
+                    <div>
+                        <strong style="font-size:0.9rem; color:white;">Air Scrubbers Rental</strong>
+                        <div style="font-size:0.75rem; color:#94a3b8;">$105.00 per unit per day</div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="number" id="rental-checklist-scrubber-units" value="${state.costing.rentals.airScrubberUnits || 0}" placeholder="Qty" min="0" style="width:55px; padding:0.25rem; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:4px; text-align:center;">
+                        <span style="font-size:0.75rem; color:#94a3b8;">x</span>
+                        <input type="number" id="rental-checklist-scrubber-days" value="${state.costing.rentals.airScrubberDays || 0}" placeholder="Days" min="0" style="width:55px; padding:0.25rem; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:4px; text-align:center;">
+                        <span style="font-size:0.75rem; color:#94a3b8;">days</span>
+                    </div>
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem;">
+                    <div>
+                        <strong style="font-size:0.9rem; color:white;">LGR Dehumidifiers Rental</strong>
+                        <div style="font-size:0.75rem; color:#94a3b8;">$76.00 per unit per day</div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; align-items:center;">
+                        <input type="number" id="rental-checklist-dehum-units" value="${state.costing.rentals.dehumidifierUnits || 0}" placeholder="Qty" min="0" style="width:55px; padding:0.25rem; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:4px; text-align:center;">
+                        <span style="font-size:0.75rem; color:#94a3b8;">x</span>
+                        <input type="number" id="rental-checklist-dehum-days" value="${state.costing.rentals.dehumidifierDays || 0}" placeholder="Days" min="0" style="width:55px; padding:0.25rem; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; border-radius:4px; text-align:center;">
+                        <span style="font-size:0.75rem; color:#94a3b8;">days</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Labor Card
+    html += `
+        <div class="checklist-room-card" style="border-color: rgba(245, 158, 11, 0.3);">
+            <div class="checklist-room-header" style="margin-bottom:0.5rem; border:none; padding:0;">
+                <h4 style="margin:0; font-size:1.1rem; color:#f59e0b;"><i data-lucide="users" style="display:inline-block; vertical-align:middle; margin-right:0.5rem; width:18px; height:18px;"></i> Project Labor Settings</h4>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:0.75rem; margin-top:0.75rem;">
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+                    <div class="input-group">
+                        <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.15rem; display:block;">Crew Size</label>
+                        <input type="number" id="labor-checklist-crew" value="${state.costing.labor.projectCrewSize}" min="0" style="width:100%; padding:0.35rem; border-radius:6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.15rem; display:block;">Workdays</label>
+                        <input type="number" id="labor-checklist-workdays" value="${state.costing.labor.projectWorkdays}" min="0" style="width:100%; padding:0.35rem; border-radius:6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+                    <div class="input-group">
+                        <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.15rem; display:block;">Hours Per Day</label>
+                        <input type="number" id="labor-checklist-hours" value="${state.costing.labor.projectHoursPerDay}" min="0" style="width:100%; padding:0.35rem; border-radius:6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.15rem; display:block;">Hourly Labor Rate ($)</label>
+                        <input type="number" id="labor-checklist-rate" value="${state.costing.labor.projectLaborRate}" min="0" style="width:100%; padding:0.35rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Sticky summary html builder
+    const actualMargin = report.summary.grossMarginPct;
+    const isBelowTarget = actualMargin < state.costing.settings.targetGrossMargin;
+    const marginBadgeColor = isBelowTarget ? '#ef4444' : '#10b981';
+
+    let summaryHtml = `
+        <div class="cost-sticky-column" style="position: sticky; top: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+            <!-- Bid Price Card -->
+            <div class="checklist-room-card" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(15, 23, 42, 0.65); padding: 1.25rem;">
+                <h4 style="margin:0 0 0.5rem 0; font-size:0.75rem; text-transform:uppercase; color:#3b82f6; letter-spacing:0.05em;">Project Estimator Summary</h4>
+                <div style="font-size: 2rem; font-weight: 800; color: white; line-height: 1.2;">
+                    ${formatCurrency(report.summary.bidPrice)}
+                </div>
+                <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
+                    COGS: ${formatCurrency(report.summary.directCost)} 
+                    <span style="color: ${marginBadgeColor}; font-weight: bold; margin-left: 0.5rem;">
+                        ${actualMargin.toFixed(1)}% Margin
+                    </span>
+                </div>
+                ${isBelowTarget ? `
+                    <div style="margin-top: 0.5rem; font-size: 0.7rem; color: #f87171; display: flex; align-items: center; gap: 0.25rem;">
+                        <i data-lucide="alert-triangle" style="width:12px; height:12px;"></i> Below target margin of ${state.costing.settings.targetGrossMargin}%
+                    </div>
+                ` : ''}
+                
+                <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem;">
+                    <button onclick="window.printCustomerProposal()" class="btn-primary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.6rem; cursor:pointer;">
+                        <i data-lucide="printer" style="width:16px; height:16px;"></i> Customer Proposal
+                    </button>
+                    <button onclick="window.printInternalCostSheet()" class="btn-secondary" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.6rem; cursor:pointer;">
+                        <i data-lucide="file-text" style="width:16px; height:16px;"></i> Print Cost Sheet
+                    </button>
+                </div>
+            </div>
+
+            <!-- Quick Add Room Card -->
+            <div class="checklist-room-card" style="padding: 1rem;">
+                <h4 style="margin:0 0 0.75rem 0; font-size:0.8rem; text-transform:uppercase; color:#a78bfa; letter-spacing:0.05em;">+ Add Room / Area</h4>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 0.5rem;">
+                    <button onclick="window.addRoomFromChecklist('basement')" class="btn-secondary" style="padding:0.5rem; font-size:0.8rem; text-align:left; justify-content:flex-start; cursor:pointer;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem; display:inline-block; vertical-align:middle;"></i> Basement Room</button>
+                    <button onclick="window.addRoomFromChecklist('crawlspace')" class="btn-secondary" style="padding:0.5rem; font-size:0.8rem; text-align:left; justify-content:flex-start; cursor:pointer;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem; display:inline-block; vertical-align:middle;"></i> Crawl Space</button>
+                    <button onclick="window.addRoomFromChecklist('attic')" class="btn-secondary" style="padding:0.5rem; font-size:0.8rem; text-align:left; justify-content:flex-start; cursor:pointer;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem; display:inline-block; vertical-align:middle;"></i> Attic Area</button>
+                    <button onclick="window.addRoomFromChecklist('main')" class="btn-secondary" style="padding:0.5rem; font-size:0.8rem; text-align:left; justify-content:flex-start; cursor:pointer;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem; display:inline-block; vertical-align:middle;"></i> Main Floor Room</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top:0.75rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:0.75rem;">
+                    <button onclick="window.addSumpPumpFromChecklist()" class="btn-secondary" style="padding:0.4rem; font-size:0.75rem; justify-content:center; cursor:pointer;"><i data-lucide="shield" style="width:12px; height:12px; margin-right:0.25rem; display:inline-block; vertical-align:middle;"></i> + Sump</button>
+                    <button onclick="window.addDehumidifierFromChecklist()" class="btn-secondary" style="padding:0.4rem; font-size:0.75rem; justify-content:center; cursor:pointer;"><i data-lucide="droplet" style="width:12px; height:12px; margin-right:0.25rem; display:inline-block; vertical-align:middle;"></i> + Dehum</button>
+                </div>
+            </div>
+            
+            <!-- Quick Settings Card -->
+            <div class="checklist-room-card" style="padding: 1rem;">
+                <h4 style="margin:0 0 0.75rem 0; font-size:0.8rem; text-transform:uppercase; color:#94a3b8; letter-spacing:0.05em;">Estimating Controls</h4>
+                <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                    <div class="input-group">
+                        <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.15rem; display:block;">Target Gross Margin (%)</label>
+                        <input type="number" id="checklist-settings-margin" value="${state.costing.settings.targetGrossMargin}" min="0" max="90" style="width:100%; padding:0.35rem; border-radius:6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                    </div>
+                    <div class="input-group">
+                        <label style="font-size:0.75rem; color:#94a3b8; margin-bottom:0.15rem; display:block;">Sales Tax Rate (%)</label>
+                        <input type="number" id="checklist-settings-tax" value="${state.costing.settings.salesTaxRate}" min="0" max="15" style="width:100%; padding:0.35rem; border-radius:6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    html += `
+            </div>
+            <!-- Right Sticky Column: Summary & Pricing -->
+            ${summaryHtml}
+        </div>
+    `;
+
+    checklistContainer.innerHTML = html;
+    
+    // Bind listeners
+    bindChecklistEvents();
+
+    // Rerender icons
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        lucide.createIcons();
+    }
+}
+
+// Expose render function to global namespace
+window.renderChecklistUI = renderChecklistUI;
+
