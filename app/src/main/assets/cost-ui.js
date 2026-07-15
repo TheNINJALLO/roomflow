@@ -2664,7 +2664,7 @@ function renderChecklistUI() {
     `;
 
     // Sticky summary html builder
-    const actualMargin = report.summary.grossMarginPct;
+    const actualMargin = report.subtotals.actualMarginPercent;
     const isBelowTarget = actualMargin < state.costing.settings.targetGrossMargin;
     const marginBadgeColor = isBelowTarget ? '#ef4444' : '#10b981';
 
@@ -2674,10 +2674,10 @@ function renderChecklistUI() {
             <div class="checklist-room-card" style="border-color: rgba(59, 130, 246, 0.4); background: rgba(15, 23, 42, 0.65); padding: 1.25rem;">
                 <h4 style="margin:0 0 0.5rem 0; font-size:0.75rem; text-transform:uppercase; color:#3b82f6; letter-spacing:0.05em;">Project Estimator Summary</h4>
                 <div style="font-size: 2rem; font-weight: 800; color: white; line-height: 1.2;">
-                    ${formatCurrency(report.summary.bidPrice)}
+                    ${formatCurrency(report.subtotals.sellingPrice)}
                 </div>
                 <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
-                    COGS: ${formatCurrency(report.summary.directCost)} 
+                    COGS: ${formatCurrency(report.subtotals.direct)} 
                     <span style="color: ${marginBadgeColor}; font-weight: bold; margin-left: 0.5rem;">
                         ${actualMargin.toFixed(1)}% Margin
                     </span>
@@ -2750,4 +2750,11 @@ function renderChecklistUI() {
 
 // Expose render function to global namespace
 window.renderChecklistUI = renderChecklistUI;
+
+// Auto-render if this is the active startup view
+if (typeof state !== 'undefined' && state.activeView === 'checklist') {
+    renderChecklistUI();
+} else if (typeof state !== 'undefined' && state.activeView === 'cost') {
+    renderCostUI();
+}
 

@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="styles.css?v=59">
 </head>
 <body>
-    <div id="app-container">
+    <div id="app-container" class="interface-mode-simple">
         <!-- Top Navigation -->
         <header class="app-header">
             <div class="logo">
@@ -52,6 +52,13 @@
             </div>
 
             <div class="project-actions">
+                <div class="mode-selector-container" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.25rem 0.5rem; margin-right: 0.5rem;">
+                    <label style="font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin: 0; white-space: nowrap;">Interface:</label>
+                    <select id="select-app-interface-mode" style="background: transparent; border: none; color: white; font-size: 0.8rem; font-weight: bold; cursor: pointer; padding: 0; outline: none;">
+                        <option value="simple" style="background: #0f172a; color: white;">Simple Checklist</option>
+                        <option value="professional" style="background: #0f172a; color: white;">CAD Blueprint</option>
+                    </select>
+                </div>
                 <button id="btn-undo" title="Undo Action" disabled><i data-lucide="undo"></i></button>
                 <button id="btn-redo" title="Redo Action" disabled><i data-lucide="redo"></i></button>
                 <button id="btn-new" title="New Project"><i data-lucide="file-plus"></i></button>

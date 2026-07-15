@@ -5511,6 +5511,22 @@ window.redo = redo;
 document.getElementById('btn-undo').addEventListener('click', undo);
 document.getElementById('btn-redo').addEventListener('click', redo);
 
+// Bind Interface Mode selector
+const selectInterfaceMode = document.getElementById('select-app-interface-mode');
+if (selectInterfaceMode) {
+    selectInterfaceMode.addEventListener('change', (e) => {
+        const mode = e.target.value;
+        state.interfaceMode = mode;
+        const appContainer = document.getElementById('app-container');
+        if (appContainer) {
+            appContainer.classList.toggle('interface-mode-simple', mode === 'simple');
+        }
+        if (mode === 'simple') {
+            switchView('checklist');
+        }
+    });
+}
+
 // Bind Keyboard Shortcuts (Ctrl+Z and Ctrl+Y / Ctrl+Shift+Z)
 window.addEventListener('keydown', (e) => {
     if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
@@ -6216,6 +6232,7 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 lucide.createIcons();
 checkUrlJobLoad();
+switchView(state.activeView);
 
 // --- MOBILE RESPONSIVE DRAWERS & TOUCH EVENTS ---
 const leftSidebar = document.getElementById('left-sidebar');
