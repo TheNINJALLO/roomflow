@@ -2692,7 +2692,7 @@ html, body {
     }
 }
 
-#more-viewport, #jobs-viewport {
+#more-viewport, #jobs-viewport, #guided-container {
     overflow-y: auto !important;
     touch-action: auto !important;
 }
