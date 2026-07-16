@@ -2754,10 +2754,824 @@ function renderChecklistUI() {
 // Expose render function to global namespace
 window.renderChecklistUI = renderChecklistUI;
 
-// Auto-render if this is the active startup view
-if (typeof state !== 'undefined' && state.activeView === 'checklist') {
-    renderChecklistUI();
-} else if (typeof state !== 'undefined' && state.activeView === 'cost') {
-    renderCostUI();
+// ==========================================
+// GUIDED MODE STEP-BY-STEP FORM RENDERER
+// ==========================================
+
+window.selectGuidedWorkArea = function(areaId) {
+    if (!state.costing) initDefaultCosting(state);
+    state.costing.workAreaSelection = areaId;
+    window.renderGuidedStep();
+    triggerAutosave();
+};
+
+window.setGuidedStep3Mode = function(mode) {
+    state.guidedStep3Mode = mode;
+    window.renderGuidedStep();
+};
+
+window.selectRoomTemplate = function(name, len, wid, hgt, level) {
+    state.guidedStep3Mode = 'manual';
+    window.renderGuidedStep();
+    setTimeout(() => {
+        const nameEl = document.getElementById('manual-room-name');
+        const lenEl = document.getElementById('manual-room-length');
+        const widEl = document.getElementById('manual-room-width');
+        const hgtEl = document.getElementById('manual-room-height');
+        const lvlEl = document.getElementById('manual-room-level');
+        if (nameEl) nameEl.value = name;
+        if (lenEl) lenEl.value = len;
+        if (widEl) widEl.value = wid;
+        if (hgtEl) hgtEl.value = hgt;
+        if (lvlEl) lvlEl.value = level;
+    }, 50);
+};
+
+window.saveManualRoom = function() {
+    const name = document.getElementById('manual-room-name').value.trim() || 'New Room';
+    const lenStr = document.getElementById('manual-room-length').value;
+    const widStr = document.getElementById('manual-room-width').value;
+    const height = parseFloat(document.getElementById('manual-room-height').value) || 8;
+    const levelId = document.getElementById('manual-room-level').value || 'basement';
+    
+    const length = window.parseFeetInches(lenStr);
+    const width = window.parseFeetInches(widStr);
+    
+    if (length <= 0 || width <= 0) {
+        alert("Please enter a valid length and width!");
+        return;
+    }
+    
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    
+    // Add standard rectangular room
+    const id = 'room_' + Date.now();
+    const newRoom = {
+        id: id,
+        name: name,
+        levelId: levelId,
+        x: 100, y: 100, // drawing coords
+        width: width,
+        length: length,
+        height: height,
+        shape: 'rectangular',
+        carbonStraps: 0,
+        floorPerimeterStrap: false,
+        nb1Height: 'none',
+        drywallHeight: 'none',
+        foamBondPockets: false,
+        removeInsulation: false,
+        blowInInsulation: false
+    };
+    
+    state.rooms.push(newRoom);
+    selectItem(null);
+    if (typeof draw === 'function') draw();
+    if (typeof updateGlobalStats === 'function') updateGlobalStats();
+    
+    state.guidedStep3Mode = 'choose';
+    window.renderGuidedStep();
+    triggerAutosave();
+};
+
+window.deleteGuidedRoom = function(roomId) {
+    if (confirm("Are you sure you want to delete this room?")) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        state.rooms = state.rooms.filter(r => r.id !== roomId);
+        if (typeof draw === 'function') draw();
+        if (typeof updateGlobalStats === 'function') updateGlobalStats();
+        window.renderGuidedStep();
+        triggerAutosave();
+    }
+};
+
+window.toggleGuidedQuestion = function(roomId, optionKey) {
+    const room = state.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    
+    room[optionKey] = !room[optionKey];
+    window.renderGuidedStep();
+    triggerAutosave();
+};
+
+window.selectGuidedDropdown = function(roomId, optionKey, val) {
+    const room = state.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    
+    room[optionKey] = val;
+    window.renderGuidedStep();
+    triggerAutosave();
+};
+
+window.changeGuidedNumber = function(roomId, optionKey, step) {
+    const room = state.rooms.find(r => r.id === roomId);
+    if (!room) return;
+    
+    let val = parseInt(room[optionKey]) || 0;
+    val += step;
+    if (val < 0) val = 0;
+    room[optionKey] = val;
+    window.renderGuidedStep();
+    triggerAutosave();
+};
+
+window.parseFeetInches = function(str) {
+    if (!str) return 0;
+    str = str.toString().trim().toLowerCase();
+    const ftMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:ft|'|feet)/);
+    const inMatch = str.match(/(\d+(?:\.\d+)?)\s*(?:in|\"|inches)/);
+    let feet = 0;
+    let inches = 0;
+    if (ftMatch) feet = parseFloat(ftMatch[1]);
+    if (inMatch) inches = parseFloat(inMatch[1]);
+    if (!ftMatch && !inMatch) {
+        const num = parseFloat(str);
+        if (!isNaN(num)) return num;
+        return 0;
+    }
+    return feet + (inches / 12);
+};
+
+window.removeGuidedPhoto = function(idx) {
+    if (state.costing && state.costing.photos) {
+        state.costing.photos.splice(idx, 1);
+        window.renderGuidedStep();
+        triggerAutosave();
+    }
+};
+
+// Generate Step Contents
+function generateGuidedStepHTML(stepIndex) {
+    if (!state.costing) initDefaultCosting(state);
+    
+    // Step 1: Job Info
+    if (stepIndex === 1) {
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div class="checklist-room-card" style="padding: 1.5rem;">
+                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Customer Information</h3>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="input-group">
+                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Customer Name</label>
+                            <input type="text" id="guided-customer-name" value="${state.costing.customerName || ''}" placeholder="John Smith" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                        <div class="input-group">
+                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Property Address</label>
+                            <input type="text" id="guided-customer-address" value="${state.costing.customerAddress || ''}" placeholder="123 Maple St, Detroit, MI" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                        <div class="input-group">
+                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Phone Number</label>
+                            <input type="tel" id="guided-customer-phone" value="${state.costing.customerPhone || ''}" placeholder="555-0199" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                        <div class="input-group">
+                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Email Address</label>
+                            <input type="email" id="guided-customer-email" value="${state.costing.customerEmail || ''}" placeholder="john@example.com" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="checklist-room-card" style="padding: 1.5rem;">
+                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Inspection Details</h3>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="input-group">
+                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Estimator Name</label>
+                            <input type="text" id="guided-estimator-name" value="${state.costing.estimator || ''}" placeholder="Inspector Name" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                        <div class="input-group">
+                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Inspection Date</label>
+                            <input type="date" id="guided-inspection-date" value="${state.costing.inspectionDate || ''}" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                    </div>
+                    <div class="input-group" style="margin-top: 1rem;">
+                        <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Job & Field Notes</label>
+                        <textarea id="guided-job-notes" placeholder="Describe crawlspace moisture, straps spacing, or custom drywall removals here..." style="width:100%; min-height:80px; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white; resize:vertical;">${state.costing.notes || ''}</textarea>
+                    </div>
+                </div>
+
+                <div class="checklist-room-card" style="padding: 1.5rem;">
+                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="camera" style="color:var(--accent-teal);"></i> Inspection Photos</h3>
+                    <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">Upload or attach visual inspections to the client proposal scope.</p>
+                    
+                    <div id="guided-photos-preview-list" style="display:flex; gap:0.75rem; flex-wrap:wrap; margin-bottom:1rem;">
+                        ${(state.costing.photos || []).map((img, idx) => `
+                            <div style="position:relative; width:80px; height:80px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); overflow:hidden;">
+                                <img src="${img}" style="width:100%; height:100%; object-fit:cover;">
+                                <button onclick="window.removeGuidedPhoto(${idx})" style="position:absolute; top:2px; right:2px; background:#ef4444; border:none; border-radius:50%; width:18px; height:18px; color:white; font-size:10px; cursor:pointer; display:flex; align-items:center; justify-content:center;">&times;</button>
+                            </div>
+                        `).join('')}
+                        <label style="width:80px; height:80px; border-radius:8px; border:2px dashed rgba(255,255,255,0.15); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; color:#94a3b8; background:rgba(0,0,0,0.1);">
+                            <i data-lucide="plus" style="width:20px; height:20px; margin-bottom:2px;"></i>
+                            <span style="font-size:10px;">Add Photo</span>
+                            <input type="file" id="guided-photo-file-picker" style="display:none;" accept="image/*" multiple>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Step 2: Work Area Selection
+    if (stepIndex === 2) {
+        const selectedArea = state.costing.workAreaSelection || 'multiple';
+        const areas = [
+            { id: 'crawlspace', name: 'Crawl Space', desc: 'Sump pumps, vapor barrier wraps, mold remediation', icon: 'shield' },
+            { id: 'basement', name: 'Basement', desc: 'Epoxy floor coatings, drainage systems, waterstops', icon: 'home' },
+            { id: 'main', name: 'Main Floor', desc: 'Insulation removals, drywall cuts, joist repairs', icon: 'layers' },
+            { id: 'second', name: 'Second Floor', desc: 'Insulation, drywall repairs, structural beams', icon: 'copy' },
+            { id: 'attic', name: 'Attic Space', desc: 'Fiberglass insulation removals and blow-ins', icon: 'triangle' },
+            { id: 'multiple', name: 'Multiple Areas', desc: 'Mix crawl spaces, basements, and upper levels', icon: 'grid' }
+        ];
+
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1.5rem;">Select the primary foundation level or structural area for this estimate. You can always add other levels later.</p>
+                <div class="choices-grid-layout">
+                    ${areas.map(a => `
+                        <div onclick="window.selectGuidedWorkArea('${a.id}')" class="choice-card-item ${selectedArea === a.id ? 'selected' : ''}">
+                            <div class="choice-card-icon"><i data-lucide="${a.icon}"></i></div>
+                            <h3>${a.name}</h3>
+                            <p>${a.desc}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Step 3: Add or Measure Rooms
+    if (stepIndex === 3) {
+        const mode = state.guidedStep3Mode || 'choose';
+        
+        if (mode === 'choose') {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem;">
+                        <h3 style="font-size: 1.1rem; font-weight:700; color:white; margin:0;">Blueprint Room List (${state.rooms.length} rooms)</h3>
+                    </div>
+                    
+                    ${state.rooms.length === 0 ? `
+                        <div class="checklist-room-card" style="text-align: center; padding: 2.5rem 1.5rem; background: rgba(30, 41, 59, 0.15);">
+                            <i data-lucide="layout" style="width:40px; height:40px; color:#64748b; margin-bottom:1rem; display:block; margin-left:auto; margin-right:auto;"></i>
+                            <h4 style="color:#cbd5e1; margin-bottom:0.25rem;">No Rooms Added Yet</h4>
+                            <p style="color:#64748b; font-size:0.8rem; max-width:280px; margin:0 auto;">Choose a method below to add the first room.</p>
+                        </div>
+                    ` : `
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            ${state.rooms.map(r => `
+                                <div class="checklist-room-card" style="padding:1rem; display:flex; justify-content:space-between; align-items:center;">
+                                    <div>
+                                        <h4 style="font-weight:700; color:white; margin-bottom:0.2rem;">${r.name}</h4>
+                                        <p style="font-size:0.75rem; color:#64748b; margin:0;">Level: ${r.levelId} | Size: ${r.width.toFixed(1)} x ${r.length.toFixed(1)} ft (${Math.round(r.width * r.length)} sq ft)</p>
+                                    </div>
+                                    <button onclick="window.deleteGuidedRoom('${r.id}')" style="background:none; border:none; color:#ef4444; cursor:pointer; padding:0.5rem;"><i data-lucide="trash-2" style="width:18px; height:18px;"></i></button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `}
+                    
+                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-top:1.5rem; margin-bottom:0.5rem;">How would you like to add a room?</h3>
+                    <div class="choices-grid-layout" style="grid-template-columns: repeat(2, 1fr);">
+                        <div onclick="window.setGuidedStep3Mode('manual')" class="choice-card-item">
+                            <div class="choice-card-icon"><i data-lucide="edit-2"></i></div>
+                            <h3>Enter Measurements</h3>
+                            <p>Best when you already know the room's length and width.</p>
+                        </div>
+                        <div onclick="window.setGuidedStep3Mode('template')" class="choice-card-item">
+                            <div class="choice-card-icon"><i data-lucide="layers"></i></div>
+                            <h3>Use Room Template</h3>
+                            <p>Pre-populate standard sizes for crawl spaces, basements, or living areas.</p>
+                        </div>
+                        <div onclick="window.switchView('2d')" class="choice-card-item">
+                            <div class="choice-card-icon"><i data-lucide="pen-tool"></i></div>
+                            <h3>Draw the Room</h3>
+                            <p>Best for unusual shapes, wall bump outs, or connected spaces.</p>
+                        </div>
+                        <div onclick="window.switchView('ar')" class="choice-card-item">
+                            <div class="choice-card-icon"><i data-lucide="scan"></i></div>
+                            <h3>Scan with Camera</h3>
+                            <p>Use your phone camera to capture room intersections directly.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Manual entry screen
+        if (mode === 'manual') {
+            return `
+                <div class="checklist-room-card" style="padding: 1.5rem; max-width: 600px; margin: 0 auto;">
+                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Room Dimensions Entry</h3>
+                    <div style="display:flex; flex-direction:column; gap:1rem;">
+                        <div class="input-group">
+                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Room Name</label>
+                            <input type="text" id="manual-room-name" value="Basement Room" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Length (ft / inches)</label>
+                                <input type="text" id="manual-room-length" placeholder="e.g. 12 ft 6 in or 12.5" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Width (ft / inches)</label>
+                                <input type="text" id="manual-room-width" placeholder="e.g. 10 ft or 10.0" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Wall Height (ft)</label>
+                                <input type="number" id="manual-room-height" value="8" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Floor Level</label>
+                                <select id="manual-room-level" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; cursor:pointer;">
+                                    <option value="basement">Basement</option>
+                                    <option value="crawlspace">Crawl Space</option>
+                                    <option value="main">Main Floor</option>
+                                    <option value="second">2nd Floor</option>
+                                    <option value="attic">Attic</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="text-align:right; margin-top:0.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+                            <button onclick="window.setGuidedStep3Mode('choose')" class="btn-secondary" style="padding:0.6rem 1rem;">Cancel</button>
+                            <button onclick="window.saveManualRoom()" class="btn-primary" style="padding:0.6rem 1.25rem;">Save Room</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Templates screen
+        if (mode === 'template') {
+            return `
+                <div class="checklist-room-card" style="padding: 1.5rem; max-width: 600px; margin: 0 auto;">
+                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Select Room Template</h3>
+                    <div class="choices-grid-layout" style="grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1.5rem;">
+                        <div onclick="window.selectRoomTemplate('Basement Room', '24 ft', '30 ft', 8, 'basement')" class="choice-card-item" style="padding:1rem;">
+                            <h3>Basement Preset</h3>
+                            <p>24 x 30 ft, Height 8 ft</p>
+                        </div>
+                        <div onclick="window.selectRoomTemplate('Crawl Space', '24 ft', '40 ft', 4, 'crawlspace')" class="choice-card-item" style="padding:1rem;">
+                            <h3>Crawl Space Preset</h3>
+                            <p>24 x 40 ft, Height 4 ft</p>
+                        </div>
+                        <div onclick="window.selectRoomTemplate('Living Area', '16 ft', '20 ft', 9, 'main')" class="choice-card-item" style="padding:1rem;">
+                            <h3>Living Room</h3>
+                            <p>16 x 20 ft, Height 9 ft</p>
+                        </div>
+                        <div onclick="window.selectRoomTemplate('Bedroom', '12 ft', '14 ft', 8, 'main')" class="choice-card-item" style="padding:1rem;">
+                            <h3>Bedroom</h3>
+                            <p>12 x 14 ft, Height 8 ft</p>
+                        </div>
+                        <div onclick="window.selectRoomTemplate('Bathroom', '8 ft', '10 ft', 8, 'main')" class="choice-card-item" style="padding:1rem;">
+                            <h3>Bathroom</h3>
+                            <p>8 x 10 ft, Height 8 ft</p>
+                        </div>
+                        <div onclick="window.selectRoomTemplate('Custom Area', '10 ft', '10 ft', 8, 'main')" class="choice-card-item" style="padding:1rem;">
+                            <h3>Custom Size</h3>
+                            <p>10 x 10 ft, Height 8 ft</p>
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <button onclick="window.setGuidedStep3Mode('choose')" class="btn-secondary" style="padding:0.6rem 1rem;">Cancel</button>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    // Step 4: Questionnaire
+    if (stepIndex === 4) {
+        if (state.rooms.length === 0) {
+            return `
+                <div class="checklist-room-card" style="text-align: center; padding: 3rem 1.5rem; background: rgba(30, 41, 59, 0.15);">
+                    <i data-lucide="layout" style="width:48px; height:48px; color:#64748b; margin-bottom:1rem; display:block; margin-left:auto; margin-right:auto;"></i>
+                    <h3 style="color:#cbd5e1; margin-bottom:0.5rem;">No Rooms Added Yet</h3>
+                    <p style="color:#64748b; font-size:0.85rem; margin-bottom:1.5rem;">You need to add at least one room before setting work requirements.</p>
+                    <button onclick="state.currentStep = 3; window.renderGuidedStep();" class="btn-primary" style="padding:0.5rem 1rem;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem;"></i> Add Room</button>
+                </div>
+            `;
+        }
+        
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">Answer these simple questions for each room to build the estimating scope.</p>
+                
+                ${state.rooms.map(r => `
+                    <div class="checklist-room-card" style="padding: 1.5rem;">
+                        <h3 style="font-size:1.2rem; font-weight:700; color:var(--accent-teal); margin-bottom:1.25rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">${r.name} (${r.levelId})</h3>
+                        
+                        <!-- Vapor Barrier Question -->
+                        <div class="guided-category-card">
+                            <div class="category-question-row">
+                                <div class="category-question-text">
+                                    <h4>Does this floor need a vapor barrier?</h4>
+                                    <p>Vapor barrier prevents ground dampness from climbing into wall structures.</p>
+                                </div>
+                                <div class="checklist-pill-group">
+                                    <span onclick="if(!${r.floorPerimeterStrap}){ window.toggleGuidedQuestion('${r.id}', 'floorPerimeterStrap') }" class="checklist-pill ${r.floorPerimeterStrap ? 'active' : ''}">Yes</span>
+                                    <span onclick="if(${r.floorPerimeterStrap}){ window.toggleGuidedQuestion('${r.id}', 'floorPerimeterStrap') }" class="checklist-pill ${!r.floorPerimeterStrap ? 'active' : ''}">No</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Drywall Removal Question -->
+                        <div class="guided-category-card">
+                            <div class="category-question-row">
+                                <div class="category-question-text">
+                                    <h4>Will drywall need to be removed?</h4>
+                                    <p>Used to remove waterlogged or mold-damaged boards.</p>
+                                </div>
+                                <select onchange="window.selectGuidedDropdown('${r.id}', 'drywallHeight', this.value)" style="padding:0.4rem; background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:white; cursor:pointer;">
+                                    <option value="none" ${r.drywallHeight==='none'?'selected':''}>No Drywall Removal</option>
+                                    <option value="1ft" ${r.drywallHeight==='1ft'?'selected':''}>Cut Drywall at 1 ft</option>
+                                    <option value="2ft" ${r.drywallHeight==='2ft'?'selected':''}>Cut Drywall at 2 ft</option>
+                                    <option value="4ft" ${r.drywallHeight==='4ft'?'selected':''}>Cut Drywall at 4 ft</option>
+                                    <option value="6ft" ${r.drywallHeight==='6ft'?'selected':''}>Cut Drywall at 6 ft</option>
+                                    <option value="full" ${r.drywallHeight==='full'?'selected':''}>Full Wall Removal</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Wall reinforcement Question -->
+                        <div class="guided-category-card">
+                            <div class="category-question-row">
+                                <div class="category-question-text">
+                                    <h4>Are any walls cracked or bowing?</h4>
+                                    <p>Cracks larger than 1/4" require carbon-fiber wall reinforcement strap anchors.</p>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <button onclick="window.changeGuidedNumber('${r.id}', 'carbonStraps', -1)" class="btn-secondary" style="padding:0.25rem 0.5rem; font-size:1rem; cursor:pointer;">-</button>
+                                    <span style="font-weight:700; color:white; min-width:30px; text-align:center;">${r.carbonStraps || 0}</span>
+                                    <button onclick="window.changeGuidedNumber('${r.id}', 'carbonStraps', 1)" class="btn-secondary" style="padding:0.25rem 0.5rem; font-size:1rem; cursor:pointer;">+</button>
+                                    <span style="font-size:0.75rem; color:#64748b;">Straps</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Insulation Question -->
+                        <div class="guided-category-card">
+                            <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                                <div class="category-question-row">
+                                    <div class="category-question-text">
+                                        <h4>Remove moldy/damaged insulation?</h4>
+                                        <p>Removes fiberglass batts or blown-in insulation from joists.</p>
+                                    </div>
+                                    <div class="checklist-pill-group">
+                                        <span onclick="if(!${r.removeInsulation}){ window.toggleGuidedQuestion('${r.id}', 'removeInsulation') }" class="checklist-pill ${r.removeInsulation ? 'active' : ''}">Yes</span>
+                                        <span onclick="if(${r.removeInsulation}){ window.toggleGuidedQuestion('${r.id}', 'removeInsulation') }" class="checklist-pill ${!r.removeInsulation ? 'active' : ''}">No</span>
+                                    </div>
+                                </div>
+                                <div class="category-question-row" style="border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem;">
+                                    <div class="category-question-text">
+                                        <h4>Blow new insulation back in?</h4>
+                                        <p>Blows fresh loose insulation back to ceiling/joist standard heights.</p>
+                                    </div>
+                                    <div class="checklist-pill-group">
+                                        <span onclick="if(!${r.blowInInsulation}){ window.toggleGuidedQuestion('${r.id}', 'blowInInsulation') }" class="checklist-pill ${r.blowInInsulation ? 'active' : ''}">Yes</span>
+                                        <span onclick="if(${r.blowInInsulation}){ window.toggleGuidedQuestion('${r.id}', 'blowInInsulation') }" class="checklist-pill ${!r.blowInInsulation ? 'active' : ''}">No</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+    
+    // Step 5: Equipment and Structural Items
+    if (stepIndex === 5) {
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <p style="color:#94a3b8; font-size:0.9rem;">Review equipment systems and structural fixtures currently added to the estimate blueprint.</p>
+                
+                <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem;">
+                    <!-- Sump Pumps Card -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size:1.1rem; font-weight:700; color:white; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="shield" style="color:var(--accent-teal);"></i> Sump Basin Systems</h3>
+                        <p style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">Basin structures containing primary pump units.</p>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:700; color:white; font-size:1.1rem;">Qty: ${state.sumpPumps.length}</span>
+                            <button onclick="window.addSumpPumpFromChecklist()" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="plus" style="width:12px; height:12px; margin-right:0.25rem;"></i> + Sump Basin</button>
+                        </div>
+                    </div>
+
+                    <!-- Dehumidifiers Card -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size:1.1rem; font-weight:700; color:white; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="droplet" style="color:var(--accent-blue);"></i> Dehumidifiers</h3>
+                        <p style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">Professional dehumidifier units for relative humidity controls.</p>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:700; color:white; font-size:1.1rem;">Qty: ${state.dehumidifiers.length}</span>
+                            <button onclick="window.addDehumidifierFromChecklist()" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="plus" style="width:12px; height:12px; margin-right:0.25rem;"></i> + Dehum</button>
+                        </div>
+                    </div>
+
+                    <!-- Structural Beams Card -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size:1.1rem; font-weight:700; color:white; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="layers" style="color:#a78bfa;"></i> Support Beams</h3>
+                        <p style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">Steel or structural timber beam installations.</p>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:700; color:white; font-size:1.1rem;">Qty: ${state.mainBeams.length}</span>
+                            <button onclick="if(typeof window.addBeamFromChecklist==='function'){window.addBeamFromChecklist()}else{alert('Beam adder available on CAD blueprint mode.')}" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="plus" style="width:12px; height:12px; margin-right:0.25rem;"></i> + Add Beam</button>
+                        </div>
+                    </div>
+
+                    <!-- Structural Stanchions Card -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size:1.1rem; font-weight:700; color:white; margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;"><i data-lucide="sliders" style="color:#f59e0b;"></i> Support Posts</h3>
+                        <p style="font-size:0.8rem; color:#64748b; margin-bottom:1rem;">Adjustable steel stanchion support jacks.</p>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:700; color:white; font-size:1.1rem;">Qty: ${state.stanchions.length}</span>
+                            <button onclick="if(typeof window.addStanchionFromChecklist==='function'){window.addStanchionFromChecklist()}else{alert('Post adder available on CAD blueprint mode.')}" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="plus" style="width:12px; height:12px; margin-right:0.25rem;"></i> + Add Post</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Step 6: Measurement Review
+    if (stepIndex === 6) {
+        if (state.rooms.length === 0) {
+            return `
+                <div class="checklist-room-card" style="text-align: center; padding: 3rem 1.5rem; background: rgba(30, 41, 59, 0.15);">
+                    <i data-lucide="layout" style="width:48px; height:48px; color:#64748b; margin-bottom:1rem; display:block; margin-left:auto; margin-right:auto;"></i>
+                    <h3 style="color:#cbd5e1; margin-bottom:0.5rem;">No Rooms Saved Yet</h3>
+                    <p style="color:#64748b; font-size:0.85rem; margin-bottom:1.5rem;">You need to add at least one room before reviewing measurements.</p>
+                    <button onclick="state.currentStep = 3; window.renderGuidedStep();" class="btn-primary" style="padding:0.5rem 1rem;"><i data-lucide="plus" style="width:14px; height:14px; margin-right:0.25rem;"></i> Add Room</button>
+                </div>
+            `;
+        }
+
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <p style="color:#94a3b8; font-size:0.9rem; margin-bottom:1rem;">Verify all dimensions and warning logs. Click any card to edit its sizing data.</p>
+                
+                <div style="display:flex; flex-direction:column; gap:1rem;">
+                    ${state.rooms.map(r => {
+                        const perimeter = (r.width * 2) + (r.length * 2);
+                        const area = r.width * r.length;
+                        
+                        let warnings = [];
+                        if (!r.height || r.height === 0) warnings.push("Height is missing.");
+                        if (r.width === 0 || r.length === 0) warnings.push("Dimensions are missing.");
+                        
+                        return `
+                            <div onclick="window.editGuidedRoomDimensions('${r.id}')" class="checklist-room-card" style="padding: 1.25rem; cursor:pointer; display:flex; justify-content:space-between; align-items:center; border: 1px solid ${warnings.length > 0 ? '#ef4444' : 'rgba(255,255,255,0.08)'};">
+                                <div>
+                                    <h4 style="font-weight:700; color:white; margin-bottom:0.25rem;">${r.name} (${r.levelId})</h4>
+                                    <p style="font-size:0.75rem; color:#cbd5e1; margin:0;">
+                                        Dimensions: ${r.width.toFixed(1)} x ${r.length.toFixed(1)} ft (Height ${r.height} ft)<br>
+                                        Area: ${Math.round(area)} sq ft | Wall Area: ${Math.round(perimeter * r.height)} sq ft | Perimeter: ${Math.round(perimeter)} ft
+                                    </p>
+                                    ${warnings.map(w => `
+                                        <span style="display:inline-block; font-size:10px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; padding:0.1rem 0.4rem; border-radius:4px; margin-top:0.5rem; font-weight:700;"><i data-lucide="alert-triangle" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> ${w}</span>
+                                    `).join('')}
+                                </div>
+                                <button class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="edit"></i> Edit Details</button>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Step 7: Materials and Costs Breakdown
+    if (stepIndex === 7) {
+        if (!state.costingTab) state.costingTab = 'materials';
+        const pricing = calculatePricing();
+        
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <div style="display:flex; gap:0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:0.5rem;">
+                    <button onclick="state.costingTab = 'materials'; window.renderGuidedStep();" class="btn-secondary ${state.costingTab === 'materials' ? 'active' : ''}" style="padding:0.5rem 1rem; border-radius:8px; cursor:pointer;">Materials Summary</button>
+                    <button onclick="state.costingTab = 'costing'; window.renderGuidedStep();" class="btn-secondary ${state.costingTab === 'costing' ? 'active' : ''}" style="padding:0.5rem 1rem; border-radius:8px; cursor:pointer;">Private Internal Costing</button>
+                </div>
+                
+                ${state.costingTab === 'materials' ? `
+                    <div class="checklist-room-card" style="padding:1.5rem;">
+                        <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Materials Checklist Summary</h3>
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            ${Object.keys(pricing.items).map(k => {
+                                const itm = pricing.items[k];
+                                if (itm.qty === 0) return '';
+                                return `
+                                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0; border-bottom:1px solid rgba(255,255,255,0.04);">
+                                        <span style="color:#cbd5e1; font-size:0.85rem;">${itm.name}</span>
+                                        <span style="font-weight:700; color:white; font-size:0.85rem;">${itm.qty} units</span>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                ` : `
+                    <div class="checklist-room-card" style="padding:1.5rem;">
+                        <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Private Estimating Markup</h3>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1.5rem;">
+                            <div>
+                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Target Gross Margin (%)</label>
+                                <input type="number" id="guided-settings-margin" value="${state.costing.settings.targetGrossMargin}" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                            </div>
+                            <div>
+                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Sales Tax Rate (%)</label>
+                                <input type="number" id="guided-settings-tax" value="${state.costing.settings.salesTaxRate}" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                            </div>
+                        </div>
+                        
+                        <div style="background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.05); border-radius:10px; padding:1.25rem; display:flex; flex-direction:column; gap:0.5rem;">
+                            <div style="display:flex; justify-content:space-between;">
+                                <span style="color:#64748b; font-size:0.85rem;">Total Hardware Cost</span>
+                                <span style="font-weight:600; color:white; font-size:0.85rem;">$${pricing.totalCost.toFixed(2)}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between;">
+                                <span style="color:#64748b; font-size:0.85rem;">Sales Tax</span>
+                                <span style="font-weight:600; color:white; font-size:0.85rem;">$${pricing.totalTax.toFixed(2)}</span>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; border-top:1px solid rgba(255,255,255,0.05); padding-top:0.5rem;">
+                                <span style="color:var(--accent-teal); font-weight:700; font-size:1rem;">Recommended Customer Bid</span>
+                                <span style="font-weight:700; color:var(--accent-teal); font-size:1.1rem;">$${pricing.totalPrice.toFixed(2)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `}
+            </div>
+        `;
+    }
+    
+    // Step 8: Proposal Configuration
+    if (stepIndex === 8) {
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                <p style="color:#94a3b8; font-size:0.9rem;">Select which estimating items should be visible on the customer proposal document.</p>
+                
+                <div class="checklist-room-card" style="padding: 1.5rem;">
+                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Scope Selections</h3>
+                    
+                    <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                        <label style="display:flex; align-items:center; gap:0.75rem; color:white; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" checked style="width:18px; height:18px;">
+                            Include Customer & Property Info
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.75rem; color:white; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" checked style="width:18px; height:18px;">
+                            Include Sump Pumps Config
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.75rem; color:white; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" checked style="width:18px; height:18px;">
+                            Include Dehumidifiers & Air Scrubbers
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.75rem; color:white; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" checked style="width:18px; height:18px;">
+                            Include Vapor Barriers & Treatment
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.75rem; color:white; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" checked style="width:18px; height:18px;">
+                            Include 2D Drawing Blueprint
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.75rem; color:white; font-size:0.9rem; cursor:pointer;">
+                            <input type="checkbox" checked style="width:18px; height:18px;">
+                            Include Total Pricing
+                        </label>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    // Step 9: Save and Export
+    if (stepIndex === 9) {
+        return `
+            <div style="display: flex; flex-direction: column; gap: 1.5rem; text-align: center; padding: 2rem 0;">
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 50%; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem;">
+                    <i data-lucide="check" style="width: 40px; height: 40px; color: #10b981;"></i>
+                </div>
+                
+                <h2 style="font-size: 1.6rem; font-weight: 700; color: white; margin-bottom: 0.5rem;">Estimate Ready!</h2>
+                <p style="color: #cbd5e1; font-size: 0.95rem; max-width: 320px; margin: 0 auto 2rem;">All details have been computed. You can now download the PDF or export the estimate.</p>
+                
+                <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; max-width: 500px; margin: 0 auto;">
+                    <button id="btn-guided-pdf-export" onclick="if(typeof window.exportToPDF==='function'){window.exportToPDF()}else{document.getElementById('btn-export-pdf').click()}" class="btn-primary" style="padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="download"></i> Download PDF Proposal</button>
+                    <button onclick="document.getElementById('btn-save').click()" class="btn-secondary" style="padding: 0.75rem 1.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="folder-open"></i> Export Job JSON</button>
+                </div>
+            </div>
+        `;
+    }
+    
+    return '';
 }
+
+window.editGuidedRoomDimensions = function(roomId) {
+    state.guidedStep3Mode = 'manual';
+    window.renderGuidedStep();
+    setTimeout(() => {
+        const room = state.rooms.find(r => r.id === roomId);
+        if (!room) return;
+        const nameEl = document.getElementById('manual-room-name');
+        const lenEl = document.getElementById('manual-room-length');
+        const widEl = document.getElementById('manual-room-width');
+        const hgtEl = document.getElementById('manual-room-height');
+        const lvlEl = document.getElementById('manual-room-level');
+        if (nameEl) nameEl.value = room.name;
+        if (lenEl) lenEl.value = room.length.toFixed(1) + " ft";
+        if (widEl) widEl.value = room.width.toFixed(1) + " ft";
+        if (hgtEl) hgtEl.value = room.height;
+        if (lvlEl) lvlEl.value = room.levelId;
+        
+        // Remove room to overwrite on save
+        state.rooms = state.rooms.filter(r => r.id !== roomId);
+    }, 50);
+};
+
+// Bind listeners to inputs
+function bindGuidedInputListeners(container) {
+    // Step 1 listeners
+    const fields = [
+        { id: 'guided-customer-name', key: 'customerName' },
+        { id: 'guided-customer-address', key: 'customerAddress' },
+        { id: 'guided-customer-phone', key: 'customerPhone' },
+        { id: 'guided-customer-email', key: 'customerEmail' },
+        { id: 'guided-estimator-name', key: 'estimator' },
+        { id: 'guided-inspection-date', key: 'inspectionDate' },
+        { id: 'guided-job-notes', key: 'notes' }
+    ];
+    
+    fields.forEach(f => {
+        const el = document.getElementById(f.id);
+        if (el) {
+            el.addEventListener('input', () => {
+                if (!state.costing) initDefaultCosting(state);
+                state.costing[f.key] = el.value;
+                triggerAutosave();
+            });
+        }
+    });
+
+    const filePicker = document.getElementById('guided-photo-file-picker');
+    if (filePicker) {
+        filePicker.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+            
+            if (!state.costing.photos) state.costing.photos = [];
+            
+            for (let i = 0; i < files.length; i++) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    state.costing.photos.push(event.target.result);
+                    window.renderGuidedStep();
+                    triggerAutosave();
+                };
+                reader.readAsDataURL(files[i]);
+            }
+        });
+    }
+
+    // Step 7 pricing fields
+    const marginInput = document.getElementById('guided-settings-margin');
+    if (marginInput) {
+        marginInput.addEventListener('input', () => {
+            state.costing.settings.targetGrossMargin = parseFloat(marginInput.value) || 0;
+            triggerAutosave();
+        });
+    }
+    const taxInput = document.getElementById('guided-settings-tax');
+    if (taxInput) {
+        taxInput.addEventListener('input', () => {
+            state.costing.settings.salesTaxRate = parseFloat(taxInput.value) || 0;
+            triggerAutosave();
+        });
+    }
+}
+
+// Debounced Autosave triggers
+let autosaveTimeout = null;
+function triggerAutosave() {
+    const statusText = document.getElementById('save-status-text');
+    if (statusText) statusText.innerText = "Saving...";
+    
+    if (autosaveTimeout) clearTimeout(autosaveTimeout);
+    autosaveTimeout = setTimeout(() => {
+        if (typeof window.autosaveJob === 'function') {
+            window.autosaveJob();
+        }
+    }, 1200);
+}
+
+window.calculatePricing = function() {
+    if (state.rooms) {
+        state.rooms.forEach(r => {
+            if (typeof r.h === 'undefined' && typeof r.height !== 'undefined') {
+                r.h = r.height;
+            } else if (typeof r.height === 'undefined' && typeof r.h !== 'undefined') {
+                r.height = r.h;
+            }
+        });
+    }
+    const catalog = RoomFlowCatalog.loadCatalog ? RoomFlowCatalog.loadCatalog() : RoomFlowCatalog.getDefaults();
+    return calculateProjectCosts(state, catalog);
+};
+
 

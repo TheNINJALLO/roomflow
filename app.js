@@ -4155,6 +4155,9 @@ const view2D = document.getElementById('canvas-container');
 const view3D = document.getElementById('three-container');
 const viewAR = document.getElementById('ar-container');
 const viewCost = document.getElementById('cost-container');
+const viewJobs = document.getElementById('jobs-viewport');
+const viewGuided = document.getElementById('guided-container');
+const viewMore = document.getElementById('more-viewport');
 
 function switchView(viewName) {
     state.activeView = viewName;
@@ -4170,6 +4173,9 @@ function switchView(viewName) {
     view3D.classList.toggle('active', viewName === '3d');
     viewAR.classList.toggle('active', viewName === 'ar');
     if (viewCost) viewCost.classList.toggle('active', viewName === 'cost');
+    if (viewJobs) viewJobs.classList.toggle('active', viewName === 'jobs');
+    if (viewGuided) viewGuided.classList.toggle('active', viewName === 'guided');
+    if (viewMore) viewMore.classList.toggle('active', viewName === 'more');
 
     // Toggle AR transparency controls & solid overlays
     const appContainer = document.getElementById('app-container');
@@ -6316,4 +6322,533 @@ if (btnToggleChecklist) {
         switchView('checklist');
     });
 }
+
+// ==========================================
+// GUIDED WORKFLOW & DASHBOARD CONTROLLER
+// ==========================================
+
+// Global state defaults for Guided Mode
+state.interfaceMode = localStorage.getItem('roomflow_interface_mode') || 'guided';
+state.currentStep = 1;
+state.currentJobName = '';
+state.guidedStep3Mode = 'choose';
+
+// Sync settings class helper
+if (!state.costing) {
+    initDefaultCosting(state);
+}
+
+// Setup responsive UI view elements on startup
+window.addEventListener('load', () => {
+    // Apply initial interface modes
+    setInterfaceMode(state.interfaceMode);
+    
+    // Bind navigation tab clicks
+    document.querySelectorAll('.nav-bar-item, .nav-rail-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            const tab = e.currentTarget.getAttribute('data-tab');
+            switchTab(tab);
+        });
+    });
+
+    // Dashboard actions
+    const startNewBtn = document.getElementById('btn-start-new-estimate');
+    if (startNewBtn) {
+        startNewBtn.addEventListener('click', startNewEstimateWorkflow);
+    }
+    const continueBtn = document.getElementById('btn-continue-last-estimate');
+    if (continueBtn) {
+        continueBtn.addEventListener('click', continueLastEstimateWorkflow);
+    }
+
+    // Wizard navigation buttons
+    const backBtn = document.getElementById('btn-guided-back');
+    if (backBtn) backBtn.addEventListener('click', prevGuidedStep);
+    
+    const continueWizardBtn = document.getElementById('btn-guided-continue');
+    if (continueWizardBtn) continueWizardBtn.addEventListener('click', nextGuidedStep);
+
+    // Search and filters
+    const searchInput = document.getElementById('jobs-search-input');
+    if (searchInput) {
+        searchInput.addEventListener('input', renderJobsList);
+    }
+    const statusFilter = document.getElementById('jobs-filter-status');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', renderJobsList);
+    }
+
+    // Help Center triggers
+    const helpBtn = document.getElementById('btn-dashboard-help');
+    if (helpBtn) helpBtn.addEventListener('click', () => showModal('help-center-modal'));
+    
+    const showHelpBtn = document.getElementById('btn-show-help-modal');
+    if (showHelpBtn) showHelpBtn.addEventListener('click', () => showModal('help-center-modal'));
+    
+    const closeHelpBtn = document.getElementById('btn-close-help');
+    if (closeHelpBtn) closeHelpBtn.addEventListener('click', () => hideModal('help-center-modal'));
+
+    // Diagnostics shortcuts
+    const diagBtn = document.getElementById('btn-show-diagnostics-modal');
+    if (diagBtn) diagBtn.addEventListener('click', () => {
+        showModal('diagnostics-modal');
+        if (window.RoomFlowSpatial) window.RoomFlowSpatial.performCapabilityDetection();
+    });
+
+    // Interface toggles settings
+    const guidedPill = document.getElementById('pill-interface-guided');
+    const advancedPill = document.getElementById('pill-interface-advanced');
+    
+    if (guidedPill) {
+        guidedPill.addEventListener('click', () => {
+            setInterfaceMode('guided');
+            guidedPill.classList.add('active');
+            if (advancedPill) advancedPill.classList.remove('active');
+        });
+    }
+    
+    if (advancedPill) {
+        advancedPill.addEventListener('click', () => {
+            setInterfaceMode('advanced');
+            advancedPill.classList.add('active');
+            if (guidedPill) guidedPill.classList.remove('active');
+        });
+    }
+
+    // Initial render
+    renderJobsList();
+    renderTrashList();
+    checkLastEstimate();
+});
+
+// Modal helpers
+function showModal(id) {
+    const m = document.getElementById(id);
+    if (m) m.classList.remove('hidden');
+}
+function hideModal(id) {
+    const m = document.getElementById(id);
+    if (m) m.classList.add('hidden');
+}
+
+// Set layout interfaces
+function setInterfaceMode(mode) {
+    state.interfaceMode = mode;
+    localStorage.setItem('roomflow_interface_mode', mode);
+    
+    const container = document.getElementById('app-container');
+    if (!container) return;
+    
+    if (mode === 'guided') {
+        container.classList.remove('interface-mode-advanced');
+        container.classList.add('interface-mode-guided');
+        // Hide standard CAD headers options, show dashboard
+        switchTab('jobs');
+    } else {
+        container.classList.remove('interface-mode-guided');
+        container.classList.add('interface-mode-advanced');
+        // Restore professional layout tabs
+        switchView('checklist');
+    }
+}
+
+// Tab Switching Routing
+window.switchTab = function(tabName) {
+    document.querySelectorAll('.nav-bar-item, .nav-rail-item').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-tab') === tabName);
+    });
+
+    if (tabName === 'jobs') {
+        switchView('jobs');
+        renderJobsList();
+    } else if (tabName === 'project') {
+        if (state.currentJobName) {
+            switchView('guided');
+            window.renderGuidedStep();
+        } else {
+            alert("Please start or select a job first!");
+            switchTab('jobs');
+        }
+    } else if (tabName === 'add') {
+        if (state.currentJobName) {
+            state.currentStep = 3;
+            state.guidedStep3Mode = 'choose';
+            switchView('guided');
+            window.renderGuidedStep();
+        } else {
+            alert("Please start or select a job first!");
+            switchTab('jobs');
+        }
+    } else if (tabName === 'review') {
+        if (state.currentJobName) {
+            state.currentStep = 6;
+            switchView('guided');
+            window.renderGuidedStep();
+        } else {
+            alert("Please start or select a job first!");
+            switchTab('jobs');
+        }
+    } else if (tabName === 'more') {
+        switchView('more');
+        renderTrashList();
+    }
+};
+
+// Check for last unfinished estimate
+function checkLastEstimate() {
+    const lastJob = localStorage.getItem('roomflow_last_estimate');
+    const container = document.getElementById('continue-last-estimate-container');
+    if (lastJob && container) {
+        const jobs = getStoredJobs();
+        if (jobs[lastJob]) {
+            container.style.display = 'flex';
+            document.getElementById('continue-job-title').innerText = lastJob;
+            const dateStr = new Date(jobs[lastJob].lastModified || Date.now()).toLocaleDateString();
+            document.getElementById('continue-job-meta').innerText = `Last edited: ${dateStr}`;
+        } else {
+            container.style.display = 'none';
+        }
+    } else if (container) {
+        container.style.display = 'none';
+    }
+}
+
+// Start/Continue workflow
+function startNewEstimateWorkflow() {
+    const name = prompt("Enter a unique Job/Customer Name for this estimate:");
+    if (!name) return;
+    
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    
+    const jobs = getStoredJobs();
+    if (jobs[trimmed]) {
+        alert("A job with this name already exists!");
+        return;
+    }
+    
+    // Reset project state for new job
+    state.rooms = [];
+    state.sumpPumps = [];
+    state.dehumidifiers = [];
+    state.dischargeLines = [];
+    state.floorHatches = [];
+    state.interiorPipes = [];
+    state.stanchions = [];
+    state.mainBeams = [];
+    state.capturedMeasurements = [];
+    
+    initDefaultCosting(state);
+    state.currentJobName = trimmed;
+    state.currentStep = 1;
+    state.guidedStep3Mode = 'choose';
+    
+    // Save immediately to register
+    window.autosaveJob();
+    localStorage.setItem('roomflow_last_estimate', trimmed);
+    checkLastEstimate();
+    
+    switchTab('project');
+}
+
+function continueLastEstimateWorkflow() {
+    const lastJob = localStorage.getItem('roomflow_last_estimate');
+    if (lastJob) {
+        loadJobByName(lastJob);
+    }
+}
+
+window.loadJobByName = function(jobName) {
+    const jobs = getStoredJobs();
+    const data = jobs[jobName];
+    if (data) {
+        state.currentJobName = jobName;
+        localStorage.setItem('roomflow_last_estimate', jobName);
+        loadJobData(data);
+        
+        state.currentStep = 1;
+        state.guidedStep3Mode = 'choose';
+        switchTab('project');
+    }
+};
+
+// Jobs List Management
+function getStoredJobs() {
+    try {
+        const stored = localStorage.getItem('roomflow_jobs');
+        return stored ? JSON.parse(stored) : {};
+    } catch(e) {
+        console.error(e);
+        return {};
+    }
+}
+
+window.autosaveJob = function() {
+    if (!state.currentJobName) return;
+    
+    const projectData = {
+        customerName: state.costing ? state.costing.customerName : '',
+        customerAddress: state.costing ? state.costing.customerAddress : '',
+        rooms: state.rooms,
+        sumpPumps: state.sumpPumps,
+        dehumidifiers: state.dehumidifiers || [],
+        dischargeLines: state.dischargeLines,
+        floorHatches: state.floorHatches,
+        interiorPipes: state.interiorPipes,
+        stanchions: state.stanchions,
+        mainBeams: state.mainBeams,
+        currentLevelId: state.currentLevelId,
+        capturedMeasurements: state.capturedMeasurements || [],
+        costing: state.costing,
+        lastModified: Date.now()
+    };
+    
+    const jobs = getStoredJobs();
+    jobs[state.currentJobName] = projectData;
+    localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+    
+    const statusText = document.getElementById('save-status-text');
+    if (statusText) statusText.innerText = "Saved";
+};
+
+// Search & Filter rendering
+function renderJobsList() {
+    const list = document.getElementById('recent-jobs-list');
+    if (!list) return;
+    
+    const jobs = getStoredJobs();
+    const query = (document.getElementById('jobs-search-input')?.value || '').trim().toLowerCase();
+    const filter = document.getElementById('jobs-filter-status')?.value || 'all';
+    
+    const jobKeys = Object.keys(jobs).sort((a,b) => (jobs[b].lastModified || 0) - (jobs[a].lastModified || 0));
+    
+    let html = '';
+    let matchCount = 0;
+    
+    jobKeys.forEach(k => {
+        const j = jobs[k];
+        const cName = (j.customerName || k).toLowerCase();
+        const cAddr = (j.customerAddress || '').toLowerCase();
+        
+        // Search filter
+        if (query && !cName.includes(query) && !cAddr.includes(query)) return;
+        
+        // Completion status check
+        const isComplete = j.rooms && j.rooms.length > 0 && j.costing && j.costing.customerName;
+        if (filter === 'complete' && !isComplete) return;
+        if (filter === 'incomplete' && isComplete) return;
+        
+        matchCount++;
+        const dateStr = new Date(j.lastModified || Date.now()).toLocaleDateString();
+        const progress = isComplete ? 100 : Math.round(((j.rooms?.length ? 1 : 0) + (j.costing?.customerName ? 1 : 0)) * 50);
+        
+        html += `
+            <div class="job-row-card">
+                <div class="job-info-cell">
+                    <h4>${k}</h4>
+                    <p>${j.customerAddress || 'No Address Specified'} | Edited: ${dateStr}</p>
+                </div>
+                <div class="job-progress-cell">
+                    <span style="font-size:0.75rem; font-weight:600; color:#cbd5e1;">Progress: ${progress}%</span>
+                    <div class="job-progress-bar-bg">
+                        <div class="job-progress-bar-fill" style="width: ${progress}%;"></div>
+                    </div>
+                </div>
+                <div style="font-size: 0.8rem; color: #94a3b8;">
+                    ${isComplete ? '<span style="color:#10b981; font-weight:600;">Complete</span>' : '<span style="color:#f59e0b; font-weight:600;">In Progress</span>'}
+                </div>
+                <div class="job-actions-cell">
+                    <button onclick="window.loadJobByName('${k}')" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="arrow-right" style="width:12px; height:12px;"></i> Open</button>
+                    <button onclick="window.duplicateJob('${k}')" class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="copy" style="width:12px; height:12px;"></i> Duplicate</button>
+                    <button onclick="window.deleteJobWithTrash('${k}')" class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem; color:#ef4444;"><i data-lucide="trash-2" style="width:12px; height:12px;"></i> Delete</button>
+                </div>
+            </div>
+        `;
+    });
+    
+    if (matchCount === 0) {
+        html = `
+            <div style="text-align: center; padding: 2rem; color: #64748b; font-size: 0.85rem;">
+                No matching estimates found.
+            </div>
+        `;
+    }
+    
+    list.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+}
+
+// Duplicate estimate
+window.duplicateJob = function(jobName) {
+    const jobs = getStoredJobs();
+    const orig = jobs[jobName];
+    if (!orig) return;
+    
+    const copyName = jobName + " (Copy)";
+    const copyData = JSON.parse(JSON.stringify(orig));
+    copyData.lastModified = Date.now();
+    
+    jobs[copyName] = copyData;
+    localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+    renderJobsList();
+};
+
+// Trash Bin System
+window.deleteJobWithTrash = function(jobName) {
+    if (!confirm(`Are you sure you want to delete job "${jobName}"?`)) return;
+    
+    const jobs = getStoredJobs();
+    const deleted = jobs[jobName];
+    if (!deleted) return;
+    
+    // Save to Trash localstorage
+    let trash = {};
+    try {
+        const stored = localStorage.getItem('roomflow_jobs_trash');
+        if (stored) trash = JSON.parse(stored);
+    } catch(e) {
+        console.error(e);
+    }
+    
+    trash[jobName] = deleted;
+    localStorage.setItem('roomflow_jobs_trash', JSON.stringify(trash));
+    
+    // Remove from active jobs
+    delete jobs[jobName];
+    localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+    
+    // If it was the active last estimate, clear
+    if (localStorage.getItem('roomflow_last_estimate') === jobName) {
+        localStorage.removeItem('roomflow_last_estimate');
+    }
+    if (state.currentJobName === jobName) {
+        state.currentJobName = '';
+    }
+    
+    // Show Restore Toast Banner
+    showTrashToastBanner(jobName);
+    
+    renderJobsList();
+    renderTrashList();
+    checkLastEstimate();
+};
+
+function showTrashToastBanner(jobName) {
+    // Remove existing toast if any
+    const existing = document.getElementById('trash-toast-banner');
+    if (existing) existing.remove();
+    
+    const banner = document.createElement('div');
+    banner.id = 'trash-toast-banner';
+    banner.className = 'trash-restore-toast-banner';
+    banner.innerHTML = `
+        <span>Job "${jobName}" deleted.</span>
+        <button onclick="window.restoreJob('${jobName}')">Undo</button>
+    `;
+    
+    document.body.appendChild(banner);
+    
+    // Auto-remove after 6 seconds
+    setTimeout(() => {
+        if (banner && banner.parentNode) banner.remove();
+    }, 6000);
+}
+
+window.restoreJob = function(jobName) {
+    let trash = {};
+    try {
+        const stored = localStorage.getItem('roomflow_jobs_trash');
+        if (stored) trash = JSON.parse(stored);
+    } catch(e) {
+        console.error(e);
+    }
+    
+    const restored = trash[jobName];
+    if (!restored) return;
+    
+    const jobs = getStoredJobs();
+    jobs[jobName] = restored;
+    localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+    
+    delete trash[jobName];
+    localStorage.setItem('roomflow_jobs_trash', JSON.stringify(trash));
+    
+    // Clean banner
+    const banner = document.getElementById('trash-toast-banner');
+    if (banner) banner.remove();
+    
+    renderJobsList();
+    renderTrashList();
+    checkLastEstimate();
+};
+
+function renderTrashList() {
+    const list = document.getElementById('trash-jobs-list');
+    if (!list) return;
+    
+    let trash = {};
+    try {
+        const stored = localStorage.getItem('roomflow_jobs_trash');
+        if (stored) trash = JSON.parse(stored);
+    } catch(e) {
+        console.error(e);
+    }
+    
+    const keys = Object.keys(trash);
+    if (keys.length === 0) {
+        list.innerHTML = `<div style="text-align: center; font-size: 0.8rem; color: #64748b; padding: 1rem 0;">Trash bin is empty.</div>`;
+        return;
+    }
+    
+    let html = '';
+    keys.forEach(k => {
+        html += `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0.5rem; background:rgba(255,255,255,0.03); border-radius:6px; font-size:0.8rem; border:1px solid rgba(255,255,255,0.05);">
+                <span style="font-weight:600; color:white;">${k}</span>
+                <button onclick="window.restoreJob('${k}')" class="btn-primary" style="padding:0.25rem 0.5rem; font-size:0.75rem;"><i data-lucide="refresh-cw" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Restore</button>
+            </div>
+        `;
+    });
+    
+    list.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+}
+
+// Guided Steps Wizard Navigation Controls
+function prevGuidedStep() {
+    if (state.currentStep > 1) {
+        state.currentStep--;
+        window.renderGuidedStep();
+    } else {
+        // Return to jobs list
+        switchTab('jobs');
+    }
+}
+
+function nextGuidedStep() {
+    if (state.currentStep < 9) {
+        state.currentStep++;
+        window.renderGuidedStep();
+    } else {
+        // Step 9 finish estimate, return to dashboard
+        switchTab('jobs');
+    }
+}
+
+// Viewport Overrides for drawings returns
+window.returnFromDrawing = function() {
+    switchView('guided');
+    state.guidedStep3Mode = 'choose';
+    window.renderGuidedStep();
+};
+
+window.returnFromScanning = function() {
+    if (typeof stopARSession === 'function') {
+        stopARSession();
+    }
+    switchView('guided');
+    state.guidedStep3Mode = 'choose';
+    window.renderGuidedStep();
+};
+
 

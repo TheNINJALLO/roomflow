@@ -218,6 +218,33 @@ function addSpatialPoint(pt) {
     }));
     
     updateARDisplay();
+    triggerSpatialFeedback();
+}
+
+function triggerSpatialFeedback() {
+    // 1. Haptic vibration feedback
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+        navigator.vibrate(80);
+    }
+    
+    // 2. Audible feedback (beep) if not muted
+    if (typeof state !== 'undefined' && !state.arMuteAudio) {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            gain.gain.setValueAtTime(0.04, ctx.currentTime);
+            
+            osc.start();
+            osc.stop(ctx.currentTime + 0.08);
+        } catch (e) {
+            console.warn("Audio Context playback blocked or unsupported:", e);
+        }
+    }
 }
 
 function updateHeightMeasurement(heightFeet) {
@@ -818,10 +845,28 @@ captureBtn.addEventListener('click', () => {
         updateARDisplay();
         updateARCapturesOverlay();
         if (window.updateMeasurementsSidebar) window.updateMeasurementsSidebar();
+        triggerSpatialFeedback();
     } else {
         alert('Aim at a layout target point first.');
     }
 });
+
+// Bind audio toggle button in overlay
+const audioToggleBtn = document.getElementById('btn-ar-audio-toggle');
+if (audioToggleBtn) {
+    audioToggleBtn.addEventListener('click', () => {
+        state.arMuteAudio = !state.arMuteAudio;
+        const icon = audioToggleBtn.querySelector('i');
+        const span = audioToggleBtn.querySelector('span');
+        if (state.arMuteAudio) {
+            audioToggleBtn.style.opacity = '0.6';
+            if (span) span.innerText = 'Muted';
+        } else {
+            audioToggleBtn.style.opacity = '1';
+            if (span) span.innerText = 'Audio';
+        }
+    });
+}
 
 function updateARCapturesOverlay() {
     const listEl = document.getElementById('ar-captures-list');

@@ -74,6 +74,29 @@
 
         <!-- Main Body Grid -->
         <main class="app-body">
+            <!-- Vertical Left Navigation Rail for Desktop/Tablet in Guided Mode -->
+            <aside id="desktop-nav-rail">
+                <button class="nav-rail-item active" data-tab="jobs" title="Dashboard Home">
+                    <i data-lucide="layout"></i>
+                    <span>Jobs</span>
+                </button>
+                <button class="nav-rail-item" data-tab="project" title="Current Job Wizard">
+                    <i data-lucide="edit-3"></i>
+                    <span>Project</span>
+                </button>
+                <button class="nav-rail-item" data-tab="add" title="Quick Add Rooms / Hardware">
+                    <i data-lucide="plus-circle"></i>
+                    <span>Add</span>
+                </button>
+                <button class="nav-rail-item" data-tab="review" title="Review Summary & Costs">
+                    <i data-lucide="check-square"></i>
+                    <span>Review</span>
+                </button>
+                <button class="nav-rail-item" data-tab="more" title="More Options & Settings">
+                    <i data-lucide="more-horizontal"></i>
+                    <span>More</span>
+                </button>
+            </aside>
             <!-- Left Sidebar: Toolbox -->
             <aside id="left-sidebar" class="sidebar toolbox">
                 <div class="sidebar-header-mobile">
@@ -240,8 +263,118 @@
                 </div>
                 <div id="mobile-sidebar-backdrop" class="sidebar-backdrop hidden"></div>
 
+                <!-- Jobs Dashboard Viewport -->
+                <div id="jobs-viewport" class="viewport active" style="display: flex; flex-direction: column; gap: 2rem;">
+                    <div class="jobs-dashboard-header">
+                        <div class="guided-title-row">
+                            <div class="jobs-welcome-text">
+                                <h2>RoomFlow Dashboard</h2>
+                                <p>Create, manage, and sync job estimates directly from the field.</p>
+                            </div>
+                            <button id="btn-dashboard-help" style="background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: #cbd5e1; border-radius: 8px; padding: 0.5rem 1rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="help-circle"></i> Help</button>
+                        </div>
+                    </div>
+
+                    <div class="jobs-hero-block">
+                        <button id="btn-start-new-estimate" class="dashboard-btn-large">
+                            <div class="dashboard-btn-large-content">
+                                <h3>Start New Estimate</h3>
+                                <p>Set up customer info and follow the guided wizard.</p>
+                            </div>
+                            <i data-lucide="arrow-right-circle"></i>
+                        </button>
+
+                        <div id="continue-last-estimate-container" class="continue-job-card" style="display: none;">
+                            <div>
+                                <h4 style="margin: 0 0 0.25rem 0; font-size: 0.85rem; text-transform: uppercase; color: var(--accent-teal); letter-spacing: 0.05em; font-weight: 700;">Unfinished Work</h4>
+                                <h3 id="continue-job-title" style="font-size: 1.15rem; font-weight: 700; color: white; margin-bottom: 0.25rem; word-break: break-all;">No recent job</h3>
+                                <p id="continue-job-meta" style="font-size: 0.75rem; color: #64748b; margin: 0;">Last edited: N/A</p>
+                            </div>
+                            <button id="btn-continue-last-estimate" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.5rem; color: white; cursor: pointer; font-weight: 600; text-align: center; margin-top: 1rem; width: 100%; display: flex; align-items: center; justify-content: center; gap: 0.35rem;"><i data-lucide="arrow-right"></i> Continue Estimate</button>
+                        </div>
+                    </div>
+
+                    <div class="jobs-list-section">
+                        <div class="jobs-search-bar">
+                            <div class="jobs-search-input-wrapper">
+                                <i data-lucide="search"></i>
+                                <input type="text" id="jobs-search-input" class="jobs-search-input" placeholder="Search by customer name or address...">
+                            </div>
+                            <select id="jobs-filter-status" class="jobs-filter-select">
+                                <option value="all">All Jobs</option>
+                                <option value="incomplete">In Progress</option>
+                                <option value="complete">Completed</option>
+                            </select>
+                        </div>
+
+                        <div id="recent-jobs-list" class="recent-jobs-grid">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Guided Step Wizard Viewport -->
+                <div id="guided-container" class="viewport" style="display: flex; flex-direction: column;">
+                    <div class="guided-header-block">
+                        <div class="guided-step-indicator" id="guided-step-title">Step 1 of 9: Job Information</div>
+                        <div class="guided-progress-track">
+                            <div class="guided-progress-fill" id="guided-step-progress-bar" style="width: 11.11%;"></div>
+                        </div>
+                    </div>
+
+                    <div class="guided-step-body" id="guided-step-content-container">
+                        <!-- Dynamic Guided Step Forms gets injected here -->
+                    </div>
+
+                    <div class="guided-action-footer">
+                        <button id="btn-guided-back" class="btn-secondary" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.25rem;"><i data-lucide="arrow-left"></i> Back</button>
+                        <button id="btn-guided-continue" class="btn-primary" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.65rem 1.5rem;"><span>Continue</span> <i data-lucide="arrow-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- More / Settings Viewport -->
+                <div id="more-viewport" class="viewport" style="display: flex; flex-direction: column; gap: 1.5rem; padding: 2rem;">
+                    <div class="jobs-dashboard-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 1rem;">
+                        <h2 style="font-size: 1.5rem; font-weight: 700; color: white;">Settings & Options</h2>
+                        <p style="font-size: 0.85rem; color: #94a3b8;">Manage interface modes, synchronization, device diagnostics, and trash bins.</p>
+                    </div>
+
+                    <!-- Interface preferences -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="sliders" style="color: var(--accent-teal);"></i> Interface Mode Configuration</h3>
+                        <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">Switch between guided step wizard workflow and full CAD toolbox sketching.</p>
+                        <div class="checklist-pill-group">
+                            <span id="pill-interface-guided" class="checklist-pill active" style="padding: 0.5rem 1rem; cursor: pointer; font-weight: 600;">Guided Mode (Field wizard)</span>
+                            <span id="pill-interface-advanced" class="checklist-pill" style="padding: 0.5rem 1rem; cursor: pointer; font-weight: 600;">Advanced Mode (CAD Blueprint)</span>
+                        </div>
+                    </div>
+
+                    <!-- Trash Bin -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="trash-2" style="color: #ef4444;"></i> Trash & Recovery</h3>
+                        <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">Deleted estimates are kept here temporarily and can be recovered safely.</p>
+                        <div id="trash-jobs-list" style="display: flex; flex-direction: column; gap: 0.5rem; max-height: 150px; overflow-y: auto; background: rgba(0,0,0,0.15); padding: 0.5rem; border-radius: 8px;">
+                            <div style="text-align: center; font-size: 0.8rem; color: #64748b; padding: 1rem 0;">Trash bin is empty.</div>
+                        </div>
+                    </div>
+
+                    <!-- Diagnostics shortcut -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="settings-2" style="color: var(--accent-blue);"></i> System Diagnostics</h3>
+                        <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">View WebXR provider routing, orientation logs, capabilities cache, and fallback measurement history.</p>
+                        <button id="btn-show-diagnostics-modal" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"><i data-lucide="settings"></i> Launch Device Diagnostics</button>
+                    </div>
+
+                    <!-- Help center link -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="help-circle" style="color: var(--accent-teal);"></i> Help Center</h3>
+                        <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">Open searchable instructions, spatial tracking tips, and the guided tour panel.</p>
+                        <button id="btn-show-help-modal" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"><i data-lucide="help-circle"></i> Open Help Center</button>
+                    </div>
+                </div>
+
                 <!-- Unified Estimating Checklist Viewport -->
-                <div id="checklist-container" class="viewport active">
+                <div id="checklist-container" class="viewport">
                     <!-- Dynamic checklist layout populated by cost-ui.js -->
                 </div>
 
@@ -275,16 +408,21 @@
                         <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 50%; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; margin-bottom: 1.5rem;">
                             <i data-lucide="scan" style="width: 40px; height: 40px; color: var(--accent-teal);"></i>
                         </div>
-                        <h3 id="ar-splash-title" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: white;">Spatial Scanner</h3>
-                        <p id="ar-splash-desc" style="font-size: 0.85rem; color: var(--text-muted); max-width: 280px; margin-bottom: 2rem;">Prepare to scan the room corners by pointing your camera at floor-to-wall intersections.</p>
-                        <button id="btn-ar-start-session" style="background: var(--accent-blue); color: white; border: none; padding: 0.85rem 2rem; border-radius: 50px; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; box-shadow: var(--shadow-lg); transition: all 0.2s;"><i data-lucide="play" style="width: 18px; height: 18px;"></i> Initialize Scanner</button>
+                        <h3 id="ar-splash-title" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: white;">Start Camera Measurement</h3>
+                        <p id="ar-splash-desc" style="font-size: 0.85rem; color: var(--text-muted); max-width: 320px; margin-bottom: 2rem;">RoomFlow uses your camera to measure the room. Photos are not saved unless you choose to attach them to the job.</p>
+                        <button id="btn-ar-start-session" style="background: var(--accent-blue); color: white; border: none; padding: 0.85rem 2rem; border-radius: 50px; font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; cursor: pointer; box-shadow: var(--shadow-lg); transition: all 0.2s;"><i data-lucide="camera"></i> Allow Camera</button>
                     </div>
                     <video id="ar-video" autoplay playsinline muted></video>
                     <div class="ar-overlay">
+                        <!-- Top left return button -->
+                        <div id="ar-guided-back-bar" style="position: absolute; top: 15px; left: 15px; z-index: 200; pointer-events: auto;">
+                            <button onclick="window.returnFromScanning()" class="btn-primary" style="background: rgba(16, 22, 35, 0.85); border: 1px solid var(--border-color); padding: 0.5rem 1rem; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.35rem; color: white;"><i data-lucide="arrow-left"></i> Return to Step 3</button>
+                        </div>
                         <!-- Top status badges -->
-                        <div class="ar-status-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: auto; margin-bottom: auto; padding: 0.5rem 0.25rem;">
+                        <div class="ar-status-row" style="display: flex; justify-content: space-between; align-items: center; width: 100%; pointer-events: auto; margin-bottom: auto; padding: 0.5rem 0.25rem; padding-left: 170px;">
                             <div id="ar-tier-badge" style="background: rgba(59, 130, 246, 0.85); padding: 0.35rem 0.75rem; border-radius: 6px; font-weight: 700; font-size: 0.75rem; color: white; border: 1px solid rgba(255,255,255,0.1); letter-spacing: 0.05em; text-transform: uppercase;">CAMERA ESTIMATE</div>
                             <div id="ar-quality-badge" style="background: rgba(16, 22, 35, 0.85); border: 1px solid var(--border-color); padding: 0.35rem 0.75rem; border-radius: 6px; font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">Orientation Only</div>
+                            <button id="btn-ar-audio-toggle" style="background: rgba(16, 22, 35, 0.85); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.35rem 0.75rem; font-size: 0.75rem; color: #e2e8f0; cursor: pointer; display: flex; align-items: center; gap: 0.25rem;"><i data-lucide="volume-2"></i> <span>Audio</span></button>
                         </div>
                         <div class="ar-reticle"></div>
                         <div class="ar-aim-point"></div>
@@ -295,7 +433,7 @@
                                 <span id="ar-distance">0' 0"</span>
                             </div>
                             <div class="ar-stat-card">
-                                <label>Active Segment</label>
+                                <label>Current Wall Length</label>
                                 <span id="ar-segment">0' 0"</span>
                             </div>
                             <div class="ar-stat-card">
@@ -320,7 +458,7 @@
                              <div class="ar-buttons">
                                 <button id="btn-ar-reset" class="btn-danger"><i data-lucide="refresh-cw"></i> Clear</button>
                                 <button id="btn-ar-pin" class="btn-success"><i data-lucide="map-pin"></i> Pin Corner</button>
-                                <button id="btn-ar-capture" class="btn-success"><i data-lucide="camera"></i> Capture Dist</button>
+                                <button id="btn-ar-capture" class="btn-success"><i data-lucide="camera"></i> Save This Measurement</button>
                                 <button id="btn-ar-finish" class="btn-accent"><i data-lucide="check"></i> Create Room</button>
                             </div>
                         </div>
@@ -785,6 +923,59 @@
                 </div>
             </aside>
         </main>
+
+        <!-- Persistent Bottom Navigation Bar for Mobile Viewports -->
+        <nav id="bottom-nav-bar">
+            <button class="nav-bar-item active" data-tab="jobs">
+                <i data-lucide="layout"></i>
+                <span>Jobs</span>
+            </button>
+            <button class="nav-bar-item" data-tab="project">
+                <i data-lucide="edit-3"></i>
+                <span>Project</span>
+            </button>
+            <button class="nav-bar-item" data-tab="add">
+                <i data-lucide="plus-circle"></i>
+                <span>Add</span>
+            </button>
+            <button class="nav-bar-item" data-tab="review">
+                <i data-lucide="check-square"></i>
+                <span>Review</span>
+            </button>
+            <button class="nav-bar-item" data-tab="more">
+                <i data-lucide="more-horizontal"></i>
+                <span>More</span>
+            </button>
+        </nav>
+
+        <!-- Help Center Modal -->
+        <div id="help-center-modal" class="modal hidden" style="position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(12px); display: flex; align-items: center; justify-content: center;">
+            <div class="modal-content" style="background: rgba(30, 41, 59, 0.95); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 2rem; width: 90%; max-width: 500px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); color: #f8fafc; max-height: 80vh; overflow-y: auto;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 0.75rem;">
+                    <h3 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--accent-teal); display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="help-circle"></i> Help & Guided Tour</h3>
+                    <button id="btn-close-help" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0.25rem;"><i data-lucide="x"></i></button>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 1rem; font-size: 0.9rem; line-height: 1.5; color: #cbd5e1;">
+                    <p>Welcome to <strong>RoomFlow Guided Estimator</strong>. This app helps you quickly capture room shapes, problems, and generate professional estimates in the field.</p>
+                    
+                    <h4 style="color: white; margin: 0.5rem 0 0 0; font-size: 1rem; font-weight: 600;">Guided Workflow Overview</h4>
+                    <ol style="margin: 0; padding-left: 1.25rem; display: flex; flex-direction: column; gap: 0.35rem;">
+                        <li><strong>Job Info</strong>: Enter property and contact details (autosaved).</li>
+                        <li><strong>Work Area</strong>: Select the foundation levels (Basement, Crawl Space, etc.).</li>
+                        <li><strong>Add/Measure Rooms</strong>: Enter sizes manually, pick presets, draw custom shapes, or scan with camera.</li>
+                        <li><strong>Work Needed</strong>: Toggle issues like water leaks, bowed walls, mold, or vapor barriers.</li>
+                        <li><strong>Equipment</strong>: Configure pumps and dehumidifiers.</li>
+                        <li><strong>Review</strong>: Verify measurements and check for missing info warnings.</li>
+                        <li><strong>Costs & Margin</strong>: Inspect materials list and set margins (private view).</li>
+                        <li><strong>Customer Proposal</strong>: Customize scope items for proposal generation.</li>
+                        <li><strong>Save / Export</strong>: Download proposal PDFs or share links.</li>
+                    </ol>
+
+                    <h4 style="color: white; margin: 0.5rem 0 0 0; font-size: 1rem; font-weight: 600;">Troubleshooting Camera Scan</h4>
+                    <p>If AR/LiDAR scanning fails or permission is denied, tap <strong>More &rarr; Diagnostics</strong> to verify device status. You can fallback to manual measurement entries anytime without losing your job data.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Jobs Manager Modal -->
