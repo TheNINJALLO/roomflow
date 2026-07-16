@@ -525,6 +525,15 @@ window.addEventListener('load', () => {
         });
     }
 
+    const switcherMore = document.getElementById('more-company-switcher');
+    if (switcherMore) {
+        switcherMore.addEventListener('change', async (e) => {
+            if (e.target.value) {
+                await RoomFlowAuth.setActiveOrganization(e.target.value);
+            }
+        });
+    }
+
     setTimeout(async () => {
         await RoomFlowAuth.loadSessionContext();
         checkAuthOverlay();
@@ -535,19 +544,32 @@ window.addEventListener('load', () => {
 
 function populateCompanySwitcher() {
     const switcher = document.getElementById('header-company-switcher');
-    if (!switcher) return;
+    const switcherMore = document.getElementById('more-company-switcher');
 
-    if (!state.sessionUser || state.userOrganizations.length === 0) {
-        switcher.innerHTML = `<option value="">No Companies</option>`;
-        return;
+    if (switcher) {
+        if (!state.sessionUser || state.userOrganizations.length === 0) {
+            switcher.innerHTML = `<option value="">No Companies</option>`;
+        } else {
+            let html = '';
+            state.userOrganizations.forEach(o => {
+                const selected = (state.currentOrganization && state.currentOrganization.id === o.id) ? 'selected' : '';
+                html += `<option value="${o.id}" ${selected}>${o.name} (${o.role})</option>`;
+            });
+            switcher.innerHTML = html;
+        }
     }
 
-    let html = '';
-    state.userOrganizations.forEach(o => {
-        const selected = (state.currentOrganization && state.currentOrganization.id === o.id) ? 'selected' : '';
-        html += `<option value="${o.id}" ${selected}>${o.name} (${o.role})</option>`;
-    });
-
-    switcher.innerHTML = html;
+    if (switcherMore) {
+        if (!state.sessionUser || state.userOrganizations.length === 0) {
+            switcherMore.innerHTML = `<option value="">No Companies</option>`;
+        } else {
+            let html = '';
+            state.userOrganizations.forEach(o => {
+                const selected = (state.currentOrganization && state.currentOrganization.id === o.id) ? 'selected' : '';
+                html += `<option value="${o.id}" ${selected}>${o.name} (${o.role})</option>`;
+            });
+            switcherMore.innerHTML = html;
+        }
+    }
 }
 

@@ -353,7 +353,24 @@
                 <div id="more-viewport" class="viewport" style="display: flex; flex-direction: column; gap: 1.5rem; padding: 2rem;">
                     <div class="jobs-dashboard-header" style="border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 1rem;">
                         <h2 style="font-size: 1.5rem; font-weight: 700; color: white;">Settings & Options</h2>
-                        <p style="font-size: 0.85rem; color: #94a3b8;">Manage interface modes, synchronization, device diagnostics, and trash bins.</p>
+                        <p style="font-size: 0.85rem; color: #94a3b8;">Manage workspaces, interface modes, system diagnostics, and recovery options.</p>
+                    </div>
+
+                    <!-- Company & Account Profile (Mobile Friendly) -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="building-2" style="color: var(--accent-blue);"></i> Active Workspaces</h3>
+                        <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">Select company context or manage your account profile settings.</p>
+                        
+                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                            <div style="display:flex; flex-direction:column; gap:0.25rem;">
+                                <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1;">Selected Company:</label>
+                                <select id="more-company-switcher" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.5rem 0.75rem; color:white; font-size:0.85rem; width:100%; outline:none;">
+                                    <option value="">Select...</option>
+                                </select>
+                            </div>
+                            
+                            <button onclick="RoomFlowAuth.signOut()" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); width:100%; text-align:center; background:transparent;"><i data-lucide="log-out" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Log Out from Account</button>
+                        </div>
                     </div>
 
                     <!-- Interface preferences -->
