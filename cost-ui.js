@@ -20,6 +20,20 @@ function renderCostUI() {
     const costContainer = document.getElementById('cost-container');
     if (!costContainer) return;
 
+    if (typeof window.hasCapability === 'function' && !window.hasCapability('view_internal_costs')) {
+        costContainer.innerHTML = `
+            <div style="padding: 2.5rem; text-align: center; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 12px; margin: 2rem;">
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 50%; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                    <i data-lucide="shield-alert" style="width: 32px; height: 32px; color: #f87171;"></i>
+                </div>
+                <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: white;">Access Denied</h3>
+                <p style="font-size: 0.9rem; color: #cbd5e1; max-width: 400px; margin: 0 auto;">You do not have permission to view internal pricing, labor rates, or margins. Please contact your administrator if this is an error.</p>
+            </div>
+        `;
+        if (window.lucide) window.lucide.createIcons();
+        return;
+    }
+
     initDefaultCosting(state);
     const catalog = RoomFlowCatalog.loadCatalog();
     const report = calculateProjectCosts(state, catalog);
@@ -3342,14 +3356,22 @@ function generateGuidedStepHTML(stepIndex) {
     // Step 7: Materials and Costs Breakdown
     if (stepIndex === 7) {
         if (!state.costingTab) state.costingTab = 'materials';
+        
+        const showCosting = (typeof window.hasCapability !== 'function' || window.hasCapability('view_internal_costs'));
+        if (!showCosting) {
+            state.costingTab = 'materials';
+        }
+        
         const pricing = calculatePricing();
         
         return `
             <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+                ${showCosting ? `
                 <div style="display:flex; gap:0.5rem; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:0.5rem;">
                     <button onclick="state.costingTab = 'materials'; window.renderGuidedStep();" class="btn-secondary ${state.costingTab === 'materials' ? 'active' : ''}" style="padding:0.5rem 1rem; border-radius:8px; cursor:pointer;">Materials Summary</button>
                     <button onclick="state.costingTab = 'costing'; window.renderGuidedStep();" class="btn-secondary ${state.costingTab === 'costing' ? 'active' : ''}" style="padding:0.5rem 1rem; border-radius:8px; cursor:pointer;">Private Internal Costing</button>
                 </div>
+                ` : ''}
                 
                 ${state.costingTab === 'materials' ? `
                     <div class="checklist-room-card" style="padding:1.5rem;">
@@ -3570,6 +3592,22 @@ window.calculatePricing = function() {
             }
         });
     }
+    
+    // Check permission
+    const showCosting = (typeof window.hasCapability !== 'function' || window.hasCapability('view_internal_costs'));
+    if (!showCosting) {
+        // Return empty mock pricing totals with accurate material quantities
+        const q = calculateProjectQuantities(state);
+        const emptyItems = {};
+        Object.keys(q).forEach(k => {
+            emptyItems[k] = { name: k, qty: q[k], rate: 0, cost: 0, price: 0 };
+        });
+        return {
+            items: emptyItems,
+            totals: { hardwareCost: 0, tax: 0, labor: 0, overhead: 0, pricingTotal: 0, bidTotal: 0 }
+        };
+    }
+    
     const catalog = RoomFlowCatalog.loadCatalog ? RoomFlowCatalog.loadCatalog() : RoomFlowCatalog.getDefaults();
     return calculateProjectCosts(state, catalog);
 };

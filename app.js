@@ -6609,6 +6609,12 @@ window.autosaveJob = function() {
     
     const statusText = document.getElementById('save-status-text');
     if (statusText) statusText.innerText = "Saved";
+    
+    if (typeof window.RoomFlowSync !== 'undefined' && window.RoomFlowSync.enqueueOffline) {
+        window.RoomFlowSync.enqueueOffline(state.currentJobName, projectData).then(() => {
+            window.RoomFlowSync.processSyncQueue();
+        });
+    }
 };
 
 // Search & Filter rendering

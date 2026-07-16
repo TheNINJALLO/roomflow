@@ -12,6 +12,10 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
     <link rel="stylesheet" href="styles.css?v=59">
+    <!-- Supabase integration -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js?v=60"></script>
+    <script src="supabase-service.js?v=60"></script>
 </head>
 <body>
     <div id="app-container" class="interface-mode-simple">
@@ -52,6 +56,7 @@
             </div>
 
             <div class="project-actions">
+                <div id="sync-status-badge" style="background:#64748b; color:white; padding:0.25rem 0.65rem; border-radius:6px; font-size:0.75rem; font-weight:700; display:inline-block; vertical-align:middle; margin-right:0.5rem; text-transform:uppercase; letter-spacing:0.02em;">Offline mode</div>
                 <div class="mode-selector-container" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.25rem 0.5rem; margin-right: 0.5rem;">
                     <label style="font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin: 0; white-space: nowrap;">Interface:</label>
                     <select id="select-app-interface-mode" style="background: transparent; border: none; color: white; font-size: 0.8rem; font-weight: bold; cursor: pointer; padding: 0; outline: none;">
@@ -67,6 +72,7 @@
                 <button id="btn-jobs" title="Job Database (Local / Share)"><i data-lucide="database"></i></button>
                 <button id="btn-diagnostics" title="Device & AR Diagnostics"><i data-lucide="settings-2"></i></button>
                 <input type="file" id="file-input" style="display: none;" accept=".json">
+                <button id="btn-create-work-order" class="btn-accent" style="background-color: #3b82f6; border-color: #3b82f6; margin-right: 0.5rem;"><i data-lucide="printer"></i> <span>Work Order</span></button>
                 <button id="btn-export-proposal" class="btn-accent" style="background-color: var(--accent-teal); border-color: var(--accent-teal); margin-right: 0.5rem;"><i data-lucide="file-text"></i> <span>Customer Proposal</span></button>
                 <button id="btn-export-pdf" class="btn-accent"><i data-lucide="download"></i> <span>Export</span></button>
             </div>
@@ -74,7 +80,6 @@
 
         <!-- Main Body Grid -->
         <main class="app-body">
-            <!-- Vertical Left Navigation Rail for Desktop/Tablet in Guided Mode -->
             <aside id="desktop-nav-rail">
                 <button class="nav-rail-item active" data-tab="jobs" title="Dashboard Home">
                     <i data-lucide="layout"></i>
@@ -96,6 +101,18 @@
                     <i data-lucide="more-horizontal"></i>
                     <span>More</span>
                 </button>
+                
+                <div style="margin-top: auto; display: flex; flex-direction: column; gap: 0.5rem; width: 100%; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 0.75rem; padding-bottom: 0.5rem;">
+                    <div style="font-size: 0.65rem; font-weight: 700; color: rgba(255,255,255,0.3); text-align: center; text-transform: uppercase; letter-spacing: 0.05em;">Company</div>
+                    <select id="header-company-switcher" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.35rem 0.5rem; font-size: 0.75rem; color: white; cursor: pointer; width: calc(100% - 0.75rem); margin: 0 auto; outline: none; border-color: rgba(255,255,255,0.15);">
+                        <option value="">Select...</option>
+                    </select>
+                    
+                    <button onclick="RoomFlowAuth.signOut()" class="nav-rail-item" style="padding: 0.5rem 0; width: 100%; border: none; background: transparent; cursor: pointer; color: #f87171;" title="Sign Out">
+                        <i data-lucide="log-out" style="width: 14px; height: 14px; margin: 0 auto; color: #f87171;"></i>
+                        <span style="font-size: 0.65rem; color: #f87171;">Log Out</span>
+                    </button>
+                </div>
             </aside>
             <!-- Left Sidebar: Toolbox -->
             <aside id="left-sidebar" class="sidebar toolbox">
@@ -358,11 +375,17 @@
                         </div>
                     </div>
 
-                    <!-- Diagnostics shortcut -->
                     <div class="checklist-room-card" style="padding: 1.25rem;">
                         <h3 style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="settings-2" style="color: var(--accent-blue);"></i> System Diagnostics</h3>
                         <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">View WebXR provider routing, orientation logs, capabilities cache, and fallback measurement history.</p>
                         <button id="btn-show-diagnostics-modal" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"><i data-lucide="settings"></i> Launch Device Diagnostics</button>
+                    </div>
+
+                    <!-- Legacy Data Migration -->
+                    <div class="checklist-room-card" style="padding: 1.25rem;">
+                        <h3 style="font-size: 1.05rem; font-weight: 700; color: white; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="database-backup" style="color: var(--accent-teal);"></i> Legacy Project Migration</h3>
+                        <p style="font-size: 0.8rem; color: #64748b; margin-bottom: 1rem;">Migrate old local browser estimates or JSON files directly into your active Supabase company organization.</p>
+                        <button id="btn-show-migration-modal" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;"><i data-lucide="refresh-cw"></i> Open Migration Tool</button>
                     </div>
 
                     <!-- Help center link -->
@@ -1085,6 +1108,50 @@
     <script src="renderer3d.js?v=60"></script>
     <script src="ar-estimator.js?v=59"></script>
     <script src="cost-ui.js?v=60"></script>
+    <script src="work-order.js?v=60"></script>
+    <script src="migration.js?v=60"></script>
     <script src="cost-tests.js?v=59"></script>
+    <!-- Beautiful Fullscreen Authentication Overlay -->
+    <div id="auth-overlay" class="hidden" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: #0b0f19; z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1.5rem; overflow-y: auto;">
+        <div style="background: #111827; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 16px; width: 100%; max-width: 440px; padding: 2.5rem; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; gap: 1.5rem;">
+            
+            <div style="text-align: center;">
+                <div style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 12px; width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                    <i data-lucide="shield-check" style="width: 26px; height: 26px; color: #3b82f6;"></i>
+                </div>
+                <h2 style="font-size: 1.5rem; font-weight: 700; color: white; margin-bottom: 0.25rem;">RoomFlow Accounts</h2>
+                <p id="auth-subtitle" style="font-size: 0.85rem; color: #94a3b8;">Sign in to sync your estimating jobs with your team.</p>
+            </div>
+            
+            <div id="auth-alert-box" style="display:none; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.8rem; font-weight: 600; border:1px solid rgba(239, 68, 68, 0.2); background: rgba(239, 68, 68, 0.1); color: #fca5a5;"></div>
+
+            <!-- Email & Password Form -->
+            <form id="auth-form" style="display:flex; flex-direction:column; gap:1rem;" onsubmit="return false;">
+                <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                    <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Email Address</label>
+                    <input type="email" id="auth-email" required placeholder="name@company.com" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.75rem 1rem; color:white; font-size:0.9rem;">
+                </div>
+                
+                <div id="auth-password-row" style="display:flex; flex-direction:column; gap:0.35rem;">
+                    <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Password</label>
+                    <input type="password" id="auth-password" placeholder="••••••••" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.75rem 1rem; color:white; font-size:0.9rem;">
+                </div>
+
+                <div id="auth-name-row" style="display:none; flex-direction:column; gap:0.35rem;">
+                    <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Full Name</label>
+                    <input type="text" id="auth-name" placeholder="John Smith" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.75rem 1rem; color:white; font-size:0.9rem;">
+                </div>
+
+                <button id="btn-auth-submit" class="btn-primary" style="padding:0.85rem; font-weight:700; font-size:0.9rem; text-align:center; border-radius:8px;">Sign In</button>
+            </form>
+
+            <!-- Secondary Actions -->
+            <div style="display:flex; flex-direction:column; gap:0.75rem; text-align:center; font-size:0.85rem; border-top: 1px solid rgba(255,255,255,0.05); padding-top:1.25rem;">
+                <a id="btn-auth-toggle-mode" href="#" style="color:#3b82f6; font-weight:600; text-decoration:none;">Don't have an account? Sign Up</a>
+                <a id="btn-auth-magic-link" href="#" style="color:#cbd5e1; text-decoration:none;">Email me a secure Magic Link instead</a>
+            </div>
+
+        </div>
+    </div>
 </body>
 </html>
