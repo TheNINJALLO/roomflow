@@ -2692,3 +2692,8 @@ html, body {
     }
 }
 
+#more-viewport, #jobs-viewport {
+    overflow-y: auto !important;
+    touch-action: auto !important;
+}
+

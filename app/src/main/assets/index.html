@@ -369,7 +369,15 @@
                                 </select>
                             </div>
                             
-                            <button onclick="RoomFlowAuth.signOut()" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); width:100%; text-align:center; background:transparent;"><i data-lucide="log-out" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Log Out from Account</button>
+                            <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:0.75rem; display:flex; flex-direction:column; gap:0.5rem;">
+                                <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1;">Create New Company:</label>
+                                <div style="display:flex; gap:0.5rem;">
+                                    <input type="text" id="more-new-company-name" placeholder="Acme Contracting" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.5rem; color:white; font-size:0.8rem; flex-grow:1; outline:none;">
+                                    <button id="btn-more-create-company" class="btn-primary" style="padding:0.5rem 1rem; font-size:0.8rem; font-weight:700;">Create</button>
+                                </div>
+                            </div>
+                            
+                            <button onclick="RoomFlowAuth.signOut()" class="btn-secondary" style="padding: 0.5rem 1rem; font-size: 0.8rem; font-weight: 600; cursor: pointer; color: #ef4444; border-color: rgba(239, 68, 68, 0.2); width:100%; text-align:center; background:transparent; margin-top:0.5rem;"><i data-lucide="log-out" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:4px;"></i> Log Out from Account</button>
                         </div>
                     </div>
 

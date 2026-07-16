@@ -534,6 +534,27 @@ window.addEventListener('load', () => {
         });
     }
 
+    const createCompanyBtn = document.getElementById('btn-more-create-company');
+    if (createCompanyBtn) {
+        createCompanyBtn.addEventListener('click', async () => {
+            const input = document.getElementById('more-new-company-name');
+            if (input) {
+                const name = input.value.trim();
+                if (!name) {
+                    alert("Please enter a valid company name.");
+                    return;
+                }
+                try {
+                    await RoomFlowAuth.createCompany(name);
+                    input.value = '';
+                    alert(`Company "${name}" created successfully!`);
+                } catch (e) {
+                    alert("Failed to create company: " + e.message);
+                }
+            }
+        });
+    }
+
     setTimeout(async () => {
         await RoomFlowAuth.loadSessionContext();
         checkAuthOverlay();
