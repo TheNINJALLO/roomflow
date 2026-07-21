@@ -361,6 +361,57 @@ window.RoomFlowSync = {
         }
     },
 
+    async createCloudJobRecord(jobName, customerName, email, phone) {
+        if (!supabaseClient || !state.currentOrganization) return null;
+        
+        try {
+            // 1. Create or get customer
+            let customerId = null;
+            const { data: custs } = await supabaseClient
+                .from('customers')
+                .select('id')
+                .eq('organization_id', state.currentOrganization.id)
+                .eq('name', customerName)
+                .limit(1);
+
+            if (custs && custs.length > 0) {
+                customerId = custs[0].id;
+            } else {
+                const { data: newCust, error: custErr } = await supabaseClient
+                    .from('customers')
+                    .insert({
+                        organization_id: state.currentOrganization.id,
+                        name: customerName,
+                        phone: phone || '',
+                        email: email || ''
+                    })
+                    .select('id')
+                    .single();
+                if (custErr) throw custErr;
+                customerId = newCust.id;
+            }
+
+            // 2. Create Job
+            const { data: newJob, error: jobErr } = await supabaseClient
+                .from('jobs')
+                .insert({
+                    organization_id: state.currentOrganization.id,
+                    customer_id: customerId,
+                    name: jobName,
+                    status: 'Draft',
+                    current_version_number: 1
+                })
+                .select('id')
+                .single();
+            if (jobErr) throw jobErr;
+
+            return newJob;
+        } catch (err) {
+            console.error("Failed to create cloud job record:", err);
+            return null;
+        }
+    },
+
     updateSyncBadge() {
         const badge = document.getElementById('sync-status-badge');
         if (!badge) return;

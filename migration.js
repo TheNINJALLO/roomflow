@@ -1,6 +1,107 @@
 // --- ROOMFLOW LEGACY ESTIMATES DATA MIGRATION ENGINE ---
 
 window.RoomFlowMigration = {
+    upgradeLegacyJob(job) {
+        if (!job) return job;
+        if (!job.rooms) job.rooms = [];
+        if (!job.walls) job.walls = [];
+        if (!job.roomConnections) job.roomConnections = [];
+        if (!job.doors) job.doors = [];
+        if (!job.windows) job.windows = [];
+        if (!job.openings) job.openings = [];
+
+        const oldRooms = state.rooms;
+        const oldWalls = state.walls;
+        const oldConnections = state.roomConnections;
+        const oldDoors = state.doors;
+        const oldWindows = state.windows;
+        const oldOpenings = state.openings;
+        const oldLevel = state.currentLevelId;
+
+        state.rooms = job.rooms;
+        state.walls = [];
+        state.roomConnections = [];
+        state.doors = [];
+        state.windows = [];
+        state.openings = [];
+        state.currentLevelId = job.currentLevelId || 'basement';
+
+        job.rooms.forEach(r => {
+            if (Array.isArray(r.openings)) {
+                r.openings.forEach(op => {
+                    let side = op.wall || 'n';
+                    let offset = op.offset || 3.0;
+                    let width = op.w || 3.0;
+                    const dummyWallId = 'wall_' + r.id + '_' + side + '_dummy';
+                    if (op.type === 'window') {
+                        state.windows.push({
+                            id: op.id || 'win_' + Math.random().toString(36).substr(2, 9),
+                            levelId: state.currentLevelId,
+                            hostWallId: dummyWallId,
+                            roomId: r.id,
+                            w: width,
+                            h: op.h || 4.0,
+                            sillHeight: 3.0,
+                            offset: offset,
+                            type: 'standard'
+                        });
+                    } else {
+                        state.doors.push({
+                            id: op.id || 'door_' + Math.random().toString(36).substr(2, 9),
+                            levelId: state.currentLevelId,
+                            hostWallId: dummyWallId,
+                            roomA: r.id,
+                            roomB: null,
+                            w: width,
+                            h: op.h || 6.8,
+                            offset: offset,
+                            hingeSide: 'left',
+                            swingDirection: 'in',
+                            type: 'interior'
+                        });
+                    }
+                });
+            }
+        });
+
+        if (typeof window.rebuildLogicalLayout === 'function') {
+            window.rebuildLogicalLayout();
+        }
+
+        (state.doors || []).forEach(d => {
+            if (d.hostWallId && d.hostWallId.endsWith('_dummy')) {
+                const actualWall = (state.walls || []).find(w => w.primaryRoomId === d.roomA || w.secondaryRoomId === d.roomA);
+                if (actualWall) {
+                    d.hostWallId = actualWall.id;
+                }
+            }
+        });
+        (state.windows || []).forEach(win => {
+            if (win.hostWallId && win.hostWallId.endsWith('_dummy')) {
+                const actualWall = (state.walls || []).find(w => w.primaryRoomId === win.roomId);
+                if (actualWall) {
+                    win.hostWallId = actualWall.id;
+                }
+            }
+        });
+
+        job.walls = state.walls;
+        job.roomConnections = state.roomConnections;
+        job.doors = state.doors;
+        job.windows = state.windows;
+        job.openings = state.openings;
+
+        state.rooms = oldRooms;
+        state.walls = oldWalls;
+        state.roomConnections = oldConnections;
+        state.doors = oldDoors;
+        state.windows = oldWindows;
+        state.openings = oldOpenings;
+        state.currentLevelId = oldLevel;
+
+        return job;
+    },
+
     openModal() {
         // Verify active login session
         if (!state.sessionUser) {
@@ -193,6 +294,9 @@ window.RoomFlowMigration = {
 
                 if (jobErr) throw jobErr;
 
+                // Upgrade to new structural model
+                const upgradedJob = RoomFlowMigration.upgradeLegacyJob(job);
+
                 // 4. Create geometry layouts
                 const { error: layoutErr } = await client
                     .from('job_layouts')
@@ -200,15 +304,20 @@ window.RoomFlowMigration = {
                         job_id: newJob.id,
                         version_number: 1,
                         layout_json: {
-                            rooms: job.rooms,
-                            sumpPumps: job.sumpPumps,
-                            dehumidifiers: job.dehumidifiers || [],
-                            dischargeLines: job.dischargeLines,
-                            floorHatches: job.floorHatches,
-                            interiorPipes: job.interiorPipes,
-                            stanchions: job.stanchions,
-                            mainBeams: job.mainBeams,
-                            capturedMeasurements: job.capturedMeasurements
+                            rooms: upgradedJob.rooms,
+                            walls: upgradedJob.walls || [],
+                            roomConnections: upgradedJob.roomConnections || [],
+                            doors: upgradedJob.doors || [],
+                            windows: upgradedJob.windows || [],
+                            openings: upgradedJob.openings || [],
+                            sumpPumps: upgradedJob.sumpPumps,
+                            dehumidifiers: upgradedJob.dehumidifiers || [],
+                            dischargeLines: upgradedJob.dischargeLines,
+                            floorHatches: upgradedJob.floorHatches,
+                            interiorPipes: upgradedJob.interiorPipes,
+                            stanchions: upgradedJob.stanchions,
+                            mainBeams: upgradedJob.mainBeams,
+                            capturedMeasurements: upgradedJob.capturedMeasurements
                         }
                     });
 

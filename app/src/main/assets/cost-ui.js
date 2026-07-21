@@ -3012,142 +3012,310 @@ function generateGuidedStepHTML(stepIndex) {
         `;
     }
     
-    // Step 3: Add or Measure Rooms
+    // Step 3: Rooms and Layout Workspace
     if (stepIndex === 3) {
         const mode = state.guidedStep3Mode || 'choose';
-        
+        const levelRooms = state.rooms.filter(r => r.levelId === state.currentLevelId);
+
         if (mode === 'choose') {
+            // Rebuild wall segments automatically
+            if (typeof window.rebuildLogicalLayout === 'function') window.rebuildLogicalLayout();
+
+            // Run simple layout checks
+            const warnings = [];
+            if (levelRooms.length > 0) {
+                // Check overlaps
+                for (let i = 0; i < levelRooms.length; i++) {
+                    for (let j = i + 1; j < levelRooms.length; j++) {
+                        const rA = levelRooms[i];
+                        const rB = levelRooms[j];
+                        const noOverlap = (rA.x + rA.w <= rB.x + 0.05) || (rB.x + rB.w <= rA.x + 0.05) ||
+                                          (rA.y + rA.l <= rB.y + 0.05) || (rB.y + rB.l <= rA.y + 0.05);
+                        if (!noOverlap) {
+                            warnings.push(`Overlap detected between "${rA.name}" and "${rB.name}"`);
+                        }
+                    }
+                }
+
+                // Check disconnected rooms
+                if (levelRooms.length > 1) {
+                    const visited = new Set();
+                    const queue = [levelRooms[0].id];
+                    visited.add(levelRooms[0].id);
+                    
+                    while (queue.length > 0) {
+                        const currId = queue.shift();
+                        (state.roomConnections || []).forEach(conn => {
+                            if (conn.roomA === currId && !visited.has(conn.roomB)) {
+                                visited.add(conn.roomB);
+                                queue.push(conn.roomB);
+                            } else if (conn.roomB === currId && !visited.has(conn.roomA)) {
+                                visited.add(conn.roomA);
+                                queue.push(conn.roomA);
+                            }
+                        });
+                    }
+                    
+                    levelRooms.forEach(r => {
+                        if (!visited.has(r.id)) {
+                            warnings.push(`Room "${r.name}" is detached from the main layout.`);
+                        }
+                    });
+                }
+            }
+
+            // Build warnings log HTML
+            let warningLog = '';
+            if (warnings.length > 0) {
+                warningLog = `
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 0.75rem 1rem; color: #fca5a5; font-size: 0.8rem; display:flex; flex-direction:column; gap:0.25rem; margin-top:1rem;">
+                        <span style="font-weight:700; color:white; display:flex; align-items:center; gap:0.25rem;"><i data-lucide="alert-triangle" style="width:14px; height:14px; color:#ef4444;"></i> Layout Warnings Found:</span>
+                        ${warnings.map(w => `<span style="padding-left:1.25rem;">• ${w}</span>`).join('')}
+                    </div>
+                `;
+            }
+
             return `
-                <div style="display: flex; flex-direction: column; gap: 1.5rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 0.75rem;">
-                        <h3 style="font-size: 1.1rem; font-weight:700; color:white; margin:0;">Blueprint Room List (${state.rooms.length} rooms)</h3>
+                <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                    <!-- Miniature Plan Preview -->
+                    <div class="checklist-room-card" style="padding: 1rem;">
+                        <h4 style="font-size:0.8rem; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:0.5rem; display:flex; justify-content:space-between; align-items:center;">
+                            <span>Floor Blueprint Preview (${state.currentLevelId.toUpperCase()})</span>
+                            <span style="color:white; font-size:0.8rem;">${levelRooms.length} Rooms | ${(state.doors || []).filter(d=>d.levelId===state.currentLevelId).length} Openings</span>
+                        </h4>
+                        
+                        ${levelRooms.length === 0 ? `
+                            <div style="text-align: center; padding: 2.5rem 1.5rem; background: rgba(30, 41, 59, 0.15); border-radius: 8px; border: 1px dashed rgba(255,255,255,0.08);">
+                                <i data-lucide="layout" style="width:36px; height:36px; color:#64748b; margin-bottom:0.75rem; display:block; margin-left:auto; margin-right:auto;"></i>
+                                <h4 style="color:#cbd5e1; margin-bottom:0.25rem; font-size:0.9rem;">Add the first room to begin the house layout.</h4>
+                                <button onclick="window.setGuidedStep3Mode('add_first')" class="btn-primary" style="padding:0.5rem 1.25rem; margin-top:0.75rem; font-weight:700;"><i data-lucide="plus-circle" style="width:14px; height:14px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Add First Room</button>
+                            </div>
+                        ` : `
+                            <canvas id="guided-floor-mini-preview" width="480" height="220" style="width: 100%; height: 220px; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; background: rgba(0,0,0,0.3); display:block;"></canvas>
+                            <script>
+                                setTimeout(() => { if(typeof window.renderMiniFloorPreview === 'function') window.renderMiniFloorPreview(); }, 100);
+                            </script>
+                        `}
                     </div>
-                    
-                    ${state.rooms.length === 0 ? `
-                        <div class="checklist-room-card" style="text-align: center; padding: 2.5rem 1.5rem; background: rgba(30, 41, 59, 0.15);">
-                            <i data-lucide="layout" style="width:40px; height:40px; color:#64748b; margin-bottom:1rem; display:block; margin-left:auto; margin-right:auto;"></i>
-                            <h4 style="color:#cbd5e1; margin-bottom:0.25rem;">No Rooms Added Yet</h4>
-                            <p style="color:#64748b; font-size:0.8rem; max-width:280px; margin:0 auto;">Choose a method below to add the first room.</p>
-                        </div>
-                    ` : `
-                        <div style="display:flex; flex-direction:column; gap:0.75rem;">
-                            ${state.rooms.map(r => `
-                                <div class="checklist-room-card" style="padding:1rem; display:flex; justify-content:space-between; align-items:center;">
-                                    <div>
-                                        <h4 style="font-weight:700; color:white; margin-bottom:0.2rem;">${r.name}</h4>
-                                        <p style="font-size:0.75rem; color:#64748b; margin:0;">Level: ${r.levelId} | Size: ${r.width.toFixed(1)} x ${r.length.toFixed(1)} ft (${Math.round(r.width * r.length)} sq ft)</p>
+
+                    ${warningLog}
+
+                    <!-- Room List & Settings -->
+                    ${levelRooms.length > 0 ? `
+                        <div class="checklist-room-card" style="padding:1rem;">
+                            <h4 style="font-size:0.8rem; font-weight:700; color:#94a3b8; text-transform:uppercase; margin-bottom:0.75rem;">Connected Room Layout Configuration</h4>
+                            <div style="display:flex; flex-direction:column; gap:0.5rem; max-height:160px; overflow-y:auto; padding-right:0.25rem;">
+                                ${levelRooms.map(r => `
+                                    <div style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem; background:rgba(0,0,0,0.15); border-radius:6px; border:1px solid rgba(255,255,255,0.04);">
+                                        <div>
+                                            <span style="font-weight:700; color:white; font-size:0.85rem;">${r.name}</span>
+                                            <span style="font-size:0.75rem; color:#94a3b8; margin-left:0.5rem;">${(r.w !== undefined ? r.w : r.width).toFixed(1)} x ${(r.l !== undefined ? r.l : r.length).toFixed(1)} ft</span>
+                                        </div>
+                                        <div style="display:flex; gap:0.25rem;">
+                                            <button onclick="window.editGuidedRoomDimensions('${r.id}')" class="btn-tool-secondary" style="padding:0.25rem 0.5rem; font-size:0.75rem;"><i data-lucide="edit-2" style="width:12px; height:12px;"></i></button>
+                                            <button onclick="window.deleteGuidedRoom('${r.id}')" class="btn-tool-secondary" style="padding:0.25rem 0.5rem; font-size:0.75rem; color:#ef4444; border-color:rgba(239, 68, 68, 0.1);"><i data-lucide="trash-2" style="width:12px; height:12px;"></i></button>
+                                        </div>
                                     </div>
-                                    <button onclick="window.deleteGuidedRoom('${r.id}')" style="background:none; border:none; color:#ef4444; cursor:pointer; padding:0.5rem;"><i data-lucide="trash-2" style="width:18px; height:18px;"></i></button>
-                                </div>
-                            `).join('')}
+                                `).join('')}
+                            </div>
                         </div>
-                    `}
-                    
-                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-top:1.5rem; margin-bottom:0.5rem;">How would you like to add a room?</h3>
-                    <div class="choices-grid-layout" style="grid-template-columns: repeat(2, 1fr);">
-                        <div onclick="window.setGuidedStep3Mode('manual')" class="choice-card-item">
-                            <div class="choice-card-icon"><i data-lucide="edit-2"></i></div>
-                            <h3>Enter Measurements</h3>
-                            <p>Best when you already know the room's length and width.</p>
+
+                        <!-- Action Controls -->
+                        <div class="choices-grid-layout" style="grid-template-columns: repeat(2, 1fr); gap: 0.75rem;">
+                            <div onclick="window.setGuidedStep3Mode('add_connected')" class="choice-card-item" style="padding:1rem; cursor:pointer;">
+                                <div class="choice-card-icon" style="background:rgba(59,130,246,0.1); color:#3b82f6;"><i data-lucide="plus"></i></div>
+                                <h3 style="font-size:0.85rem; font-weight:700; margin-bottom:0.2rem;">Attach Connected Room</h3>
+                                <p style="font-size:0.7rem; color:#64748b;">Add beside a wall, sharing the wall structure.</p>
+                            </div>
+                            <div onclick="window.setGuidedStep3Mode('add_door')" class="choice-card-item" style="padding:1rem; cursor:pointer;">
+                                <div class="choice-card-icon" style="background:rgba(16,185,129,0.1); color:#10b981;"><i data-lucide="door-open"></i></div>
+                                <h3 style="font-size:0.85rem; font-weight:700; margin-bottom:0.2rem;">Add Door or Window</h3>
+                                <p style="font-size:0.7rem; color:#64748b;">Place interior/exterior passage or egress windows.</p>
+                            </div>
+                            <div onclick="window.switchView('2d')" class="choice-card-item" style="padding:1rem; cursor:pointer;">
+                                <div class="choice-card-icon" style="background:rgba(168,85,247,0.1); color:#a855f7;"><i data-lucide="pen-tool"></i></div>
+                                <h3 style="font-size:0.85rem; font-weight:700; margin-bottom:0.2rem;">Open Full 2D Layout</h3>
+                                <p style="font-size:0.7rem; color:#64748b;">Switch to professional floor plan editor.</p>
+                            </div>
+                            <div onclick="window.switchView('3d')" class="choice-card-item" style="padding:1rem; cursor:pointer;">
+                                <div class="choice-card-icon" style="background:rgba(59,130,246,0.1); color:#3b82f6;"><i data-lucide="box"></i></div>
+                                <h3 style="font-size:0.85rem; font-weight:700; margin-bottom:0.2rem;">View Building in 3D</h3>
+                                <p style="font-size:0.7rem; color:#64748b;">Stack levels and align stairs vertically.</p>
+                            </div>
                         </div>
-                        <div onclick="window.setGuidedStep3Mode('template')" class="choice-card-item">
-                            <div class="choice-card-icon"><i data-lucide="layers"></i></div>
-                            <h3>Use Room Template</h3>
-                            <p>Pre-populate standard sizes for crawl spaces, basements, or living areas.</p>
-                        </div>
-                        <div onclick="window.switchView('2d')" class="choice-card-item">
-                            <div class="choice-card-icon"><i data-lucide="pen-tool"></i></div>
-                            <h3>Draw the Room</h3>
-                            <p>Best for unusual shapes, wall bump outs, or connected spaces.</p>
-                        </div>
-                        <div onclick="window.switchView('ar')" class="choice-card-item">
-                            <div class="choice-card-icon"><i data-lucide="scan"></i></div>
-                            <h3>Scan with Camera</h3>
-                            <p>Use your phone camera to capture room intersections directly.</p>
-                        </div>
-                    </div>
+                    ` : ''}
                 </div>
             `;
         }
-        
-        // Manual entry screen
-        if (mode === 'manual') {
+
+        if (mode === 'add_first') {
             return `
-                <div class="checklist-room-card" style="padding: 1.5rem; max-width: 600px; margin: 0 auto;">
-                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Room Dimensions Entry</h3>
-                    <div style="display:flex; flex-direction:column; gap:1rem;">
+                <div class="checklist-room-card" style="padding: 1.5rem; max-width: 540px; margin: 0 auto;">
+                    <h3 style="font-size:1.1rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;"><i data-lucide="plus-circle" style="color:var(--accent-blue);"></i> Add Anchor Room</h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
                         <div class="input-group">
-                            <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Room Name</label>
-                            <input type="text" id="manual-room-name" value="Basement Room" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
+                            <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Room Name</label>
+                            <input type="text" id="af-room-name" value="Basement Area" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
                         </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
                             <div class="input-group">
-                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Length (ft / inches)</label>
-                                <input type="text" id="manual-room-length" placeholder="e.g. 12 ft 6 in or 12.5" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
-                            </div>
-                            <div class="input-group">
-                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Width (ft / inches)</label>
-                                <input type="text" id="manual-room-width" placeholder="e.g. 10 ft or 10.0" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
-                            </div>
-                        </div>
-                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
-                            <div class="input-group">
-                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Wall Height (ft)</label>
-                                <input type="number" id="manual-room-height" value="8" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:white;">
-                            </div>
-                            <div class="input-group">
-                                <label style="font-size:0.8rem; color:#94a3b8; margin-bottom:0.25rem; display:block;">Floor Level</label>
-                                <select id="manual-room-level" style="width:100%; padding:0.6rem 0.8rem; border-radius:8px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:#cbd5e1; cursor:pointer;">
-                                    <option value="basement">Basement</option>
-                                    <option value="crawlspace">Crawl Space</option>
-                                    <option value="main">Main Floor</option>
-                                    <option value="second">2nd Floor</option>
-                                    <option value="attic">Attic</option>
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Room Type</label>
+                                <select id="af-room-type" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                                    <option value="living">Living Room</option>
+                                    <option value="bedroom">Bedroom</option>
+                                    <option value="kitchen">Kitchen</option>
+                                    <option value="bathroom">Bathroom</option>
+                                    <option value="hallway">Hallway</option>
+                                    <option value="custom" selected>Custom / General Space</option>
                                 </select>
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Ceiling Height (ft)</label>
+                                <input type="number" id="af-room-height" value="8" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
+                        </div>
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Width (ft)</label>
+                                <input type="text" id="af-room-width" value="20" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Length (ft)</label>
+                                <input type="text" id="af-room-length" value="30" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
                             </div>
                         </div>
                         <div style="text-align:right; margin-top:0.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
-                            <button onclick="window.setGuidedStep3Mode('choose')" class="btn-secondary" style="padding:0.6rem 1rem;">Cancel</button>
-                            <button onclick="window.saveManualRoom()" class="btn-primary" style="padding:0.6rem 1.25rem;">Save Room</button>
+                            <button onclick="window.setGuidedStep3Mode('choose')" class="btn-secondary" style="padding:0.5rem 1rem; font-size:0.8rem;">Cancel</button>
+                            <button onclick="window.saveFirstRoom()" class="btn-primary" style="padding:0.5rem 1.25rem; font-size:0.8rem; font-weight:700;">Place Room</button>
                         </div>
                     </div>
                 </div>
             `;
         }
-        
-        // Templates screen
-        if (mode === 'template') {
+
+        if (mode === 'add_connected') {
             return `
-                <div class="checklist-room-card" style="padding: 1.5rem; max-width: 600px; margin: 0 auto;">
-                    <h3 style="font-size:1.15rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;">Select Room Template</h3>
-                    <div class="choices-grid-layout" style="grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1.5rem;">
-                        <div onclick="window.selectRoomTemplate('Basement Room', '24 ft', '30 ft', 8, 'basement')" class="choice-card-item" style="padding:1rem;">
-                            <h3>Basement Preset</h3>
-                            <p>24 x 30 ft, Height 8 ft</p>
+                <div class="checklist-room-card" style="padding: 1.5rem; max-width: 560px; margin: 0 auto;">
+                    <h3 style="font-size:1.1rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;"><i data-lucide="plus-circle" style="color:var(--accent-teal);"></i> Attach Connected Room</h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Room Name</label>
+                                <input type="text" id="ac-room-name" value="Utility Room" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Room Type</label>
+                                <select id="ac-room-type" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                                    <option value="living">Living Room</option>
+                                    <option value="bedroom">Bedroom</option>
+                                    <option value="kitchen">Kitchen</option>
+                                    <option value="bathroom">Bathroom</option>
+                                    <option value="hallway">Hallway</option>
+                                    <option value="custom" selected>Custom Space</option>
+                                </select>
+                            </div>
                         </div>
-                        <div onclick="window.selectRoomTemplate('Crawl Space', '24 ft', '40 ft', 4, 'crawlspace')" class="choice-card-item" style="padding:1rem;">
-                            <h3>Crawl Space Preset</h3>
-                            <p>24 x 40 ft, Height 4 ft</p>
+                        
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Attach to Existing Room</label>
+                                <select id="ac-ref-room" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                                    ${state.rooms.map(r => `<option value="${r.id}">${r.name}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Attach to Wall Side</label>
+                                <select id="ac-wall-side" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                                    <option value="n">North (Top)</option>
+                                    <option value="e" selected>East (Right)</option>
+                                    <option value="s">South (Bottom)</option>
+                                    <option value="w">West (Left)</option>
+                                </select>
+                            </div>
                         </div>
-                        <div onclick="window.selectRoomTemplate('Living Area', '16 ft', '20 ft', 9, 'main')" class="choice-card-item" style="padding:1rem;">
-                            <h3>Living Room</h3>
-                            <p>16 x 20 ft, Height 9 ft</p>
+
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Width (ft)</label>
+                                <input type="text" id="ac-room-width" value="12" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Length (ft)</label>
+                                <input type="text" id="ac-room-length" value="12" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
                         </div>
-                        <div onclick="window.selectRoomTemplate('Bedroom', '12 ft', '14 ft', 8, 'main')" class="choice-card-item" style="padding:1rem;">
-                            <h3>Bedroom</h3>
-                            <p>12 x 14 ft, Height 8 ft</p>
+
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Alignment Offset along wall</label>
+                                <select id="ac-align" onchange="document.getElementById('ac-offset-val-row').style.display = this.value === 'custom' ? 'block' : 'none';" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                                    <option value="center">Centered</option>
+                                    <option value="zero">Flush Left / Top</option>
+                                    <option value="custom">Custom Offset (ft)</option>
+                                </select>
+                            </div>
+                            <div class="input-group" id="ac-offset-val-row" style="display:none;">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Offset Value (ft)</label>
+                                <input type="number" id="ac-offset-value" value="0" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
                         </div>
-                        <div onclick="window.selectRoomTemplate('Bathroom', '8 ft', '10 ft', 8, 'main')" class="choice-card-item" style="padding:1rem;">
-                            <h3>Bathroom</h3>
-                            <p>8 x 10 ft, Height 8 ft</p>
+
+                        <div style="display:flex; align-items:center; gap:0.5rem; padding:0.25rem 0;">
+                            <input type="checkbox" id="ac-add-door" checked style="width:16px; height:16px; cursor:pointer;">
+                            <label for="ac-add-door" style="font-size:0.8rem; color:#cbd5e1; cursor:pointer;">Create traversable connecting door in shared wall</label>
                         </div>
-                        <div onclick="window.selectRoomTemplate('Custom Area', '10 ft', '10 ft', 8, 'main')" class="choice-card-item" style="padding:1rem;">
-                            <h3>Custom Size</h3>
-                            <p>10 x 10 ft, Height 8 ft</p>
+
+                        <div style="text-align:right; margin-top:0.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+                            <button onclick="window.setGuidedStep3Mode('choose')" class="btn-secondary" style="padding:0.5rem 1rem; font-size:0.8rem;">Cancel</button>
+                            <button onclick="window.saveConnectedRoom()" class="btn-primary" style="padding:0.5rem 1.25rem; font-size:0.8rem; font-weight:700;">Place Room</button>
                         </div>
                     </div>
-                    <div style="text-align:right;">
-                        <button onclick="window.setGuidedStep3Mode('choose')" class="btn-secondary" style="padding:0.6rem 1rem;">Cancel</button>
+                </div>
+            `;
+        }
+
+        if (mode === 'add_door') {
+            const levelWalls = (state.walls || []).filter(w => w.levelId === state.currentLevelId);
+            return `
+                <div class="checklist-room-card" style="padding: 1.5rem; max-width: 540px; margin: 0 auto;">
+                    <h3 style="font-size:1.1rem; font-weight:700; color:white; margin-bottom:1rem; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:0.5rem;"><i data-lucide="door-open" style="color:var(--accent-teal);"></i> Add Door or Window</h3>
+                    <div style="display:flex; flex-direction:column; gap:0.85rem;">
+                        <div class="input-group">
+                            <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Opening Type</label>
+                            <select id="ad-type" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                                <option value="door">Interior Hinged Door</option>
+                                <option value="exterior_door">Exterior Entry Door</option>
+                                <option value="window">Exterior Wall Window</option>
+                                <option value="opening">Open Passageway / Archway</option>
+                            </select>
+                        </div>
+
+                        <div class="input-group">
+                            <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Host Wall Placement</label>
+                            <select id="ad-host-wall" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                                ${levelWalls.map(w => {
+                                    const rA = state.rooms.find(r=>r.id===w.primaryRoomId)?.name || 'Unknown';
+                                    const rB = w.secondaryRoomId ? state.rooms.find(r=>r.id===w.secondaryRoomId)?.name : 'Exterior';
+                                    return `<option value="${w.id}">${rA} ↔ ${rB} (${w.type.toUpperCase()})</option>`;
+                                }).join('')}
+                            </select>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.75rem;">
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Width (ft)</label>
+                                <input type="number" id="ad-width" value="3" step="0.5" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
+                            <div class="input-group">
+                                <label style="font-size:0.75rem; color:#cbd5e1; margin-bottom:0.25rem; display:block;">Offset along Wall (ft)</label>
+                                <input type="number" id="ad-offset" value="3" step="0.5" style="width:100%; padding:0.5rem; border-radius:6px; background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.1); color:white; font-size:0.85rem;">
+                            </div>
+                        </div>
+
+                        <div style="text-align:right; margin-top:0.5rem; display:flex; gap:0.5rem; justify-content:flex-end;">
+                            <button onclick="window.setGuidedStep3Mode('choose')" class="btn-secondary" style="padding:0.5rem 1rem; font-size:0.8rem;">Cancel</button>
+                            <button onclick="window.saveDoorOpening()" class="btn-primary" style="padding:0.5rem 1.25rem; font-size:0.8rem; font-weight:700;">Add Opening</button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -3325,20 +3493,23 @@ function generateGuidedStepHTML(stepIndex) {
                 
                 <div style="display:flex; flex-direction:column; gap:1rem;">
                     ${state.rooms.map(r => {
-                        const perimeter = (r.width * 2) + (r.length * 2);
-                        const area = r.width * r.length;
+                        const rw = r.w !== undefined ? r.w : (r.width !== undefined ? r.width : 0);
+                        const rl = r.l !== undefined ? r.l : (r.length !== undefined ? r.length : 0);
+                        const rh = r.h !== undefined ? r.h : (r.height !== undefined ? r.height : 8);
+                        const perimeter = (rw * 2) + (rl * 2);
+                        const area = rw * rl;
                         
                         let warnings = [];
-                        if (!r.height || r.height === 0) warnings.push("Height is missing.");
-                        if (r.width === 0 || r.length === 0) warnings.push("Dimensions are missing.");
+                        if (!rh || rh === 0) warnings.push("Height is missing.");
+                        if (rw === 0 || rl === 0) warnings.push("Dimensions are missing.");
                         
                         return `
                             <div onclick="window.editGuidedRoomDimensions('${r.id}')" class="checklist-room-card" style="padding: 1.25rem; cursor:pointer; display:flex; justify-content:space-between; align-items:center; border: 1px solid ${warnings.length > 0 ? '#ef4444' : 'rgba(255,255,255,0.08)'};">
                                 <div>
                                     <h4 style="font-weight:700; color:white; margin-bottom:0.25rem;">${r.name} (${r.levelId})</h4>
                                     <p style="font-size:0.75rem; color:#cbd5e1; margin:0;">
-                                        Dimensions: ${r.width.toFixed(1)} x ${r.length.toFixed(1)} ft (Height ${r.height} ft)<br>
-                                        Area: ${Math.round(area)} sq ft | Wall Area: ${Math.round(perimeter * r.height)} sq ft | Perimeter: ${Math.round(perimeter)} ft
+                                        Dimensions: ${rw.toFixed(1)} x ${rl.toFixed(1)} ft (Height ${rh} ft)<br>
+                                        Area: ${Math.round(area)} sq ft | Wall Area: ${Math.round(perimeter * rh)} sq ft | Perimeter: ${Math.round(perimeter)} ft
                                     </p>
                                     ${warnings.map(w => `
                                         <span style="display:inline-block; font-size:10px; background:rgba(239,68,68,0.15); border:1px solid rgba(239,68,68,0.3); color:#fca5a5; padding:0.1rem 0.4rem; border-radius:4px; margin-top:0.5rem; font-weight:700;"><i data-lucide="alert-triangle" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> ${w}</span>
@@ -3497,9 +3668,9 @@ window.editGuidedRoomDimensions = function(roomId) {
         const hgtEl = document.getElementById('manual-room-height');
         const lvlEl = document.getElementById('manual-room-level');
         if (nameEl) nameEl.value = room.name;
-        if (lenEl) lenEl.value = room.length.toFixed(1) + " ft";
-        if (widEl) widEl.value = room.width.toFixed(1) + " ft";
-        if (hgtEl) hgtEl.value = room.height;
+        if (lenEl) lenEl.value = (room.l !== undefined ? room.l : room.length).toFixed(1) + " ft";
+        if (widEl) widEl.value = (room.w !== undefined ? room.w : room.width).toFixed(1) + " ft";
+        if (hgtEl) hgtEl.value = room.h !== undefined ? room.h : room.height;
         if (lvlEl) lvlEl.value = room.levelId;
         
         // Remove room to overwrite on save
@@ -3585,11 +3756,12 @@ function triggerAutosave() {
 window.calculatePricing = function() {
     if (state.rooms) {
         state.rooms.forEach(r => {
-            if (typeof r.h === 'undefined' && typeof r.height !== 'undefined') {
-                r.h = r.height;
-            } else if (typeof r.height === 'undefined' && typeof r.h !== 'undefined') {
-                r.height = r.h;
-            }
+            if (typeof r.w === 'undefined' && typeof r.width !== 'undefined') r.w = r.width;
+            if (typeof r.width === 'undefined' && typeof r.w !== 'undefined') r.width = r.w;
+            if (typeof r.l === 'undefined' && typeof r.length !== 'undefined') r.l = r.length;
+            if (typeof r.length === 'undefined' && typeof r.l !== 'undefined') r.length = r.l;
+            if (typeof r.h === 'undefined' && typeof r.height !== 'undefined') r.h = r.height;
+            if (typeof r.height === 'undefined' && typeof r.h !== 'undefined') r.height = r.h;
         });
     }
     
@@ -3610,6 +3782,370 @@ window.calculatePricing = function() {
     
     const catalog = RoomFlowCatalog.loadCatalog ? RoomFlowCatalog.loadCatalog() : RoomFlowCatalog.getDefaults();
     return calculateProjectCosts(state, catalog);
+};
+
+window.renderGuidedStep = function() {
+    const container = document.getElementById('guided-step-content-container');
+    if (!container) return;
+
+    if (!state.currentStep) state.currentStep = 1;
+    if (!state.costing) initDefaultCosting(state);
+
+    let html = '';
+    try {
+        html = generateGuidedStepHTML(state.currentStep);
+    } catch (err) {
+        console.error("Step render error:", err);
+        html = `
+            <div style="padding: 2.5rem; text-align: center; color: #ef4444; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 12px; margin: 2rem;">
+                <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 50%; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem;">
+                    <i data-lucide="shield-alert" style="width: 32px; height: 32px; color: #f87171;"></i>
+                </div>
+                <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: white;">We could not load this job</h3>
+                <p style="font-size: 0.9rem; color: #cbd5e1; max-width: 400px; margin: 0 auto 1.5rem;">Technical details: ${err.message}</p>
+                <div style="display:flex; gap:0.5rem; justify-content:center;">
+                    <button onclick="window.renderGuidedStep()" class="btn-primary" style="padding: 0.5rem 1.5rem; font-weight: 700;">Retry</button>
+                    <button onclick="switchTab('jobs')" class="btn-secondary" style="padding: 0.5rem 1.5rem; font-weight: 700;">Return to Jobs</button>
+                </div>
+            </div>
+        `;
+    }
+
+    container.innerHTML = html;
+
+    const stepTitles = [
+        "Job Information",
+        "Work Areas and Floors",
+        "Rooms and Layout",
+        "Work Needed",
+        "Equipment and Structural Items",
+        "Measurement Review",
+        "Materials and Internal Costing",
+        "Proposal and Work Order",
+        "Save and Export"
+    ];
+    
+    const titleEl = document.getElementById('guided-step-title');
+    if (titleEl) {
+        titleEl.innerText = `Step ${state.currentStep} of 9: ${stepTitles[state.currentStep - 1]}`;
+    }
+    
+    const progressEl = document.getElementById('guided-step-progress-bar');
+    if (progressEl) {
+        progressEl.style.width = `${(state.currentStep / 9) * 100}%`;
+    }
+
+    // Bind inputs event listeners
+    bindGuidedInputListeners(container);
+
+    if (typeof window.lucide !== 'undefined' && window.lucide.createIcons) {
+        window.lucide.createIcons();
+    }
+};
+
+window.saveFirstRoom = function() {
+    const name = document.getElementById('af-room-name').value.trim() || 'Anchor Room';
+    const type = document.getElementById('af-room-type').value;
+    const height = parseFloat(document.getElementById('af-room-height').value) || 8;
+    const width = parseFloat(document.getElementById('af-room-width').value) || 20;
+    const length = parseFloat(document.getElementById('af-room-length').value) || 30;
+
+    const id = 'room_' + Date.now();
+    const newRoom = {
+        id: id,
+        name: name,
+        type: type,
+        levelId: state.currentLevelId,
+        x: 0,
+        y: 0,
+        w: width,
+        l: length,
+        h: height,
+        color: (typeof PRESETS !== 'undefined' && PRESETS[type]) ? PRESETS[type].color : '#ec4899',
+        openings: [],
+        foamBoard: false,
+        foamBondPockets: false,
+        carbonStraps: 0,
+        carbonFiberScope: 'full',
+        carbonFiberWalls: [],
+        customCarbonStraps: [],
+        floorPerimeterStrap: false,
+        nb1Height: 'none',
+        drywallHeight: 'none'
+    };
+
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.rooms.push(newRoom);
+    
+    if (typeof window.rebuildLogicalLayout === 'function') window.rebuildLogicalLayout();
+    state.guidedStep3Mode = 'choose';
+    window.renderGuidedStep();
+    if (typeof triggerAutosave === 'function') triggerAutosave();
+};
+
+window.saveConnectedRoom = function() {
+    const name = document.getElementById('ac-room-name').value.trim() || 'Attached Room';
+    const type = document.getElementById('ac-room-type').value;
+    const refRoomId = document.getElementById('ac-ref-room').value;
+    const side = document.getElementById('ac-wall-side').value;
+    const width = parseFloat(document.getElementById('ac-room-width').value) || 12;
+    const length = parseFloat(document.getElementById('ac-room-length').value) || 12;
+    const align = document.getElementById('ac-align').value;
+    const addDoor = document.getElementById('ac-add-door').checked;
+
+    const rA = state.rooms.find(r => r.id === refRoomId);
+    if (!rA) return;
+
+    let offset = 0;
+    if (align === 'center') {
+        offset = (side === 'n' || side === 's') ? (rA.w - width) / 2 : (rA.l - length) / 2;
+    } else if (align === 'custom') {
+        offset = parseFloat(document.getElementById('ac-offset-value').value) || 0;
+    }
+
+    let rx = 0, ry = 0;
+    if (side === 'n') {
+        rx = rA.x + offset;
+        ry = rA.y - length;
+    } else if (side === 's') {
+        rx = rA.x + offset;
+        ry = rA.y + rA.l;
+    } else if (side === 'w') {
+        rx = rA.x - width;
+        ry = rA.y + offset;
+    } else if (side === 'e') {
+        rx = rA.x + rA.w;
+        ry = rA.y + offset;
+    }
+
+    const id = 'room_' + Date.now();
+    const newRoom = {
+        id: id,
+        name: name,
+        type: type,
+        levelId: state.currentLevelId,
+        x: rx,
+        y: ry,
+        w: width,
+        l: length,
+        h: rA.h,
+        color: (typeof PRESETS !== 'undefined' && PRESETS[type]) ? PRESETS[type].color : '#ec4899',
+        openings: [],
+        foamBoard: false,
+        foamBondPockets: false,
+        carbonStraps: 0,
+        carbonFiberScope: 'full',
+        carbonFiberWalls: [],
+        customCarbonStraps: [],
+        floorPerimeterStrap: false,
+        nb1Height: 'none',
+        drywallHeight: 'none'
+    };
+
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    state.rooms.push(newRoom);
+    
+    if (typeof window.rebuildLogicalLayout === 'function') window.rebuildLogicalLayout();
+
+    if (addDoor) {
+        const sharedWall = (state.walls || []).find(w => 
+            (w.primaryRoomId === rA.id && w.secondaryRoomId === id) ||
+            (w.primaryRoomId === id && w.secondaryRoomId === rA.id)
+        );
+        if (sharedWall) {
+            const dx = sharedWall.x2 - sharedWall.x1;
+            const dy = sharedWall.y2 - sharedWall.y1;
+            const wallLen = Math.sqrt(dx*dx + dy*dy) || 1;
+            
+            if (!state.doors) state.doors = [];
+            state.doors.push({
+                id: 'door_' + Date.now(),
+                levelId: state.currentLevelId,
+                hostWallId: sharedWall.id,
+                roomA: rA.id,
+                roomB: id,
+                w: 3.0,
+                h: 6.8,
+                offset: wallLen / 2,
+                hingeSide: 'left',
+                swingDirection: 'in',
+                type: 'interior'
+            });
+            rA.openings.push({ id: 'op_' + Date.now(), type: 'door', wall: side, offset: offset + width / 2, w: 3.0, h: 6.8 });
+        }
+    }
+
+    if (typeof window.rebuildLogicalLayout === 'function') window.rebuildLogicalLayout();
+    state.guidedStep3Mode = 'choose';
+    window.renderGuidedStep();
+    if (typeof triggerAutosave === 'function') triggerAutosave();
+};
+
+window.saveDoorOpening = function() {
+    const type = document.getElementById('ad-type').value;
+    const hostWallId = document.getElementById('ad-host-wall').value;
+    const width = parseFloat(document.getElementById('ad-width').value) || 3;
+    const offset = parseFloat(document.getElementById('ad-offset').value) || 3;
+
+    const wall = (state.walls || []).find(w => w.id === hostWallId);
+    if (!wall) return;
+
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+
+    if (type === 'window') {
+        if (!state.windows) state.windows = [];
+        state.windows.push({
+            id: 'win_' + Date.now(),
+            levelId: state.currentLevelId,
+            hostWallId: hostWallId,
+            roomId: wall.primaryRoomId,
+            w: width,
+            h: 4.0,
+            sillHeight: 3.0,
+            offset: offset,
+            type: 'standard'
+        });
+        
+        // Sync to legacy local room openings
+        const primaryRoom = state.rooms.find(r => r.id === wall.primaryRoomId);
+        if (primaryRoom) {
+            primaryRoom.openings.push({ id: 'op_' + Date.now(), type: 'window', wall: 'n', offset: offset, w: width, h: 4.0 });
+        }
+    } else {
+        if (!state.doors) state.doors = [];
+        state.doors.push({
+            id: 'door_' + Date.now(),
+            levelId: state.currentLevelId,
+            hostWallId: hostWallId,
+            roomA: wall.primaryRoomId,
+            roomB: wall.secondaryRoomId,
+            w: width,
+            h: 6.8,
+            offset: offset,
+            hingeSide: 'left',
+            swingDirection: 'in',
+            type: type === 'exterior_door' ? 'exterior' : 'interior'
+        });
+        
+        // Sync to legacy local room openings
+        const primaryRoom = state.rooms.find(r => r.id === wall.primaryRoomId);
+        if (primaryRoom) {
+            primaryRoom.openings.push({ id: 'op_' + Date.now(), type: 'door', wall: 'n', offset: offset, w: width, h: 6.8 });
+        }
+    }
+
+    if (typeof window.rebuildLogicalLayout === 'function') window.rebuildLogicalLayout();
+    state.guidedStep3Mode = 'choose';
+    window.renderGuidedStep();
+    if (typeof triggerAutosave === 'function') triggerAutosave();
+};
+
+window.renderMiniFloorPreview = function() {
+    const canvas = document.getElementById('guided-floor-mini-preview');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    if (!state.rooms || state.rooms.length === 0) return;
+    const levelRooms = state.rooms.filter(r => r.levelId === state.currentLevelId);
+    if (levelRooms.length === 0) return;
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    levelRooms.forEach(r => {
+        if (r.x < minX) minX = r.x;
+        if (r.x + r.w > maxX) maxX = r.x + r.w;
+        if (r.y < minY) minY = r.y;
+        if (r.y + r.l > maxY) maxY = r.y + r.l;
+    });
+
+    const padding = 15;
+    const boundsW = maxX - minX || 1;
+    const boundsH = maxY - minY || 1;
+    const scaleX = (canvas.width - padding * 2) / boundsW;
+    const scaleY = (canvas.height - padding * 2) / boundsH;
+    const scale = Math.min(scaleX, scaleY, 15);
+
+    const offsetX = (canvas.width - boundsW * scale) / 2 - minX * scale;
+    const offsetY = (canvas.height - boundsH * scale) / 2 - minY * scale;
+
+    levelRooms.forEach(r => {
+        const rx = r.x * scale + offsetX;
+        const ry = r.y * scale + offsetY;
+        const rw = r.w * scale;
+        const rl = r.l * scale;
+
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(rx, ry, rw, rl);
+        ctx.strokeRect(rx, ry, rw, rl);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(r.name, rx + rw / 2, ry + rl / 2);
+    });
+
+    (state.doors || []).forEach(d => {
+        const wall = (state.walls || []).find(w => w.id === d.hostWallId);
+        if (!wall) return;
+        
+        const dx = wall.x2 - wall.x1;
+        const dy = wall.y2 - wall.y1;
+        const wallLen = Math.sqrt(dx*dx + dy*dy) || 1;
+        const ux = dx / wallLen;
+        const uy = dy / wallLen;
+        
+        const doorX = wall.x1 + ux * d.offset;
+        const doorY = wall.y1 + uy * d.offset;
+        
+        const cx = doorX * scale + offsetX;
+        const cy = doorY * scale + offsetY;
+
+        ctx.fillStyle = '#10b981';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    });
+};
+
+window.setGuidedStep3Mode = function(mode) {
+    state.guidedStep3Mode = mode;
+    window.renderGuidedStep();
+};
+
+window.deleteGuidedRoom = function(roomId) {
+    if (confirm("Are you sure you want to delete this room?")) {
+        if (typeof saveHistoryState === 'function') saveHistoryState();
+        state.rooms = state.rooms.filter(r => r.id !== roomId);
+        state.doors = (state.doors || []).filter(d => d.roomA !== roomId && d.roomB !== roomId);
+        if (typeof window.rebuildLogicalLayout === 'function') window.rebuildLogicalLayout();
+        window.renderGuidedStep();
+        if (typeof triggerAutosave === 'function') triggerAutosave();
+    }
+};
+
+window.editGuidedRoomDimensions = function(roomId) {
+    state.guidedStep3Mode = 'add_first';
+    window.renderGuidedStep();
+    setTimeout(() => {
+        const room = state.rooms.find(r => r.id === roomId);
+        if (!room) return;
+        const nameEl = document.getElementById('af-room-name');
+        const widEl = document.getElementById('af-room-width');
+        const lenEl = document.getElementById('af-room-length');
+        const hgtEl = document.getElementById('af-room-height');
+        const typeEl = document.getElementById('af-room-type');
+        if (nameEl) nameEl.value = room.name;
+        if (widEl) widEl.value = room.w;
+        if (lenEl) lenEl.value = room.l;
+        if (hgtEl) hgtEl.value = room.h;
+        if (typeEl) typeEl.value = room.type;
+        
+        // Remove room to overwrite on save
+        state.rooms = state.rooms.filter(r => r.id !== roomId);
+    }, 50);
 };
 
 

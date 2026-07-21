@@ -52,7 +52,19 @@ const state = {
     draggedMainBeamHandle: null, // { id, point: 'p1' | 'p2' | 'move' }
     snapGridSize: 0.5,   // Snap to nearest 0.5 foot (6 inches)
     showGrid: true,
-    initialMouseOffset: {}
+    initialMouseOffset: {},
+    
+    // Coordinated building structure schema elements
+    walls: [],
+    roomConnections: [],
+    doors: [],
+    windows: [],
+    openings: [],
+    stairs: [],
+    createdTimestamp: Date.now(),
+    updatedTimestamp: Date.now(),
+    revisionNumber: 1,
+    syncState: 'synchronized'
 };
 
 // Initialize default costing state
@@ -1258,8 +1270,116 @@ function getDistanceToSegment(px, py, x1, y1, x2, y2) {
 }
 
 // --- DRAWING ENGINE ---
+function drawLogicalWallsAndOpenings() {
+    const levelId = state.currentLevelId;
+    const walls = (state.walls || []).filter(w => w.levelId === levelId);
+    
+    // Draw solid walls
+    walls.forEach(w => {
+        const x1 = toCanvasX(w.x1);
+        const y1 = toCanvasY(w.y1);
+        const x2 = toCanvasX(w.x2);
+        const y2 = toCanvasY(w.y2);
+        
+        ctx.save();
+        ctx.strokeStyle = w.type === 'exterior' ? '#334155' : '#64748b';
+        ctx.lineWidth = w.type === 'exterior' ? 6 : 3.5;
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.restore();
+    });
+
+    // Draw doors
+    (state.doors || []).forEach(d => {
+        if (d.levelId !== levelId) return;
+        const wall = walls.find(w => w.id === d.hostWallId);
+        if (!wall) return;
+
+        const dx = wall.x2 - wall.x1;
+        const dy = wall.y2 - wall.y1;
+        const wallLen = Math.sqrt(dx*dx + dy*dy) || 1;
+        const ux = dx / wallLen;
+        const uy = dy / wallLen;
+
+        const doorX = wall.x1 + ux * d.offset;
+        const doorY = wall.y1 + uy * d.offset;
+
+        const px = -uy;
+        const py = ux;
+
+        const cx = toCanvasX(doorX);
+        const cy = toCanvasY(doorY);
+        const ws = d.w * state.scale;
+
+        ctx.save();
+        // Clear host wall segment under door
+        ctx.strokeStyle = '#0f172a'; // Match background color to cut wall opening
+        ctx.lineWidth = 8;
+        ctx.beginPath();
+        ctx.moveTo(cx - ux * ws/2, cy - uy * ws/2);
+        ctx.lineTo(cx + ux * ws/2, cy + uy * ws/2);
+        ctx.stroke();
+
+        // Draw door swing arc
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, ws, 0, Math.PI / 2);
+        ctx.stroke();
+
+        // Draw door panel line
+        ctx.strokeStyle = '#10b981';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + px * ws, cy + py * ws);
+        ctx.stroke();
+        
+        ctx.restore();
+    });
+
+    // Draw windows
+    (state.windows || []).forEach(w => {
+        if (w.levelId !== levelId) return;
+        const wall = walls.find(wa => wa.id === w.hostWallId);
+        if (!wall) return;
+
+        const dx = wall.x2 - wall.x1;
+        const dy = wall.y2 - wall.y1;
+        const wallLen = Math.sqrt(dx*dx + dy*dy) || 1;
+        const ux = dx / wallLen;
+        const uy = dy / wallLen;
+
+        const winX = wall.x1 + ux * w.offset;
+        const winY = wall.y1 + uy * w.offset;
+
+        const cx = toCanvasX(winX);
+        const cy = toCanvasY(winY);
+        const ws = w.w * state.scale;
+
+        ctx.save();
+        // Draw window frame
+        ctx.fillStyle = '#3b82f6';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+    });
+}
+
 function draw(isPrinting = false) {
     state.isPrintingMode = isPrinting;
+    
+    // Auto compile walls
+    if (typeof window.rebuildLogicalLayout === 'function') {
+        window.rebuildLogicalLayout();
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
     if (isPrinting) {
@@ -1281,6 +1401,9 @@ function draw(isPrinting = false) {
             drawRoom(room);
         }
     });
+
+    // 2. Draw logical building walls & openings
+    drawLogicalWallsAndOpenings();
 
     // Draw committed segments of current custom drawing in progress
     if (state.drawMode === 'custom' && state.sketchVertices.length > 0) {
@@ -5520,15 +5643,11 @@ document.getElementById('btn-redo').addEventListener('click', redo);
 // Bind Interface Mode selector
 const selectInterfaceMode = document.getElementById('select-app-interface-mode');
 if (selectInterfaceMode) {
+    selectInterfaceMode.value = state.interfaceMode === 'guided' ? 'guided' : 'advanced';
     selectInterfaceMode.addEventListener('change', (e) => {
         const mode = e.target.value;
-        state.interfaceMode = mode;
-        const appContainer = document.getElementById('app-container');
-        if (appContainer) {
-            appContainer.classList.toggle('interface-mode-simple', mode === 'simple');
-        }
-        if (mode === 'simple') {
-            switchView('checklist');
+        if (typeof setInterfaceMode === 'function') {
+            setInterfaceMode(mode);
         }
     });
 }
@@ -6061,11 +6180,95 @@ document.getElementById('btn-save-job-submit').addEventListener('click', async (
     renderJobsList();
 });
 
+// Normalizes and validates project state structure
+window.normalizeProjectState = function(s) {
+    if (!s) return s;
+    if (!s.schemaVersion) s.schemaVersion = '2.0.0';
+    if (!s.rooms) s.rooms = [];
+    if (!s.walls) s.walls = [];
+    if (!s.roomConnections) s.roomConnections = [];
+    if (!s.doors) s.doors = [];
+    if (!s.windows) s.windows = [];
+    if (!s.openings) s.openings = [];
+    if (!s.stairs) s.stairs = [];
+    if (!s.sumpPumps) s.sumpPumps = [];
+    if (!s.dehumidifiers) s.dehumidifiers = [];
+    if (!s.dischargeLines) s.dischargeLines = [];
+    if (!s.floorHatches) s.floorHatches = [];
+    if (!s.interiorPipes) s.interiorPipes = [];
+    if (!s.stanchions) s.stanchions = [];
+    if (!s.mainBeams) s.mainBeams = [];
+    if (!s.capturedMeasurements) s.capturedMeasurements = [];
+    if (!s.levels || s.levels.length === 0) {
+        s.levels = [
+            { id: 'crawlspace', name: 'Crawlspace', elevation: -3, height: 4 },
+            { id: 'basement', name: 'Basement', elevation: -8, height: 8 },
+            { id: 'mainfloor', name: 'Main Floor', elevation: 0, height: 9 },
+            { id: 'secondfloor', name: 'Second Floor', elevation: 9, height: 8 },
+            { id: 'attic', name: 'Attic', elevation: 17, height: 7 }
+        ];
+    }
+    if (!s.costing) {
+        s.costing = {
+            customerName: '',
+            customerAddress: '',
+            customerPhone: '',
+            customerEmail: '',
+            estimator: '',
+            inspectionDate: '',
+            notes: '',
+            workAreaSelection: 'crawlspace',
+            photos: [],
+            settings: {
+                targetGrossMargin: 40.0,
+                salesTaxRate: 6.0,
+                overhead: 15.0
+            }
+        };
+    }
+    if (!s.costing.settings) {
+        s.costing.settings = {
+            targetGrossMargin: 40.0,
+            salesTaxRate: 6.0,
+            overhead: 15.0
+        };
+    }
+    return s;
+};
+
 // Load job from project data structure
 function loadJobData(data) {
     if (!data) return;
-    state.rooms = data.rooms || [];
-    state.sumpPumps = data.sumpPumps || [];
+    
+    // Normalize properties
+    window.normalizeProjectState(data);
+    
+    state.rooms = data.rooms;
+    state.sumpPumps = data.sumpPumps;
+    state.dehumidifiers = data.dehumidifiers;
+    state.dischargeLines = data.dischargeLines;
+    state.floorHatches = data.floorHatches;
+    state.interiorPipes = data.interiorPipes;
+    state.stanchions = data.stanchions;
+    state.mainBeams = data.mainBeams;
+    state.currentLevelId = data.currentLevelId || 'basement';
+    state.capturedMeasurements = data.capturedMeasurements;
+    
+    // New logical building properties
+    state.walls = data.walls || [];
+    state.roomConnections = data.roomConnections || [];
+    state.doors = data.doors || [];
+    state.windows = data.windows || [];
+    state.openings = data.openings || [];
+    state.stairs = data.stairs || [];
+    state.createdTimestamp = data.createdTimestamp || Date.now();
+    state.updatedTimestamp = data.updatedTimestamp || Date.now();
+    state.revisionNumber = data.revisionNumber || 1;
+    state.syncState = data.syncState || 'synchronized';
+    
+    // Load costing data
+    state.costing = data.costing;
+    initDefaultCosting(state);
     state.dehumidifiers = data.dehumidifiers || [];
     state.dischargeLines = data.dischargeLines || [];
     state.floorHatches = data.floorHatches || [];
@@ -6328,7 +6531,10 @@ if (btnToggleChecklist) {
 // ==========================================
 
 // Global state defaults for Guided Mode
-state.interfaceMode = localStorage.getItem('roomflow_interface_mode') || 'guided';
+let storedMode = localStorage.getItem('roomflow_interface_mode') || 'guided';
+if (storedMode === 'simple') storedMode = 'guided';
+if (storedMode === 'professional') storedMode = 'advanced';
+state.interfaceMode = storedMode;
 state.currentStep = 1;
 state.currentJobName = '';
 state.guidedStep3Mode = 'choose';
@@ -6359,6 +6565,74 @@ window.addEventListener('load', () => {
     const continueBtn = document.getElementById('btn-continue-last-estimate');
     if (continueBtn) {
         continueBtn.addEventListener('click', continueLastEstimateWorkflow);
+    }
+
+    const newJobForm = document.getElementById('new-job-form');
+    if (newJobForm) {
+        newJobForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('nj-job-name').value.trim();
+            const customerName = document.getElementById('nj-customer-name').value.trim();
+            const inspectionDate = document.getElementById('nj-inspection-date').value;
+            const address = document.getElementById('nj-property-address').value.trim();
+            const phone = document.getElementById('nj-customer-phone').value.trim();
+            const email = document.getElementById('nj-customer-email').value.trim();
+            const estimator = document.getElementById('nj-estimator').value.trim();
+            const initialArea = document.getElementById('nj-initial-area').value;
+            const notes = document.getElementById('nj-notes').value.trim();
+
+            if (!name || !customerName) {
+                alert("Job Name and Customer Name are required!");
+                return;
+            }
+
+            const jobs = getStoredJobs();
+            if (jobs[name]) {
+                alert("A job with this name already exists!");
+                return;
+            }
+
+            let returnedJobId = null;
+            if (typeof RoomFlowSync !== 'undefined' && RoomFlowSync.createCloudJobRecord) {
+                try {
+                    const dbJob = await RoomFlowSync.createCloudJobRecord(name, customerName, email, phone);
+                    if (dbJob) {
+                        returnedJobId = dbJob.id;
+                    }
+                } catch (err) {
+                    console.warn("Cloud job insertion failed, proceeding locally first:", err);
+                }
+            }
+
+            const initialOrgId = state.currentOrganization ? state.currentOrganization.id : '';
+            const initialJob = getInitialProjectState(
+                name,
+                customerName,
+                address,
+                phone,
+                email,
+                estimator,
+                inspectionDate,
+                initialArea,
+                notes,
+                initialOrgId,
+                returnedJobId
+            );
+
+            state.currentJobName = name;
+            loadJobData(initialJob);
+
+            window.autosaveJob();
+            localStorage.setItem('roomflow_last_estimate', name);
+
+            document.getElementById('new-job-modal').classList.add('hidden');
+            
+            // Navigate to Project Tab and Step 1 immediately
+            state.currentStep = 1;
+            switchTab('project');
+            if (window.renderGuidedStep) window.renderGuidedStep();
+        });
     }
 
     // Wizard navigation buttons
@@ -6436,6 +6710,11 @@ function setInterfaceMode(mode) {
     state.interfaceMode = mode;
     localStorage.setItem('roomflow_interface_mode', mode);
     
+    const selectInterfaceMode = document.getElementById('select-app-interface-mode');
+    if (selectInterfaceMode) {
+        selectInterfaceMode.value = mode === 'guided' ? 'guided' : 'advanced';
+    }
+    
     const container = document.getElementById('app-container');
     if (!container) return;
     
@@ -6448,7 +6727,7 @@ function setInterfaceMode(mode) {
         container.classList.remove('interface-mode-guided');
         container.classList.add('interface-mode-advanced');
         // Restore professional layout tabs
-        switchView('checklist');
+        switchView('2d');
     }
 }
 
@@ -6513,42 +6792,235 @@ function checkLastEstimate() {
     }
 }
 
-// Start/Continue workflow
-function startNewEstimateWorkflow() {
-    const name = prompt("Enter a unique Job/Customer Name for this estimate:");
-    if (!name) return;
-    
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    
-    const jobs = getStoredJobs();
-    if (jobs[trimmed]) {
-        alert("A job with this name already exists!");
+// Helper to build initial project state object with schema defaults
+function getInitialProjectState(jobName, customerName, customerAddress, customerPhone, customerEmail, estimator, inspectionDate, initialArea, notes, orgId, jobId = null) {
+    const id = jobId || 'job_' + Math.random().toString(36).substr(2, 9);
+    return {
+        schemaVersion: '2.0.0',
+        jobId: id,
+        organizationId: orgId || (state.currentOrganization ? state.currentOrganization.id : ''),
+        currentJobName: jobName,
+        currentStep: 1,
+        guidedStep3Mode: 'choose',
+        currentLevelId: initialArea === 'basement' ? 'basement' : (initialArea === 'attic' ? 'attic' : (initialArea === 'mainfloor' ? 'mainfloor' : 'crawlspace')),
+        levels: [
+            { id: 'crawlspace', name: 'Crawlspace', elevation: -3, height: 4 },
+            { id: 'basement', name: 'Basement', elevation: -8, height: 8 },
+            { id: 'mainfloor', name: 'Main Floor', elevation: 0, height: 9 },
+            { id: 'secondfloor', name: 'Second Floor', elevation: 9, height: 8 },
+            { id: 'attic', name: 'Attic', elevation: 17, height: 7 }
+        ],
+        rooms: [],
+        walls: [],
+        roomConnections: [],
+        doors: [],
+        windows: [],
+        openings: [],
+        stairs: [],
+        floorHatches: [],
+        utilities: [],
+        sumpPumps: [],
+        dehumidifiers: [],
+        dischargeLines: [],
+        interiorPipes: [],
+        stanchions: [],
+        mainBeams: [],
+        capturedMeasurements: [],
+        costing: {
+            customerName: customerName || '',
+            customerAddress: customerAddress || '',
+            customerPhone: customerPhone || '',
+            customerEmail: customerEmail || '',
+            estimator: estimator || '',
+            inspectionDate: inspectionDate || '',
+            notes: notes || '',
+            workAreaSelection: initialArea || 'crawlspace',
+            photos: [],
+            settings: {
+                targetGrossMargin: 40.0,
+                salesTaxRate: 6.0,
+                overhead: 15.0
+            }
+        },
+        createdTimestamp: Date.now(),
+        updatedTimestamp: Date.now(),
+        revisionNumber: 1,
+        syncState: 'synchronized'
+    };
+}
+
+// Logical building wall-adjacency model compiler
+window.rebuildLogicalLayout = function() {
+    if (!state.rooms || state.rooms.length === 0) {
+        state.walls = [];
+        state.roomConnections = [];
         return;
     }
     
-    // Reset project state for new job
-    state.rooms = [];
-    state.sumpPumps = [];
-    state.dehumidifiers = [];
-    state.dischargeLines = [];
-    state.floorHatches = [];
-    state.interiorPipes = [];
-    state.stanchions = [];
-    state.mainBeams = [];
-    state.capturedMeasurements = [];
+    const levelId = state.currentLevelId;
+    const rooms = state.rooms.filter(r => r.levelId === levelId);
     
-    initDefaultCosting(state);
-    state.currentJobName = trimmed;
-    state.currentStep = 1;
-    state.guidedStep3Mode = 'choose';
+    const rawSegments = [];
+    rooms.forEach(room => {
+        const segs = getRoomSegments(room);
+        segs.forEach(seg => {
+            rawSegments.push({
+                roomId: room.id,
+                wallSide: seg.wall,
+                x1: seg.x1,
+                y1: seg.y1,
+                x2: seg.x2,
+                y2: seg.y2,
+                height: room.height || 8,
+                thickness: 0.5
+            });
+        });
+    });
+
+    const compiledWalls = [];
+    const segmentsUsed = new Set();
+    const sharedWalls = [];
+
+    // Helper to calculate segment overlapping coordinates collinearly
+    function checkOverlap(s1, s2) {
+        const dist1 = getDistanceToLine(s2.x1, s2.y1, s1.x1, s1.y1, s1.x2, s1.y2);
+        const dist2 = getDistanceToLine(s2.x2, s2.y2, s1.x1, s1.y1, s1.x2, s1.y2);
+
+        const collinearTolerance = 0.25;
+        if (dist1 > collinearTolerance || dist2 > collinearTolerance) return null;
+
+        const dx = s1.x2 - s1.x1;
+        const dy = s1.y2 - s1.y1;
+        const lenSq = dx*dx + dy*dy;
+        if (lenSq < 0.01) return null;
+
+        function getProj(x, y) {
+            return ((x - s1.x1) * dx + (y - s1.y1) * dy) / lenSq;
+        }
+
+        const p2_start = getProj(s2.x1, s2.y1);
+        const p2_end = getProj(s2.x2, s2.y2);
+
+        const minP1 = 0, maxP1 = 1;
+        const minP2 = Math.min(p2_start, p2_end), maxP2 = Math.max(p2_start, p2_end);
+
+        const overlapMin = Math.max(minP1, minP2);
+        const overlapMax = Math.min(maxP1, maxP2);
+
+        if (overlapMax - overlapMin > 0.05) {
+            return {
+                x1: s1.x1 + overlapMin * dx,
+                y1: s1.y1 + overlapMin * dy,
+                x2: s1.x1 + overlapMax * dx,
+                y2: s1.y1 + overlapMax * dy
+            };
+        }
+        return null;
+    }
+
+    function getDistanceToLine(px, py, x1, y1, x2, y2) {
+        const l2 = (x2 - x1)**2 + (y2 - y1)**2;
+        if (l2 === 0) return Math.sqrt((px - x1)**2 + (py - y1)**2);
+        let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        return Math.sqrt((px - (x1 + t * (x2 - x1)))**2 + (py - (y1 + t * (y2 - y1)))**2);
+    }
+
+    for (let i = 0; i < rawSegments.length; i++) {
+        for (let j = i + 1; j < rawSegments.length; j++) {
+            const segA = rawSegments[i];
+            const segB = rawSegments[j];
+            if (segA.roomId === segB.roomId) continue;
+
+            const overlap = checkOverlap(segA, segB);
+            if (overlap) {
+                const wallId = 'wall_' + segA.roomId + '_' + segB.roomId + '_' + i + '_' + j;
+                const newWall = {
+                    id: wallId,
+                    levelId: levelId,
+                    x1: overlap.x1,
+                    y1: overlap.y1,
+                    x2: overlap.x2,
+                    y2: overlap.y2,
+                    thickness: segA.thickness,
+                    height: Math.max(segA.height, segB.height),
+                    primaryRoomId: segA.roomId,
+                    secondaryRoomId: segB.roomId,
+                    primarySideWork: {},
+                    secondarySideWork: {},
+                    type: 'interior',
+                    notes: `Shared wall between ${rooms.find(r=>r.id===segA.roomId)?.name || 'Room A'} and ${rooms.find(r=>r.id===segB.roomId)?.name || 'Room B'}`
+                };
+                sharedWalls.push(newWall);
+                compiledWalls.push(newWall);
+                segmentsUsed.add(i);
+                segmentsUsed.add(j);
+            }
+        }
+    }
+
+    for (let i = 0; i < rawSegments.length; i++) {
+        if (!segmentsUsed.has(i)) {
+            const seg = rawSegments[i];
+            const wallId = 'wall_' + seg.roomId + '_' + seg.wallSide + '_' + i;
+            compiledWalls.push({
+                id: wallId,
+                levelId: levelId,
+                x1: seg.x1,
+                y1: seg.y1,
+                x2: seg.x2,
+                y2: seg.y2,
+                thickness: seg.thickness,
+                height: seg.height,
+                primaryRoomId: seg.roomId,
+                secondaryRoomId: null,
+                primarySideWork: {},
+                secondarySideWork: null,
+                type: 'exterior',
+                notes: `Exterior wall of ${rooms.find(r=>r.id===seg.roomId)?.name || 'Room'}`
+            });
+        }
+    }
+
+    state.walls = compiledWalls;
+
+    const adjacency = [];
+    sharedWalls.forEach(w => {
+        const doorsHosted = (state.doors || []).filter(d => d.hostWallId === w.id);
+        const openingsHosted = (state.openings || []).filter(o => o.hostWallId === w.id);
+        const hasOpening = (doorsHosted.length > 0 || openingsHosted.length > 0);
+        
+        adjacency.push({
+            id: 'conn_' + w.id,
+            levelId: levelId,
+            roomA: w.primaryRoomId,
+            roomB: w.secondaryRoomId,
+            sharedWallId: w.id,
+            type: hasOpening ? 'door' : 'shared_wall',
+            traversable: hasOpening,
+            notes: `Adjacency of ${w.primaryRoomId} to ${w.secondaryRoomId}`
+        });
+    });
     
-    // Save immediately to register
-    window.autosaveJob();
-    localStorage.setItem('roomflow_last_estimate', trimmed);
-    checkLastEstimate();
+    state.roomConnections = adjacency;
+};
+
+// Start/Continue workflow
+function startNewEstimateWorkflow() {
+    if (!state.currentOrganization) {
+        alert("Please select a workspace/company organization under Settings first.");
+        switchTab('more');
+        return;
+    }
     
-    switchTab('project');
+    const modal = document.getElementById('new-job-modal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        const dateInput = document.getElementById('nj-inspection-date');
+        if (dateInput) {
+            dateInput.value = new Date().toISOString().split('T')[0];
+        }
+    }
 }
 
 function continueLastEstimateWorkflow() {

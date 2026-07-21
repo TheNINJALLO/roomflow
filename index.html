@@ -15,7 +15,6 @@
     <!-- Supabase integration -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js?v=60"></script>
-    <script src="supabase-service.js?v=60"></script>
 </head>
 <body>
     <div id="app-container" class="interface-mode-simple">
@@ -27,10 +26,7 @@
             </div>
             
             <div class="view-toggles">
-                <button id="btn-view-checklist" class="toggle-btn active">
-                    <i data-lucide="check-square"></i> <span>Estimating Checklist</span>
-                </button>
-                <button id="btn-view-2d" class="toggle-btn">
+                <button id="btn-view-2d" class="toggle-btn active">
                     <i data-lucide="edit-3"></i> <span>2D Sketch</span>
                 </button>
                 <button id="btn-view-3d" class="toggle-btn">
@@ -60,8 +56,8 @@
                 <div class="mode-selector-container" style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 0.25rem 0.5rem; margin-right: 0.5rem;">
                     <label style="font-size: 0.75rem; color: #94a3b8; font-weight: 500; margin: 0; white-space: nowrap;">Interface:</label>
                     <select id="select-app-interface-mode" style="background: transparent; border: none; color: white; font-size: 0.8rem; font-weight: bold; cursor: pointer; padding: 0; outline: none;">
-                        <option value="simple" style="background: #0f172a; color: white;">Simple Checklist</option>
-                        <option value="professional" style="background: #0f172a; color: white;">CAD Blueprint</option>
+                        <option value="guided" style="background: #0f172a; color: white;">Guided Wizard</option>
+                        <option value="advanced" style="background: #0f172a; color: white;">CAD Blueprint</option>
                     </select>
                 </div>
                 <button id="btn-undo" title="Undo Action" disabled><i data-lucide="undo"></i></button>
@@ -421,10 +417,6 @@
                     </div>
                 </div>
 
-                <!-- Unified Estimating Checklist Viewport -->
-                <div id="checklist-container" class="viewport">
-                    <!-- Dynamic checklist layout populated by cost-ui.js -->
-                </div>
 
                 <!-- 2D Sketch Board -->
                 <div id="canvas-container" class="viewport">
@@ -1121,6 +1113,78 @@
         </div>
     </div>
 
+    <!-- New Job Creation Modal -->
+    <div id="new-job-modal" class="modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1.5rem; overflow-y: auto;">
+        <div style="background: #111827; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; width: 100%; max-width: 600px; max-height: calc(100vh - 3rem); display: flex; flex-direction: column; box-shadow: var(--shadow-2xl);">
+            <div style="padding: 1.25rem 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="font-size: 1.2rem; font-weight: 700; color: white; display: flex; align-items: center; gap: 0.5rem;"><i data-lucide="plus-circle" style="color: var(--accent-blue);"></i> Create New Estimating Job</h3>
+                <button onclick="document.getElementById('new-job-modal').classList.add('hidden')" style="background: transparent; border: none; color: #cbd5e1; cursor: pointer; padding: 0.25rem;"><i data-lucide="x"></i></button>
+            </div>
+            
+            <form id="new-job-form" onsubmit="return false;" style="padding: 1.5rem; overflow-y: auto; display: flex; flex-direction: column; gap: 1.25rem;">
+                <div style="display: grid; grid-template-columns: 1fr; gap: 1rem;">
+                    <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                        <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Job Name / Code *</label>
+                        <input type="text" id="nj-job-name" required placeholder="e.g. Job #1042 - Smith Residence" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem;">
+                    </div>
+                </div>
+                
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                        <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Customer Name *</label>
+                        <input type="text" id="nj-customer-name" required placeholder="John Smith" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                        <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Inspection Date</label>
+                        <input type="date" id="nj-inspection-date" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem;">
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                    <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Property Address</label>
+                    <input type="text" id="nj-property-address" placeholder="123 Maple St, Detroit, MI" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem;">
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                        <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Phone Number</label>
+                        <input type="tel" id="nj-customer-phone" placeholder="555-0199" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                        <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Email Address</label>
+                        <input type="email" id="nj-customer-email" placeholder="john@example.com" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                        <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Estimator / Assigned User</label>
+                        <input type="text" id="nj-estimator" placeholder="e.g. Inspector Name" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem;">
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                        <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Initial Work Area</label>
+                        <select id="nj-initial-area" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem; outline:none;">
+                            <option value="crawlspace">Crawlspace / Foundation Area</option>
+                            <option value="basement">Basement Area</option>
+                            <option value="attic">Attic / Roof Area</option>
+                            <option value="mainfloor">Main Floor Living Area</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:0.35rem;">
+                    <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1; text-transform:uppercase;">Optional Notes</label>
+                    <textarea id="nj-notes" placeholder="e.g. Mold treatment required. Standing water under crawlspace." style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.6rem 0.8rem; color:white; font-size:0.9rem; min-height:60px; resize:vertical;"></textarea>
+                </div>
+
+                <div style="padding-top: 0.5rem; display: flex; justify-content: flex-end; gap: 0.75rem;">
+                    <button type="button" onclick="document.getElementById('new-job-modal').classList.add('hidden')" class="btn-secondary" style="padding: 0.6rem 1.25rem; font-size: 0.85rem;">Cancel</button>
+                    <button type="submit" id="btn-submit-new-job" class="btn-primary" style="padding: 0.6rem 1.5rem; font-size: 0.85rem; font-weight: 700; display:flex; align-items:center; gap:0.25rem;">Create Job</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Three.js Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -1130,6 +1194,7 @@
     <script src="cost-catalog.js?v=59"></script>
     <script src="cost-engine.js?v=60"></script>
     <script src="app.js?v=65"></script>
+    <script src="supabase-service.js?v=60"></script>
     <script src="renderer3d.js?v=60"></script>
     <script src="ar-estimator.js?v=59"></script>
     <script src="cost-ui.js?v=60"></script>

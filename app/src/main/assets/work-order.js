@@ -185,7 +185,8 @@ window.RoomFlowWorkOrder = {
                         <div>
                             <strong>Physical Dimensions:</strong> ${r.width.toFixed(1)} x ${r.length.toFixed(1)} ft (Height ${r.height || 8} ft)<br>
                             <strong>Floor Area:</strong> ${Math.round(r.width * r.length)} sq ft<br>
-                            <strong>Wall Perimeter:</strong> ${Math.round((r.width + r.length) * 2)} ft
+                            <strong>Wall Perimeter:</strong> ${Math.round((r.width + r.length) * 2)} ft<br>
+                            <strong>Wall Layout:</strong> ${getRoomWallStatus(r)}
                         </div>
                         <div>
                             <strong>Room Notes:</strong> ${r.notes || 'No custom layout comments entered.'}
@@ -363,6 +364,40 @@ window.RoomFlowWorkOrder = {
         win.document.close();
     }
 };
+
+function getRoomWallStatus(room) {
+    const walls = (state.walls || []).filter(w => w.primaryRoomId === room.id || w.secondaryRoomId === room.id);
+    const descriptions = [];
+    
+    walls.forEach(w => {
+        let side = 'wall';
+        const mx = (w.x1 + w.x2) / 2;
+        const my = (w.y1 + w.y2) / 2;
+        
+        const rx = room.x + room.w / 2;
+        const ry = room.y + room.l / 2;
+        
+        const dx = mx - rx;
+        const dy = my - ry;
+        
+        if (Math.abs(dx) > Math.abs(dy)) {
+            side = dx > 0 ? 'East Wall' : 'West Wall';
+        } else {
+            side = dy > 0 ? 'South Wall' : 'North Wall';
+        }
+        
+        if (w.secondaryRoomId) {
+            const otherId = w.primaryRoomId === room.id ? w.secondaryRoomId : w.primaryRoomId;
+            const other = state.rooms.find(o => o.id === otherId);
+            const otherName = other ? other.name : 'Adjacent Room';
+            descriptions.push(`${side} (shared with ${otherName})`);
+        } else {
+            descriptions.push(`${side} (exterior)`);
+        }
+    });
+    
+    return descriptions.length > 0 ? descriptions.join(', ') : 'No defined wall segments.';
+}
 
 // Plain text instructions builder matching costing items
 function generateRoomWorkInstructions(r) {

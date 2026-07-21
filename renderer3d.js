@@ -81,7 +81,7 @@ window.sync3D = function() {
     roomMeshes.forEach(mesh => scene.remove(mesh));
     roomMeshes = [];
 
-    // Build 3D objects for each room
+    // Build floor, ceiling and joist planes for each room
     state.rooms.forEach(room => {
         const roomGroup = new THREE.Group();
         const level = state.levels.find(l => l.id === room.levelId) || { elevation: 0 };
@@ -133,13 +133,6 @@ window.sync3D = function() {
                 roomGroup.add(stepMesh);
             }
         } else if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
-            // --- Custom Polygon Room (with custom-angled walls) ---
-            const wallMat = new THREE.MeshStandardMaterial({
-                color: '#e2e8f0',
-                roughness: 0.9,
-                metalness: 0.05
-            });
-
             // 1. Draw floor plane using Shape Geometry
             const shape = new THREE.Shape();
             shape.moveTo(room.vertices[0].x, room.vertices[0].y);
@@ -166,16 +159,6 @@ window.sync3D = function() {
                 ceilMesh.position.y = room.h;
                 roomGroup.add(ceilMesh);
             }
-
-            // 3. Walls Construction connecting vertices
-            for (let i = 0; i < room.vertices.length; i++) {
-                const v1 = room.vertices[i];
-                const v2 = room.vertices[(i + 1) % room.vertices.length];
-                
-                // Openings on custom walls filter by index number string
-                const segOpenings = room.openings.filter(op => op.wall === i.toString() || op.wall === i);
-                build3DWall(v1.x, v1.y, v2.x, v2.y, room.h, segOpenings, roomGroup, wallMat);
-            }
         } else {
             // 1. Floor Plane
             const floorGeo = new THREE.PlaneGeometry(room.w, room.l);
@@ -197,28 +180,6 @@ window.sync3D = function() {
                 ceilMesh.position.y = room.h;
                 roomGroup.add(ceilMesh);
             }
-
-            // 3. Walls construction (North, East, South, West)
-            const wallMat = new THREE.MeshStandardMaterial({
-                color: '#e2e8f0',
-                roughness: 0.9,
-                metalness: 0.05
-            });
-
-            // Filter openings by wall
-            const nOpenings = room.openings.filter(op => op.wall === 'n');
-            const sOpenings = room.openings.filter(op => op.wall === 's');
-            const eOpenings = room.openings.filter(op => op.wall === 'e');
-            const wOpenings = room.openings.filter(op => op.wall === 'w');
-
-            // North Wall: (0, 0) -> (W, 0)
-            build3DWall(0, 0, room.w, 0, room.h, nOpenings, roomGroup, wallMat);
-            // South Wall: (0, L) -> (W, L)
-            build3DWall(0, room.l, room.w, room.l, room.h, sOpenings, roomGroup, wallMat);
-            // West Wall: (0, 0) -> (0, L)
-            build3DWall(0, 0, 0, room.l, room.h, wOpenings, roomGroup, wallMat);
-            // East Wall: (W, 0) -> (W, L)
-            build3DWall(room.w, 0, room.w, room.l, room.h, eOpenings, roomGroup, wallMat);
         }
 
         // --- Render Floor Joists if set ---
@@ -383,14 +344,14 @@ window.sync3D = function() {
                 
                 const mx = (seg.x1 + seg.x2) / 2;
                 const my = (seg.y1 + seg.y2) / 2;
-                
                 const testDist = 0.5;
                 const testX = mx + nx * testDist;
                 const testY = my + ny * testDist;
                 const inRoom = getRoomAt(testX, testY, room.levelId);
-                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
                 
-                const offsetDist = wallThickness / 2 + 0.01;
+                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                const offsetDist = wallThickness / 2 - 0.01;
+                
                 mesh.position.set(
                     mx + nx * offsetDist * mul,
                     elevation + coatingH / 2,
@@ -399,6 +360,8 @@ window.sync3D = function() {
                 
                 const angle = Math.atan2(dy, dx);
                 mesh.rotation.y = -angle;
+                
+                mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 
                 scene.add(mesh);
@@ -406,29 +369,23 @@ window.sync3D = function() {
             });
         }
 
-        // --- Render 3D Drywall Cut ---
+        // --- Render 3D Drywall ---
         if (room.drywallHeight && room.drywallHeight !== 'none') {
             const segments = getRoomSegments(room);
-            const drywallMat = new THREE.MeshStandardMaterial({
-                color: '#fb7185', // Warm light red/rose
-                roughness: 0.8,
-                metalness: 0.1,
-                transparent: true,
-                opacity: 0.6,
-                side: THREE.DoubleSide
+            const dwMat = new THREE.MeshStandardMaterial({
+                color: '#f8fafc', // Clean off-white drywall
+                roughness: 0.95,
+                metalness: 0.02
             });
-            const cutH = room.drywallHeight === '1ft' ? 1.0 : 
-                          (room.drywallHeight === '2ft' ? 2.0 : 
-                          (room.drywallHeight === '4ft' ? 4.0 : 
-                          (room.drywallHeight === '6ft' ? 6.0 : room.h)));
-            const dcThick = 0.025; // thicker than NB1 to sit on top / avoid z-fighting
+            const coatingH = room.drywallHeight === '2ft' ? 2.0 : (room.drywallHeight === '4ft' ? 4.0 : room.h);
+            const dwThick = 0.04; // 1/2 inch drywall panel
             
             segments.forEach(seg => {
                 const len = Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
                 if (len < 0.05) return;
                 
-                const geometry = new THREE.BoxGeometry(len, cutH, dcThick);
-                const mesh = new THREE.Mesh(geometry, drywallMat);
+                const geometry = new THREE.BoxGeometry(len, coatingH, dwThick);
+                const mesh = new THREE.Mesh(geometry, dwMat);
                 
                 const dx = seg.x2 - seg.x1;
                 const dy = seg.y2 - seg.y1;
@@ -437,22 +394,24 @@ window.sync3D = function() {
                 
                 const mx = (seg.x1 + seg.x2) / 2;
                 const my = (seg.y1 + seg.y2) / 2;
-                
                 const testDist = 0.5;
                 const testX = mx + nx * testDist;
                 const testY = my + ny * testDist;
                 const inRoom = getRoomAt(testX, testY, room.levelId);
-                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
                 
-                const offsetDist = wallThickness / 2 + 0.015; // slightly offset from NB1
+                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                const offsetDist = wallThickness / 2 - 0.02;
+                
                 mesh.position.set(
                     mx + nx * offsetDist * mul,
-                    elevation + cutH / 2,
+                    elevation + coatingH / 2,
                     my + ny * offsetDist * mul
                 );
                 
                 const angle = Math.atan2(dy, dx);
                 mesh.rotation.y = -angle;
+                
+                mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 
                 scene.add(mesh);
@@ -460,68 +419,19 @@ window.sync3D = function() {
             });
         }
 
-        // --- Render 3D Floor Perimeter Carbon Fiber Strap ---
-        if (room.floorPerimeterStrap) {
-            const segments = getRoomSegments(room);
-            const cfMat = new THREE.MeshStandardMaterial({
-                color: '#0f172a', // Charcoal/black
-                roughness: 0.6,
-                metalness: 0.1
-            });
-            const pHeight = 0.33; // 4 inches high
-            const pThick = 0.02;
-            
-            segments.forEach(seg => {
-                const len = Math.sqrt((seg.x2 - seg.x1)**2 + (seg.y2 - seg.y1)**2);
-                if (len < 0.05) return;
-                
-                const geometry = new THREE.BoxGeometry(len, pHeight, pThick);
-                const mesh = new THREE.Mesh(geometry, cfMat);
-                
-                const dx = seg.x2 - seg.x1;
-                const dy = seg.y2 - seg.y1;
-                const nx = -dy / len;
-                const ny = dx / len;
-                
-                const mx = (seg.x1 + seg.x2) / 2;
-                const my = (seg.y1 + seg.y2) / 2;
-                
-                const testDist = 0.5;
-                const testX = mx + nx * testDist;
-                const testY = my + ny * testDist;
-                const inRoom = getRoomAt(testX, testY, room.levelId);
-                const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
-                
-                const offsetDist = wallThickness / 2 + 0.03;
-                mesh.position.set(
-                    mx + nx * offsetDist * mul,
-                    elevation + pHeight / 2,
-                    my + ny * offsetDist * mul
-                );
-                
-                const angle = Math.atan2(dy, dx);
-                mesh.rotation.y = -angle;
-                mesh.receiveShadow = true;
-                
-                scene.add(mesh);
-                roomMeshes.push(mesh);
-            });
-        }
-
-        // --- Render 3D Carbon Fiber Straps (Vertical) ---
+        // --- Render 3D Carbon Fiber Wall Reinforcements ---
         if (room.carbonStraps > 0) {
             const segments = getRoomSegments(room);
-            const sWidth = 0.33; // 4 inches wide strap
-            const sThick = 0.025;
             const cfMat = new THREE.MeshStandardMaterial({
-                color: '#0f172a',
+                color: '#1e293b', // Woven Carbon Look
                 roughness: 0.6,
-                metalness: 0.1
+                metalness: 0.7
             });
-            const offsetDist = wallThickness / 2 + 0.055;
-
-            if (room.carbonFiberScope === 'specific' && room.customCarbonStraps && room.customCarbonStraps.length > 0) {
-                // Manual Placement Mode
+            const sWidth = 0.5;  // 6 inches wide strap
+            const sThick = 0.015; // 0.18 inch profile
+            
+            if (room.carbonFiberScope === 'specific' && Array.isArray(room.customCarbonStraps) && room.customCarbonStraps.length > 0) {
+                // Render specific custom positions
                 room.customCarbonStraps.forEach(strap => {
                     const seg = segments.find(s => s.wall === strap.wall);
                     if (!seg) return;
@@ -531,8 +441,8 @@ window.sync3D = function() {
                     const len = Math.sqrt(dx*dx + dy*dy);
                     if (len < 0.05) return;
                     
-                    const px = seg.x1 + dx * strap.offset;
-                    const py = seg.y1 + dy * strap.offset;
+                    const px = seg.x1 + dx * strap.ratio;
+                    const py = seg.y1 + dy * strap.ratio;
                     
                     const nx = -dy / len;
                     const ny = dx / len;
@@ -541,6 +451,7 @@ window.sync3D = function() {
                     const testY = py + ny * testDist;
                     const inRoom = getRoomAt(testX, testY, room.levelId);
                     const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                    const offsetDist = wallThickness / 2 - 0.005;
                     
                     const geometry = new THREE.BoxGeometry(sWidth, room.h, sThick);
                     const mesh = new THREE.Mesh(geometry, cfMat);
@@ -599,13 +510,15 @@ window.sync3D = function() {
                         const px = s.seg.x1 + s.dx * ratio;
                         const py = s.seg.y1 + s.dy * ratio;
                         
-                        const nx = -s.dy / s.len;
-                        const ny = s.dx / s.len;
+                        const len = s.len;
+                        const nx = -s.dy / len;
+                        const ny = s.dx / len;
                         const testDist = 0.5;
                         const testX = px + nx * testDist;
                         const testY = py + ny * testDist;
                         const inRoom = getRoomAt(testX, testY, room.levelId);
                         const mul = (inRoom && inRoom.id === room.id) ? 1 : -1;
+                        const offsetDist = wallThickness / 2 - 0.005;
                         
                         const geometry = new THREE.BoxGeometry(sWidth, room.h, sThick);
                         const mesh = new THREE.Mesh(geometry, cfMat);
@@ -631,6 +544,49 @@ window.sync3D = function() {
 
         scene.add(roomGroup);
         roomMeshes.push(roomGroup);
+    });
+
+    // Build logical building walls in 3D
+    const wallMat = new THREE.MeshStandardMaterial({
+        color: '#e2e8f0',
+        roughness: 0.9,
+        metalness: 0.05
+    });
+
+    (state.walls || []).forEach(w => {
+        const wallGroup = new THREE.Group();
+        const level = state.levels.find(l => l.id === w.levelId) || { elevation: 0 };
+        const elevation = level.elevation || 0;
+        wallGroup.position.set(0, elevation, 0);
+
+        // Map openings from first-class doors & windows
+        const openings = [];
+        (state.doors || []).forEach(d => {
+            if (d.hostWallId === w.id) {
+                openings.push({
+                    type: 'door',
+                    w: d.w || 3.0,
+                    h: d.h || 6.8,
+                    offset: d.offset
+                });
+            }
+        });
+        (state.windows || []).forEach(win => {
+            if (win.hostWallId === w.id) {
+                openings.push({
+                    type: 'window',
+                    w: win.w || 3.0,
+                    h: win.h || 4.0,
+                    offset: win.offset,
+                    sillHeight: win.sillHeight || 3.0
+                });
+            }
+        });
+
+        build3DWall(w.x1, w.y1, w.x2, w.y2, w.height || 8, openings, wallGroup, wallMat);
+        
+        scene.add(wallGroup);
+        roomMeshes.push(wallGroup);
     });
 
     // --- UTILITIES & PIPING 3D RENDERING ---
