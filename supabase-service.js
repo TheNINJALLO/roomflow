@@ -175,6 +175,10 @@ window.hasCapability = function(capabilityName) {
 
 // Translate auth exceptions to friendly user-facing alerts
 function translateAuthError(msg) {
+    if (!msg) return "An unexpected error occurred.";
+    if (msg.includes("Failed to fetch") || msg.includes("fetch") || msg.includes("NetworkError") || msg.includes("your-project-id")) {
+        return "Cannot connect to Supabase cloud. Please update config.js with your live Supabase project URL & API key, or use RoomFlow offline.";
+    }
     if (msg.includes("Invalid login credentials")) {
         return "Incorrect email or password. Please verify and try again.";
     }
@@ -561,7 +565,7 @@ window.addEventListener('load', () => {
                     showAuthAlert("Magic link sent! Check your email inbox.", 'success');
                 }
             } catch (err) {
-                showAuthAlert(err.message);
+                showAuthAlert(translateAuthError(err.message));
             }
         });
     }

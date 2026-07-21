@@ -175,6 +175,10 @@ window.hasCapability = function(capabilityName) {
 
 // Translate auth exceptions to friendly user-facing alerts
 function translateAuthError(msg) {
+    if (!msg) return "An unexpected error occurred.";
+    if (msg.includes("Failed to fetch") || msg.includes("fetch") || msg.includes("NetworkError") || msg.includes("your-project-id")) {
+        return "Cannot connect to Supabase cloud. Please update config.js with your live Supabase project URL & API key, or use RoomFlow offline.";
+    }
     if (msg.includes("Invalid login credentials")) {
         return "Incorrect email or password. Please verify and try again.";
     }
@@ -361,6 +365,57 @@ window.RoomFlowSync = {
         }
     },
 
+    async createCloudJobRecord(jobName, customerName, email, phone) {
+        if (!supabaseClient || !state.currentOrganization) return null;
+        
+        try {
+            // 1. Create or get customer
+            let customerId = null;
+            const { data: custs } = await supabaseClient
+                .from('customers')
+                .select('id')
+                .eq('organization_id', state.currentOrganization.id)
+                .eq('name', customerName)
+                .limit(1);
+
+            if (custs && custs.length > 0) {
+                customerId = custs[0].id;
+            } else {
+                const { data: newCust, error: custErr } = await supabaseClient
+                    .from('customers')
+                    .insert({
+                        organization_id: state.currentOrganization.id,
+                        name: customerName,
+                        phone: phone || '',
+                        email: email || ''
+                    })
+                    .select('id')
+                    .single();
+                if (custErr) throw custErr;
+                customerId = newCust.id;
+            }
+
+            // 2. Create Job
+            const { data: newJob, error: jobErr } = await supabaseClient
+                .from('jobs')
+                .insert({
+                    organization_id: state.currentOrganization.id,
+                    customer_id: customerId,
+                    name: jobName,
+                    status: 'Draft',
+                    current_version_number: 1
+                })
+                .select('id')
+                .single();
+            if (jobErr) throw jobErr;
+
+            return newJob;
+        } catch (err) {
+            console.error("Failed to create cloud job record:", err);
+            return null;
+        }
+    },
+
     updateSyncBadge() {
         const badge = document.getElementById('sync-status-badge');
         if (!badge) return;
@@ -510,7 +565,7 @@ window.addEventListener('load', () => {
                     showAuthAlert("Magic link sent! Check your email inbox.", 'success');
                 }
             } catch (err) {
-                showAuthAlert(err.message);
+                showAuthAlert(translateAuthError(err.message));
             }
         });
     }
