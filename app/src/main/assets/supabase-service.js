@@ -80,11 +80,19 @@ window.RoomFlowAuth = {
 
         const { data: { session } } = await client.auth.getSession();
         if (!session) {
+            state.sessionUser = null;
             state.syncStatus = 'offline';
+            if (typeof RoomFlowSync !== 'undefined' && RoomFlowSync.updateSyncBadge) {
+                RoomFlowSync.updateSyncBadge();
+            }
             return;
         }
 
         state.sessionUser = session.user;
+        state.syncStatus = 'synced';
+        if (typeof RoomFlowSync !== 'undefined' && RoomFlowSync.updateSyncBadge) {
+            RoomFlowSync.updateSyncBadge();
+        }
         
         // Fetch organization memberships for current user
         const { data: members, error: memErr } = await client
@@ -495,14 +503,20 @@ window.RoomFlowSync = {
             'saving': { text: 'Saving...', color: '#f59e0b' },
             'saved': { text: 'Saved locally', color: '#10b981' },
             'uploading': { text: 'Syncing...', color: '#3b82f6' },
-            'synced': { text: 'Synced', color: '#10b981' },
-            'offline': { text: 'Offline mode', color: '#64748b' },
+            'synced': { text: 'Cloud Online', color: '#10b981' },
+            'offline': { text: 'Offline (Click to Sign In)', color: '#64748b' },
             'conflict': { text: 'Conflict review needed', color: '#ef4444' }
         };
 
-        const current = maps[state.syncStatus] || maps.offline;
+        const current = maps[state.syncStatus] || (state.sessionUser ? maps.synced : maps.offline);
         badge.innerText = current.text;
         badge.style.background = current.color;
+        badge.style.cursor = !state.sessionUser ? 'pointer' : 'default';
+        badge.onclick = () => {
+            if (!state.sessionUser && typeof showModal === 'function') {
+                showModal('auth-overlay');
+            }
+        };
     }
 };
 
@@ -663,6 +677,11 @@ window.addEventListener('load', () => {
     const createCompanyBtn = document.getElementById('btn-more-create-company');
     if (createCompanyBtn) {
         createCompanyBtn.addEventListener('click', async () => {
+            if (!state.sessionUser) {
+                if (typeof showModal === 'function') showModal('auth-overlay');
+                alert("Please Sign In or Create an Account first to setup your company organization.");
+                return;
+            }
             const input = document.getElementById('more-new-company-name');
             if (input) {
                 const name = input.value.trim();
