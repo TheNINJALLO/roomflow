@@ -6,7 +6,7 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- 1. Profiles (linked to auth.users)
-CREATE TABLE public.profiles (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     full_name TEXT,
     avatar_url TEXT,
@@ -27,12 +27,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE OR REPLACE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- 2. Organizations (Companies)
-CREATE TABLE public.organizations (
+CREATE TABLE IF NOT EXISTS public.organizations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     logo_url TEXT,
@@ -51,7 +52,7 @@ CREATE TABLE public.organizations (
 );
 
 -- 3. Custom Roles
-CREATE TABLE public.custom_roles (
+CREATE TABLE IF NOT EXISTS public.custom_roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
@@ -62,7 +63,7 @@ CREATE TABLE public.custom_roles (
 );
 
 -- 4. Role Capabilities
-CREATE TABLE public.role_capabilities (
+CREATE TABLE IF NOT EXISTS public.role_capabilities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     role_id UUID REFERENCES public.custom_roles(id) ON DELETE CASCADE NOT NULL,
     capability TEXT NOT NULL,
@@ -70,7 +71,7 @@ CREATE TABLE public.role_capabilities (
 );
 
 -- 5. Organization Members
-CREATE TABLE public.organization_members (
+CREATE TABLE IF NOT EXISTS public.organization_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
@@ -80,7 +81,7 @@ CREATE TABLE public.organization_members (
 );
 
 -- 6. Member Capability Overrides
-CREATE TABLE public.member_capability_overrides (
+CREATE TABLE IF NOT EXISTS public.member_capability_overrides (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     member_id UUID REFERENCES public.organization_members(id) ON DELETE CASCADE NOT NULL,
     capability TEXT NOT NULL,
@@ -89,7 +90,7 @@ CREATE TABLE public.member_capability_overrides (
 );
 
 -- 7. Organization Groups (Teams)
-CREATE TABLE public.organization_groups (
+CREATE TABLE IF NOT EXISTS public.organization_groups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
@@ -99,7 +100,7 @@ CREATE TABLE public.organization_groups (
 );
 
 -- 8. Organization Group Members
-CREATE TABLE public.organization_group_members (
+CREATE TABLE IF NOT EXISTS public.organization_group_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     group_id UUID REFERENCES public.organization_groups(id) ON DELETE CASCADE NOT NULL,
     member_id UUID REFERENCES public.organization_members(id) ON DELETE CASCADE NOT NULL,
@@ -107,7 +108,7 @@ CREATE TABLE public.organization_group_members (
 );
 
 -- 9. Organization Invitations
-CREATE TABLE public.organization_invitations (
+CREATE TABLE IF NOT EXISTS public.organization_invitations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
     email TEXT NOT NULL,
@@ -119,7 +120,7 @@ CREATE TABLE public.organization_invitations (
 );
 
 -- 10. Customers
-CREATE TABLE public.customers (
+CREATE TABLE IF NOT EXISTS public.customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
@@ -130,7 +131,7 @@ CREATE TABLE public.customers (
 );
 
 -- 11. Jobs
-CREATE TABLE public.jobs (
+CREATE TABLE IF NOT EXISTS public.jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
     customer_id UUID REFERENCES public.customers(id) ON DELETE CASCADE NOT NULL,
@@ -144,7 +145,7 @@ CREATE TABLE public.jobs (
 );
 
 -- 12. Job Layouts (Geometry footprints without financial costs)
-CREATE TABLE public.job_layouts (
+CREATE TABLE IF NOT EXISTS public.job_layouts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID REFERENCES public.jobs(id) ON DELETE CASCADE NOT NULL,
     version_number INTEGER DEFAULT 1 NOT NULL,
@@ -154,7 +155,7 @@ CREATE TABLE public.job_layouts (
 );
 
 -- 13. Material Catalog
-CREATE TABLE public.material_catalog (
+CREATE TABLE IF NOT EXISTS public.material_catalog (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE NOT NULL,
     name TEXT NOT NULL,
@@ -167,7 +168,7 @@ CREATE TABLE public.material_catalog (
 );
 
 -- 14. Material Costs (PROTECTED FINANCIAL TABLE)
-CREATE TABLE public.material_costs (
+CREATE TABLE IF NOT EXISTS public.material_costs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     material_id UUID REFERENCES public.material_catalog(id) ON DELETE CASCADE UNIQUE NOT NULL,
     unit_cost NUMERIC DEFAULT 0.0 NOT NULL,
@@ -177,7 +178,7 @@ CREATE TABLE public.material_costs (
 );
 
 -- 15. Job Pricing Config (PROTECTED FINANCIAL TABLE)
-CREATE TABLE public.job_pricing (
+CREATE TABLE IF NOT EXISTS public.job_pricing (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID REFERENCES public.jobs(id) ON DELETE CASCADE UNIQUE NOT NULL,
     target_gross_margin NUMERIC DEFAULT 40.0 NOT NULL,
@@ -189,7 +190,7 @@ CREATE TABLE public.job_pricing (
 );
 
 -- 16. Work Orders
-CREATE TABLE public.work_orders (
+CREATE TABLE IF NOT EXISTS public.work_orders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     job_id UUID REFERENCES public.jobs(id) ON DELETE CASCADE NOT NULL,
     work_order_number TEXT UNIQUE NOT NULL,
@@ -207,7 +208,7 @@ CREATE TABLE public.work_orders (
 );
 
 -- 17. Work Order Tasks
-CREATE TABLE public.work_order_tasks (
+CREATE TABLE IF NOT EXISTS public.work_order_tasks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     work_order_id UUID REFERENCES public.work_orders(id) ON DELETE CASCADE NOT NULL,
     room_name TEXT NOT NULL,
@@ -218,7 +219,7 @@ CREATE TABLE public.work_order_tasks (
 );
 
 -- 18. Audit Logs
-CREATE TABLE public.audit_logs (
+CREATE TABLE IF NOT EXISTS public.audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID REFERENCES public.organizations(id) ON DELETE CASCADE,
     user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -287,72 +288,95 @@ ALTER TABLE public.work_order_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Profiles Policies
+DROP POLICY IF EXISTS "Public profiles are viewable by everyone" ON public.profiles;
 CREATE POLICY "Public profiles are viewable by everyone" ON public.profiles FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.profiles;
 CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- Organizations Policies
+DROP POLICY IF EXISTS "Members can view organization" ON public.organizations;
 CREATE POLICY "Members can view organization" ON public.organizations
     FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = public.organizations.id AND m.user_id = auth.uid()));
+DROP POLICY IF EXISTS "Authenticated users can insert organization" ON public.organizations;
 CREATE POLICY "Authenticated users can insert organization" ON public.organizations
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "Owners can update organization settings" ON public.organizations;
 CREATE POLICY "Owners can update organization settings" ON public.organizations
     FOR UPDATE USING (public.has_capability(id, 'manage_company'));
 
 -- Members Policies
+DROP POLICY IF EXISTS "Members can view other members in company" ON public.organization_members;
 CREATE POLICY "Members can view other members in company" ON public.organization_members
     FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = public.organization_members.organization_id AND m.user_id = auth.uid()));
+DROP POLICY IF EXISTS "Users can insert membership" ON public.organization_members;
 CREATE POLICY "Users can insert membership" ON public.organization_members
     FOR INSERT WITH CHECK (user_id = auth.uid() OR public.has_capability(organization_id, 'manage_members'));
+DROP POLICY IF EXISTS "Admins can manage organization members" ON public.organization_members;
 CREATE POLICY "Admins can manage organization members" ON public.organization_members
     FOR ALL USING (public.has_capability(organization_id, 'manage_members'));
 
 -- Custom Roles Policies
+DROP POLICY IF EXISTS "Members can select roles" ON public.custom_roles;
 CREATE POLICY "Members can select roles" ON public.custom_roles
     FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = public.custom_roles.organization_id AND m.user_id = auth.uid()));
+DROP POLICY IF EXISTS "Authenticated users can insert roles" ON public.custom_roles;
 CREATE POLICY "Authenticated users can insert roles" ON public.custom_roles
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
+DROP POLICY IF EXISTS "Admins can edit custom roles" ON public.custom_roles;
 CREATE POLICY "Admins can edit custom roles" ON public.custom_roles
     FOR ALL USING (public.has_capability(organization_id, 'manage_roles'));
 
 -- Role Capabilities Policies
+DROP POLICY IF EXISTS "Members can view capabilities" ON public.role_capabilities;
 CREATE POLICY "Members can view capabilities" ON public.role_capabilities
     FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Authenticated users can insert capabilities" ON public.role_capabilities;
 CREATE POLICY "Authenticated users can insert capabilities" ON public.role_capabilities
     FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Customers Policies
+DROP POLICY IF EXISTS "Members can view customers" ON public.customers;
 CREATE POLICY "Members can view customers" ON public.customers
     FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = organization_id AND user_id = auth.uid()));
+DROP POLICY IF EXISTS "Admins/Estimators can insert customers" ON public.customers;
 CREATE POLICY "Admins/Estimators can insert customers" ON public.customers
     FOR INSERT WITH CHECK (public.has_capability(organization_id, 'create_jobs'));
+DROP POLICY IF EXISTS "Admins/Estimators can update customers" ON public.customers;
 CREATE POLICY "Admins/Estimators can update customers" ON public.customers
     FOR UPDATE USING (public.has_capability(organization_id, 'create_jobs'));
 
 -- Jobs Policies
+DROP POLICY IF EXISTS "Members can view jobs if authorized" ON public.jobs;
 CREATE POLICY "Members can view jobs if authorized" ON public.jobs
     FOR SELECT USING (
         EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = organization_id AND user_id = auth.uid())
         AND (public.has_capability(organization_id, 'view_company_jobs') OR assigned_user_id = auth.uid())
     );
+DROP POLICY IF EXISTS "Authorized members can create jobs" ON public.jobs;
 CREATE POLICY "Authorized members can create jobs" ON public.jobs
     FOR INSERT WITH CHECK (public.has_capability(organization_id, 'create_jobs'));
+DROP POLICY IF EXISTS "Authorized members can update jobs" ON public.jobs;
 CREATE POLICY "Authorized members can update jobs" ON public.jobs
     FOR UPDATE USING (public.has_capability(organization_id, 'edit_job_information') OR assigned_user_id = auth.uid());
+DROP POLICY IF EXISTS "Authorized members can delete jobs" ON public.jobs;
 CREATE POLICY "Authorized members can delete jobs" ON public.jobs
     FOR DELETE USING (public.has_capability(organization_id, 'delete_jobs'));
 
 -- Job Layouts Policies
+DROP POLICY IF EXISTS "Members can view layouts" ON public.job_layouts;
 CREATE POLICY "Members can view layouts" ON public.job_layouts
     FOR SELECT USING (EXISTS (
         SELECT 1 FROM public.jobs j
         JOIN public.organization_members m ON m.organization_id = j.organization_id
         WHERE j.id = job_id AND m.user_id = auth.uid()
     ));
+DROP POLICY IF EXISTS "Designers can insert layouts" ON public.job_layouts;
 CREATE POLICY "Designers can insert layouts" ON public.job_layouts
     FOR INSERT WITH CHECK (EXISTS (
         SELECT 1 FROM public.jobs j
         WHERE j.id = job_id AND (public.has_capability(j.organization_id, 'edit_floor_plans') OR j.assigned_user_id = auth.uid())
     ));
+DROP POLICY IF EXISTS "Designers can update layouts" ON public.job_layouts;
 CREATE POLICY "Designers can update layouts" ON public.job_layouts
     FOR UPDATE USING (EXISTS (
         SELECT 1 FROM public.jobs j
@@ -360,6 +384,7 @@ CREATE POLICY "Designers can update layouts" ON public.job_layouts
     ));
 
 -- Material Catalog Policies
+DROP POLICY IF EXISTS "Members can view catalog materials" ON public.material_catalog;
 CREATE POLICY "Members can view catalog materials" ON public.material_catalog
     FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = organization_id AND user_id = auth.uid()));
 
@@ -368,6 +393,7 @@ CREATE POLICY "Members can view catalog materials" ON public.material_catalog
 -- ====================================================
 
 -- Material Costs: Restrict view access to users with 'view_internal_costs'
+DROP POLICY IF EXISTS "Only authorized managers can view material costs" ON public.material_costs;
 CREATE POLICY "Only authorized managers can view material costs" ON public.material_costs
     FOR SELECT USING (
         EXISTS (
@@ -378,6 +404,7 @@ CREATE POLICY "Only authorized managers can view material costs" ON public.mater
         )
     );
 
+DROP POLICY IF EXISTS "Only authorized managers can edit material costs" ON public.material_costs;
 CREATE POLICY "Only authorized managers can edit material costs" ON public.material_costs
     FOR ALL USING (
         EXISTS (
@@ -389,6 +416,7 @@ CREATE POLICY "Only authorized managers can edit material costs" ON public.mater
     );
 
 -- Job Pricing: Restrict view access to users with 'view_customer_prices'
+DROP POLICY IF EXISTS "Only authorized managers can view job pricing margins" ON public.job_pricing;
 CREATE POLICY "Only authorized managers can view job pricing margins" ON public.job_pricing
     FOR SELECT USING (
         EXISTS (
@@ -399,6 +427,7 @@ CREATE POLICY "Only authorized managers can view job pricing margins" ON public.
         )
     );
 
+DROP POLICY IF EXISTS "Only authorized managers can edit job pricing margins" ON public.job_pricing;
 CREATE POLICY "Only authorized managers can edit job pricing margins" ON public.job_pricing
     FOR ALL USING (
         EXISTS (
@@ -410,16 +439,21 @@ CREATE POLICY "Only authorized managers can edit job pricing margins" ON public.
     );
 
 -- Work Orders Policies
+DROP POLICY IF EXISTS "Members can view work orders" ON public.work_orders;
 CREATE POLICY "Members can view work orders" ON public.work_orders
     FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = organization_id AND user_id = auth.uid()));
+DROP POLICY IF EXISTS "Production managers can create work orders" ON public.work_orders;
 CREATE POLICY "Production managers can create work orders" ON public.work_orders
     FOR INSERT WITH CHECK (public.has_capability(organization_id, 'generate_work_orders'));
+DROP POLICY IF EXISTS "Production managers can update work orders" ON public.work_orders;
 CREATE POLICY "Production managers can update work orders" ON public.work_orders
     FOR UPDATE USING (public.has_capability(organization_id, 'generate_work_orders'));
 
 -- Audit Logs Policies
+DROP POLICY IF EXISTS "Managers can view audit logs" ON public.audit_logs;
 CREATE POLICY "Managers can view audit logs" ON public.audit_logs
     FOR SELECT USING (public.has_capability(organization_id, 'view_audit_logs'));
+DROP POLICY IF EXISTS "System can record audit logs" ON public.audit_logs;
 CREATE POLICY "System can record audit logs" ON public.audit_logs
     FOR INSERT WITH CHECK (true);
 
