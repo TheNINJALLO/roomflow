@@ -86,23 +86,46 @@ window.RoomFlowAuth = {
 
         state.sessionUser = session.user;
         
-        // Fetch organizations list
-        const { data: orgs, error: orgsErr } = await client
+        // Fetch organization memberships for current user
+        const { data: members, error: memErr } = await client
             .from('organization_members')
-            .select('organization_id, organizations(name, address, phone, email, logo_url, colors, default_measurement_units, timezone), custom_roles(name)')
+            .select('organization_id, role_id')
             .eq('user_id', session.user.id);
-            
-        if (orgs) {
-            state.userOrganizations = orgs.map(o => {
-                let orgObj = o.organizations;
-                if (Array.isArray(orgObj)) orgObj = orgObj[0];
-                let roleObj = o.custom_roles;
-                if (Array.isArray(roleObj)) roleObj = roleObj[0];
-                
+
+        if (memErr) {
+            console.error("Error fetching organization memberships:", memErr);
+        }
+
+        if (members && members.length > 0) {
+            const orgIds = members.map(m => m.organization_id);
+            const roleIds = members.map(m => m.role_id).filter(Boolean);
+
+            // Fetch organizations
+            const { data: orgsData } = await client
+                .from('organizations')
+                .select('id, name, address, phone, email, logo_url, colors, default_measurement_units, timezone')
+                .in('id', orgIds);
+
+            // Fetch custom roles
+            let rolesData = [];
+            if (roleIds.length > 0) {
+                const { data: rData } = await client
+                    .from('custom_roles')
+                    .select('id, name')
+                    .in('id', roleIds);
+                rolesData = rData || [];
+            }
+
+            const orgMap = new Map((orgsData || []).map(o => [o.id, o]));
+            const roleMap = new Map((rolesData || []).map(r => [r.id, r]));
+
+            state.userOrganizations = members.map(m => {
+                const orgObj = orgMap.get(m.organization_id);
+                const roleObj = roleMap.get(m.role_id);
                 return {
-                    id: o.organization_id,
+                    id: m.organization_id,
                     name: orgObj ? orgObj.name : 'Organization',
-                    role: roleObj ? roleObj.name : 'Member',
+                    role: roleObj ? roleObj.name : 'Company Owner',
                     colors: orgObj ? orgObj.colors : null,
                     units: orgObj ? orgObj.default_measurement_units : 'ft',
                     timezone: orgObj ? orgObj.timezone : 'UTC'
@@ -111,12 +134,16 @@ window.RoomFlowAuth = {
 
             // Restore active company selection
             let activeOrgId = localStorage.getItem('roomflow_active_org_id');
-            if (!activeOrgId && state.userOrganizations.length > 0) {
-                activeOrgId = state.userOrganizations[0].id;
+            if (!activeOrgId || !state.userOrganizations.some(o => o.id === activeOrgId)) {
+                if (state.userOrganizations.length > 0) {
+                    activeOrgId = state.userOrganizations[0].id;
+                }
             }
             if (activeOrgId) {
                 await this.setActiveOrganization(activeOrgId);
             }
+        } else {
+            state.userOrganizations = [];
         }
         
         // Update header display if elements exist
@@ -126,36 +153,56 @@ window.RoomFlowAuth = {
 
     async setActiveOrganization(orgId) {
         const client = supabaseClient || initSupabase();
-        if (!client) return;
+        if (!client || !state.sessionUser) return;
 
         const org = state.userOrganizations.find(o => o.id === orgId);
-        if (!org) return;
+        if (org) {
+            state.currentOrganization = org;
+            localStorage.setItem('roomflow_active_org_id', orgId);
+        }
 
-        state.currentOrganization = org;
-        localStorage.setItem('roomflow_active_org_id', orgId);
-
-        // Fetch User Capabilities RLS policy mirror cache
-        const { data: caps } = await client
+        // Fetch user's role_id in this organization
+        const { data: member } = await client
             .from('organization_members')
-            .select('custom_roles(role_capabilities(capability))')
+            .select('id, role_id')
             .eq('organization_id', orgId)
             .eq('user_id', state.sessionUser.id)
-            .single();
+            .maybeSingle();
 
         state.userCapabilities = [];
-        if (caps) {
-            let roleObj = caps.custom_roles;
-            if (Array.isArray(roleObj)) roleObj = roleObj[0];
-            if (roleObj && roleObj.role_capabilities) {
-                let capsList = roleObj.role_capabilities;
-                if (Array.isArray(capsList)) {
-                    state.userCapabilities = capsList.map(rc => rc.capability).filter(Boolean);
-                }
+
+        if (member && member.role_id) {
+            // Fetch capabilities for this role
+            const { data: caps } = await client
+                .from('role_capabilities')
+                .select('capability')
+                .eq('role_id', member.role_id);
+
+            if (caps && caps.length > 0) {
+                state.userCapabilities = caps.map(c => c.capability).filter(Boolean);
+            }
+        }
+
+        // Check for individual member capability overrides
+        if (member && member.id) {
+            const { data: overrides } = await client
+                .from('member_capability_overrides')
+                .select('capability, allowed')
+                .eq('member_id', member.id);
+
+            if (overrides) {
+                overrides.forEach(ov => {
+                    if (ov.allowed && !state.userCapabilities.includes(ov.capability)) {
+                        state.userCapabilities.push(ov.capability);
+                    } else if (!ov.allowed) {
+                        state.userCapabilities = state.userCapabilities.filter(c => c !== ov.capability);
+                    }
+                });
             }
         }
 
         // Apply branding colors dynamically
-        if (org.colors) {
+        if (org && org.colors) {
             const root = document.documentElement;
             if (org.colors.primary) root.style.setProperty('--accent-blue', org.colors.primary);
             if (org.colors.accent) root.style.setProperty('--accent-teal', org.colors.accent);

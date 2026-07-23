@@ -292,19 +292,23 @@ CREATE POLICY "Users can update their own profile" ON public.profiles FOR UPDATE
 
 -- Organizations Policies
 CREATE POLICY "Members can view organization" ON public.organizations
-    FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = id AND user_id = auth.uid()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = public.organizations.id AND m.user_id = auth.uid()));
+CREATE POLICY "Authenticated users can insert organization" ON public.organizations
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "Owners can update organization settings" ON public.organizations
     FOR UPDATE USING (public.has_capability(id, 'manage_company'));
 
 -- Members Policies
 CREATE POLICY "Members can view other members in company" ON public.organization_members
-    FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = organization_id AND user_id = auth.uid()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = public.organization_members.organization_id AND m.user_id = auth.uid()));
+CREATE POLICY "Users can insert membership" ON public.organization_members
+    FOR INSERT WITH CHECK (user_id = auth.uid() OR public.has_capability(organization_id, 'manage_members'));
 CREATE POLICY "Admins can manage organization members" ON public.organization_members
     FOR ALL USING (public.has_capability(organization_id, 'manage_members'));
 
 -- Custom Roles Policies
 CREATE POLICY "Members can select roles" ON public.custom_roles
-    FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = organization_id AND user_id = auth.uid()));
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = public.custom_roles.organization_id AND m.user_id = auth.uid()));
 CREATE POLICY "Admins can edit custom roles" ON public.custom_roles
     FOR ALL USING (public.has_capability(organization_id, 'manage_roles'));
 
