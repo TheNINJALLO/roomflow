@@ -309,12 +309,16 @@ CREATE POLICY "Admins can manage organization members" ON public.organization_me
 -- Custom Roles Policies
 CREATE POLICY "Members can select roles" ON public.custom_roles
     FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = public.custom_roles.organization_id AND m.user_id = auth.uid()));
+CREATE POLICY "Authenticated users can insert roles" ON public.custom_roles
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "Admins can edit custom roles" ON public.custom_roles
     FOR ALL USING (public.has_capability(organization_id, 'manage_roles'));
 
 -- Role Capabilities Policies
 CREATE POLICY "Members can view capabilities" ON public.role_capabilities
     FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can insert capabilities" ON public.role_capabilities
+    FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Customers Policies
 CREATE POLICY "Members can view customers" ON public.customers
@@ -469,3 +473,11 @@ BEGIN
     RETURN new_org_id;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Grant Permissions for RPC Functions, Tables, and Sequences
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_new_company_with_owner(TEXT, UUID) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.has_capability(UUID, TEXT) TO anon, authenticated, service_role;

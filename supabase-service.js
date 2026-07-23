@@ -225,22 +225,93 @@ window.RoomFlowAuth = {
         const client = supabaseClient || initSupabase();
         if (!client || !state.sessionUser) throw new Error("Authentication required");
 
-        const { data: newOrgId, error } = await client.rpc('create_new_company_with_owner', {
-            company_name: name,
-            owner_id: state.sessionUser.id
-        });
+        let newOrgId = null;
 
-        if (error) throw new Error(error.message);
-        
+        // Try RPC procedure first
+        try {
+            const { data, error } = await client.rpc('create_new_company_with_owner', {
+                company_name: name,
+                owner_id: state.sessionUser.id
+            });
+            if (!error && data) {
+                newOrgId = data;
+            }
+        } catch (rpcErr) {
+            console.warn("RPC company creation failed, using direct client fallback:", rpcErr);
+        }
+
+        // Direct client fallback if RPC failed or had permission restrictions
+        if (!newOrgId) {
+            // 1. Create Organization
+            const { data: orgData, error: orgErr } = await client
+                .from('organizations')
+                .insert([{ name: name }])
+                .select('id')
+                .single();
+
+            if (orgErr) throw new Error("Could not create company: " + orgErr.message);
+            newOrgId = orgData.id;
+
+            // 2. Create Company Owner Role
+            const { data: roleData, error: roleErr } = await client
+                .from('custom_roles')
+                .insert([{
+                    organization_id: newOrgId,
+                    name: 'Company Owner',
+                    description: 'Full control over company settings and pricing',
+                    is_system: true
+                }])
+                .select('id')
+                .single();
+
+            if (!roleErr && roleData) {
+                const ownerRoleId = roleData.id;
+
+                // 3. Add all owner capabilities
+                const allCapabilities = [
+                    'manage_company', 'manage_members', 'manage_roles', 'manage_groups',
+                    'create_jobs', 'view_company_jobs', 'edit_job_information', 'edit_floor_plans',
+                    'edit_measurements', 'edit_job_scope', 'upload_attachments', 'view_material_quantities',
+                    'edit_material_quantities', 'view_internal_costs', 'edit_internal_costs',
+                    'view_customer_prices', 'edit_customer_prices', 'view_margin', 'edit_margin',
+                    'generate_proposals', 'approve_proposals', 'generate_work_orders',
+                    'approve_work_orders', 'assign_jobs', 'manage_catalog', 'delete_jobs',
+                    'restore_jobs', 'view_audit_logs'
+                ];
+
+                const capInserts = allCapabilities.map(cap => ({
+                    role_id: ownerRoleId,
+                    capability: cap
+                }));
+
+                await client.from('role_capabilities').insert(capInserts);
+
+                // 4. Add User to organization_members as Owner
+                await client
+                    .from('organization_members')
+                    .insert([{
+                        organization_id: newOrgId,
+                        user_id: state.sessionUser.id,
+                        role_id: ownerRoleId
+                    }]);
+            } else {
+                // Fallback membership insertion
+                await client
+                    .from('organization_members')
+                    .insert([{
+                        organization_id: newOrgId,
+                        user_id: state.sessionUser.id
+                    }]);
+            }
+        }
+
         if (newOrgId) {
             localStorage.setItem('roomflow_active_org_id', newOrgId);
-        }
-        await this.loadSessionContext();
-        if (newOrgId) {
+            await this.loadSessionContext();
             await this.setActiveOrganization(newOrgId);
-        }
-        if (typeof populateCompanySwitcher === 'function') {
-            populateCompanySwitcher();
+            if (typeof populateCompanySwitcher === 'function') {
+                populateCompanySwitcher();
+            }
         }
         return newOrgId;
     }
