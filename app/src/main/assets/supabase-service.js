@@ -93,14 +93,21 @@ window.RoomFlowAuth = {
             .eq('user_id', session.user.id);
             
         if (orgs) {
-            state.userOrganizations = orgs.map(o => ({
-                id: o.organization_id,
-                name: o.organizations.name,
-                role: o.custom_roles?.name || 'Member',
-                colors: o.organizations.colors,
-                units: o.organizations.default_measurement_units,
-                timezone: o.organizations.timezone
-            }));
+            state.userOrganizations = orgs.map(o => {
+                let orgObj = o.organizations;
+                if (Array.isArray(orgObj)) orgObj = orgObj[0];
+                let roleObj = o.custom_roles;
+                if (Array.isArray(roleObj)) roleObj = roleObj[0];
+                
+                return {
+                    id: o.organization_id,
+                    name: orgObj ? orgObj.name : 'Organization',
+                    role: roleObj ? roleObj.name : 'Member',
+                    colors: orgObj ? orgObj.colors : null,
+                    units: orgObj ? orgObj.default_measurement_units : 'ft',
+                    timezone: orgObj ? orgObj.timezone : 'UTC'
+                };
+            });
 
             // Restore active company selection
             let activeOrgId = localStorage.getItem('roomflow_active_org_id');
@@ -136,8 +143,15 @@ window.RoomFlowAuth = {
             .single();
 
         state.userCapabilities = [];
-        if (caps?.custom_roles?.role_capabilities) {
-            state.userCapabilities = caps.custom_roles.role_capabilities.map(rc => rc.capability);
+        if (caps) {
+            let roleObj = caps.custom_roles;
+            if (Array.isArray(roleObj)) roleObj = roleObj[0];
+            if (roleObj && roleObj.role_capabilities) {
+                let capsList = roleObj.role_capabilities;
+                if (Array.isArray(capsList)) {
+                    state.userCapabilities = capsList.map(rc => rc.capability).filter(Boolean);
+                }
+            }
         }
 
         // Apply branding colors dynamically
@@ -156,20 +170,30 @@ window.RoomFlowAuth = {
         const client = supabaseClient || initSupabase();
         if (!client || !state.sessionUser) throw new Error("Authentication required");
 
-        const { data, error } = await client.rpc('create_new_company_with_owner', {
+        const { data: newOrgId, error } = await client.rpc('create_new_company_with_owner', {
             company_name: name,
             owner_id: state.sessionUser.id
         });
 
         if (error) throw new Error(error.message);
+        
+        if (newOrgId) {
+            localStorage.setItem('roomflow_active_org_id', newOrgId);
+        }
         await this.loadSessionContext();
-        return data;
+        if (newOrgId) {
+            await this.setActiveOrganization(newOrgId);
+        }
+        if (typeof populateCompanySwitcher === 'function') {
+            populateCompanySwitcher();
+        }
+        return newOrgId;
     }
 };
 
 // Check permissions locally
 window.hasCapability = function(capabilityName) {
-    if (!state.sessionUser) return false; // offline/anonymous mode
+    if (!state.sessionUser) return true; // offline/standalone local user has full permissions
     return state.userCapabilities.includes(capabilityName);
 };
 
@@ -602,7 +626,8 @@ window.addEventListener('load', () => {
                 try {
                     await RoomFlowAuth.createCompany(name);
                     input.value = '';
-                    alert(`Company "${name}" created successfully!`);
+                    populateCompanySwitcher();
+                    alert(`Company "${name}" created successfully! You are now the Company Owner.`);
                 } catch (e) {
                     alert("Failed to create company: " + e.message);
                 }
