@@ -5,7 +5,7 @@
     'use strict';
 
     const Integration = {
-        version: '1.0.0',
+        version: '1.1.0',
         client: null,
         leadChannel: null,
         jobIdMapKey: 'roomflow_cloud_job_ids_v1',
@@ -14,6 +14,7 @@
         currentLines: [],
         currentEstimateId: null,
         currentEstimateJobName: null,
+        mainEstimateSyncJob: null,
         initialized: false,
 
         getClient() {
@@ -472,6 +473,59 @@
             await this.loadCatalog(true);
         },
 
+        lineId() {
+            return globalThis.crypto?.randomUUID?.() || `rf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        },
+
+        ensureMainEstimateState() {
+            if (typeof initDefaultCosting === 'function') initDefaultCosting(state);
+            if (!state.costing) state.costing = {};
+            if (!Array.isArray(state.costing.customItems)) state.costing.customItems = [];
+            return state.costing.customItems;
+        },
+
+        syncLineToMainEstimate(line) {
+            const items = this.ensureMainEstimateState();
+            if (!line.roomflow_line_id) line.roomflow_line_id = this.lineId();
+            const catalogItem = this.catalogCache.find(item => item.id === line.catalog_item_id);
+            const allowed = new Set(['material','equipment','supply','rental','subcontractor','permit','disposal','delivery','travel','other']);
+            const requestedCategory = String(line.category || catalogItem?.category || 'other').toLowerCase();
+            const category = allowed.has(requestedCategory) ? requestedCategory : 'other';
+            const mapped = {
+                roomflowImported: true,
+                roomflowLineId: line.roomflow_line_id,
+                catalogItemId: line.catalog_item_id,
+                name: line.name,
+                category,
+                qty: Number(line.quantity) || 0,
+                unit: line.unit || 'each',
+                unitCost: Number(line.unit_price) || 0,
+                waste: 0,
+                laborHours: 0,
+                laborRate: 0,
+                taxable: Boolean(line.taxable),
+                includeInOverhead: true,
+                includeInMarkup: true
+            };
+            const index = items.findIndex(item => item.roomflowLineId === line.roomflow_line_id);
+            if (index >= 0) items[index] = { ...items[index], ...mapped };
+            else items.push(mapped);
+        },
+
+        syncAllLinesToMainEstimate() {
+            const items = this.ensureMainEstimateState();
+            this.currentLines.forEach(line => this.syncLineToMainEstimate(line));
+            const activeIds = new Set(this.currentLines.map(line => line.roomflow_line_id));
+            state.costing.customItems = items.filter(item => !item.roomflowImported || activeIds.has(item.roomflowLineId));
+            this.saveEstimateStorage();
+        },
+
+        refreshMainEstimate() {
+            if (typeof window.autosaveJob === 'function') window.autosaveJob();
+            if (typeof window.renderCostUI === 'function') window.renderCostUI();
+            if (typeof window.renderGuidedStep === 'function') window.renderGuidedStep();
+        },
+
         estimateStorage() {
             const all = JSON.parse(localStorage.getItem(this.estimateDraftKey) || '{}');
             return { all, current: all[state.currentJobName] || { lines: [], estimateId: null } };
@@ -504,6 +558,11 @@
                 this.currentEstimateJobName = state.currentJobName;
                 this.currentLines = Array.isArray(saved.lines) ? JSON.parse(JSON.stringify(saved.lines)) : [];
                 this.currentEstimateId = saved.estimateId || null;
+                this.syncAllLinesToMainEstimate();
+                if (this.mainEstimateSyncJob !== state.currentJobName) {
+                    this.mainEstimateSyncJob = state.currentJobName;
+                    setTimeout(() => this.refreshMainEstimate(), 0);
+                }
             }
             const catalogOptions = this.catalogCache.filter(item => item.active).slice(0, 500).map(item => `<option value="${item.id}">${this.escape(item.name)} · ${this.money(item.unit_price)}</option>`).join('');
             const total = this.currentLines.filter(line => line.selected !== false).reduce((sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0), 0);
@@ -518,12 +577,19 @@
                 const index = Number(input.dataset.index);
                 if (input.classList.contains('roomflow-line-qty')) this.currentLines[index].quantity = Number(input.value) || 0;
                 else this.currentLines[index].unit_price = Number(input.value) || 0;
+                this.syncLineToMainEstimate(this.currentLines[index]);
                 this.saveEstimateStorage();
+                this.refreshMainEstimate();
                 this.renderEstimateBuilder(forceCost);
             }));
             panel.querySelectorAll('.roomflow-remove-line').forEach(button => button.addEventListener('click', () => {
-                this.currentLines.splice(Number(button.dataset.index), 1);
+                const [removed] = this.currentLines.splice(Number(button.dataset.index), 1);
+                if (removed?.roomflow_line_id) {
+                    const items = this.ensureMainEstimateState();
+                    state.costing.customItems = items.filter(item => item.roomflowLineId !== removed.roomflow_line_id);
+                }
                 this.saveEstimateStorage();
+                this.refreshMainEstimate();
                 this.renderEstimateBuilder(forceCost);
             }));
         },
@@ -532,10 +598,12 @@
             const select = document.getElementById('roomflow-add-catalog-select');
             const item = this.catalogCache.find(row => row.id === select?.value);
             if (!item) return;
-            this.currentLines.push({
+            const line = {
+                roomflow_line_id: this.lineId(),
                 catalog_item_id: item.id,
                 name: item.name,
                 description: item.description || '',
+                category: item.category || 'other',
                 pricing_method: item.pricing_method,
                 quantity: 1,
                 unit: item.unit,
@@ -543,8 +611,11 @@
                 taxable: Boolean(item.taxable),
                 optional: false,
                 selected: true
-            });
+            };
+            this.currentLines.push(line);
+            this.syncLineToMainEstimate(line);
             this.saveEstimateStorage();
+            this.refreshMainEstimate();
             this.renderEstimateBuilder();
         },
 
