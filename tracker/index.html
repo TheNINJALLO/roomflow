@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoomFlow Job & Equipment Tracker</title>
+  <link rel="stylesheet" href="style.css?v=1">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="config.js?v=1"></script>
+</head>
+<body>
+  <div id="auth-overlay" class="overlay">
+    <form id="login-form" class="panel login-card">
+      <div class="brand-mark">RF</div>
+      <h1>RoomFlow Tracker</h1>
+      <p>Sign in with the same account used by RoomFlow.</p>
+      <label>Email<input id="login-email" type="email" autocomplete="username" required></label>
+      <label>Password<input id="login-password" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Sign In</button>
+      <div id="login-error" class="error"></div>
+    </form>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <div><h1>RoomFlow Tracker</h1><p id="connection-status">Connecting…</p></div>
+      <div class="top-actions">
+        <select id="organization-select" aria-label="Company"></select>
+        <button id="refresh-button" class="secondary">Refresh</button>
+        <button id="logout-button" class="danger">Log Out</button>
+      </div>
+    </header>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="jobs">Jobs</button>
+      <button class="tab" data-tab="equipment">Equipment</button>
+      <button class="tab" data-tab="deployments">Drop-offs</button>
+    </nav>
+
+    <main>
+      <section id="jobs-tab" class="tab-page active">
+        <div class="toolbar">
+          <div><h2>Job Tracking</h2><p>Email leads and RoomFlow estimates update here automatically.</p></div>
+          <div class="toolbar-actions"><input id="job-search" placeholder="Search customer, address, phone…"><select id="job-status-filter"><option value="">All statuses</option></select><button id="add-job-button" class="primary">Add Job</button></div>
+        </div>
+        <div class="metric-grid" id="job-metrics"></div>
+        <div class="panel table-wrap"><table><thead><tr><th>Customer</th><th>Location</th><th>Status</th><th>Appointment</th><th>Issue</th><th>Estimate</th><th></th></tr></thead><tbody id="jobs-body"></tbody></table></div>
+      </section>
+
+      <section id="equipment-tab" class="tab-page">
+        <div class="toolbar"><div><h2>Equipment Inventory</h2><p>Owned, deployed, and available equipment.</p></div><button id="add-equipment-button" class="primary">Add Equipment Type</button></div>
+        <div id="equipment-grid" class="card-grid"></div>
+      </section>
+
+      <section id="deployments-tab" class="tab-page">
+        <div class="toolbar"><div><h2>Active Drop-offs</h2><p>Equipment currently assigned to jobs and customer locations.</p></div><button id="add-deployment-button" class="primary">New Drop-off</button></div>
+        <div id="deployments-grid" class="card-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <div id="modal" class="overlay hidden"><div class="panel modal-card"><div class="modal-head"><h2 id="modal-title">Edit</h2><button id="modal-close" class="icon">×</button></div><form id="modal-form"></form></div></div>
+  <div id="toast" class="toast hidden"></div>
+  <script src="tracker.js?v=1"></script>
+</body>
+</html>
