@@ -6,3 +6,10 @@ node_modules/
 .vscode/
 *.log
 *.json
+ROOMFLOW_CRON_SECRET.txt
+.env
+.env.*
+!.env.example
+.supabase/
+.roomflow-backup/
+roomflow-deploy-report.txt
