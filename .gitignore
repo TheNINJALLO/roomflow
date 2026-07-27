@@ -11,5 +11,6 @@ ROOMFLOW_CRON_SECRET.txt
 .env.*
 !.env.example
 .supabase/
+supabase/.temp/
 .roomflow-backup/
 roomflow-deploy-report.txt
