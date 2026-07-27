@@ -34,6 +34,19 @@ AS $$
   );
 $$;
 
+-- Replace the original self-referencing membership policy. Querying
+-- organization_members from its own RLS policy causes infinite recursion and
+-- hides memberships that were successfully created by the company RPC.
+DROP POLICY IF EXISTS "Members can view other members in company" ON public.organization_members;
+CREATE POLICY "Members can view other members in company" ON public.organization_members
+FOR SELECT TO authenticated
+USING (public.roomflow_is_org_member(organization_id));
+
+DROP POLICY IF EXISTS "Members can view organization" ON public.organizations;
+CREATE POLICY "Members can view organization" ON public.organizations
+FOR SELECT TO authenticated
+USING (public.roomflow_is_org_member(id));
+
 
 -- Correct the original capability helper. The earlier implementation reused
 -- variable names such as member_id on both sides of comparisons, which can
