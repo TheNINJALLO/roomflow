@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>RoomFlow Job & Equipment Tracker</title>
-  <link rel="stylesheet" href="style.css?v=1">
+  <link rel="stylesheet" href="style.css?v=2">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js?v=1"></script>
 </head>
@@ -44,7 +44,13 @@
           <div class="toolbar-actions"><input id="job-search" placeholder="Search customer, address, phone…"><select id="job-status-filter"><option value="">All statuses</option></select><button id="add-job-button" class="primary">Add Job</button></div>
         </div>
         <div class="metric-grid" id="job-metrics"></div>
-        <div class="panel table-wrap"><table><thead><tr><th>Customer</th><th>Location</th><th>Status</th><th>Appointment</th><th>Issue</th><th>Estimate</th><th></th></tr></thead><tbody id="jobs-body"></tbody></table></div>
+        <div id="jobs-board" class="job-board" aria-live="polite"></div>
+        <div id="board-carousel" class="board-carousel panel">
+          <button id="board-previous" class="secondary" aria-label="Previous page">←</button>
+          <div class="board-progress"><span id="board-page-label">Page 1 of 1</span><div id="board-dots" class="board-dots"></div></div>
+          <button id="board-pause" class="secondary" aria-pressed="false">Pause rotation</button>
+          <button id="board-next" class="secondary" aria-label="Next page">→</button>
+        </div>
       </section>
 
       <section id="equipment-tab" class="tab-page">
@@ -61,6 +67,6 @@
 
   <div id="modal" class="overlay hidden"><div class="panel modal-card"><div class="modal-head"><h2 id="modal-title">Edit</h2><button id="modal-close" class="icon">×</button></div><form id="modal-form"></form></div></div>
   <div id="toast" class="toast hidden"></div>
-  <script src="tracker.js?v=1"></script>
+  <script src="tracker.js?v=2"></script>
 </body>
 </html>
