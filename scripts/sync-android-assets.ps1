@@ -11,6 +11,7 @@ $webFiles = @(
     'index.html',
     'roomflow-integrations.js',
     'styles.css',
+    'user-guide.html',
     'work-order.js'
 )
 

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>RoomFlow user guide smoke test</title>
+  <style>body{font:16px system-ui;background:#0f172a;color:#e2e8f0}iframe{position:absolute;width:390px;height:844px;left:-10000px}pre{white-space:pre-wrap}</style>
+</head>
+<body>
+  <pre id="test-result">RUNNING</pre>
+  <iframe id="guide-frame" src="../user-guide.html" title="Guide test frame"></iframe>
+  <script>
+    (function () {
+      'use strict';
+      var frame = document.getElementById('guide-frame');
+      frame.addEventListener('load', function () {
+        var doc = frame.contentDocument;
+        var checks = [];
+        function check(name, passed, detail) { checks.push({ name: name, passed: Boolean(passed), detail: detail || '' }); }
+
+        var required = ['quick-start', 'account', 'jobs', 'guided', 'rooms', 'cad', 'wall-work', 'pricing', 'documents', 'saving', 'tracker', 'zapier', 'mobile', 'troubleshooting', 'closeout'];
+        check('All required guide sections exist', required.every(function (id) { return doc.getElementById(id); }), required.filter(function (id) { return !doc.getElementById(id); }).join(', '));
+        check('RoomFlow return link exists', Boolean(doc.querySelector('a[href="index.html"]')));
+        check('Tracker link targets tracker instructions', Boolean(doc.querySelector('a[href="#tracker"]')));
+        check('Print / PDF control exists', Boolean(doc.getElementById('print-guide')));
+        check('Table of contents links resolve', Array.prototype.every.call(doc.querySelectorAll('.toc a'), function (link) { return doc.querySelector(link.getAttribute('href')); }));
+        check('390px layout has no page-level horizontal overflow', doc.documentElement.scrollWidth <= doc.documentElement.clientWidth, doc.documentElement.scrollWidth + ' / ' + doc.documentElement.clientWidth);
+
+        var search = doc.getElementById('guide-search');
+        search.value = 'delete job';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        var visible = doc.querySelectorAll('.searchable:not(.is-hidden)').length;
+        check('Search filters guide sections', visible > 0 && visible < required.length, String(visible));
+        check('Tracker deletion remains searchable', !doc.getElementById('tracker').classList.contains('is-hidden'));
+
+        var result = { passed: checks.every(function (item) { return item.passed; }), checks: checks };
+        document.getElementById('test-result').textContent = JSON.stringify(result, null, 2);
+        document.title = result.passed ? 'PASS - RoomFlow user guide smoke test' : 'FAIL - RoomFlow user guide smoke test';
+      });
+    }());
+  </script>
+</body>
+</html>

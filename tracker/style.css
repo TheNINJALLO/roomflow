@@ -31,3 +31,4 @@
 .board-carousel.single-page{visibility:hidden}
 @media(min-width:1800px){.job-card{min-height:156px}.job-board{gap:7px}}
 @media(max-width:850px){.metric-grid{grid-template-columns:repeat(3,1fr)}.job-board{grid-template-columns:1fr!important}.board-carousel{position:sticky;bottom:4px}.job-card{min-height:170px}}
+.guide-link{min-height:39px;display:inline-flex;align-items:center;justify-content:center;padding:.55rem .8rem;border:1px solid rgba(56,189,248,.35);border-radius:9px;background:rgba(56,189,248,.1);color:#7dd3fc;text-decoration:none;font-size:.8rem;font-weight:800;white-space:nowrap}.guide-link:hover{background:rgba(56,189,248,.2);border-color:#38bdf8}@media(max-width:850px){.top-actions{flex-wrap:wrap}.guide-link{flex:1 1 110px}.top-actions select{flex:1 1 100%}}

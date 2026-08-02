@@ -2,6 +2,8 @@
 
 RoomFlow is a field estimating workspace for drawing rooms, calculating project scope, and producing customer proposals, invoices, and crew work orders from one job record.
 
+Open the [complete RoomFlow user guide](user-guide.html) for the step-by-step estimator, CAD, document, Tracker, mobile, and Zapier workflows. The guide is searchable, responsive, and printable as a PDF from the browser.
+
 ## Run locally
 
 The web application has no package-install step. Serve the repository over HTTP so browser storage, canvas exports, and camera permissions use a normal web origin:
