@@ -2437,6 +2437,7 @@ function renderChecklistUI() {
                                         <span class="checklist-pill ${room.drywallHeight === '6ft' ? 'active' : ''}" onclick="window.setRoomDrywallHeight('${room.id}', '6ft')">6 Feet</span>
                                         <span class="checklist-pill ${room.drywallHeight === 'full' ? 'active' : ''}" onclick="window.setRoomDrywallHeight('${room.id}', 'full')">Full Wall</span>
                                     </div>
+                                    ${renderGuidedDrywallWallScope(room)}
                                 </div>
                             ` : ''}
                         </div>
@@ -2871,8 +2872,11 @@ window.toggleGuidedQuestion = function(roomId, optionKey) {
 window.selectGuidedDropdown = function(roomId, optionKey, val) {
     const room = state.rooms.find(r => r.id === roomId);
     if (!room) return;
-    
+    if (typeof saveHistoryState === 'function') saveHistoryState();
     room[optionKey] = val;
+    if (typeof updateRoomEstimates === 'function') updateRoomEstimates(room);
+    if (typeof updateGlobalStats === 'function') updateGlobalStats();
+    if (typeof draw === 'function') draw();
     window.renderGuidedStep();
     triggerAutosave();
 };
@@ -2915,6 +2919,29 @@ window.removeGuidedPhoto = function(idx) {
 };
 
 // Generate Step Contents
+function renderGuidedDrywallWallScope(room) {
+    if (!room.drywallHeight || room.drywallHeight === 'none' || typeof getRoomSegments !== 'function') return '';
+    const segments = getRoomSegments(room);
+    const selected = Array.isArray(room.drywallWalls)
+        ? room.drywallWalls.map(String)
+        : segments.map(segment => String(segment.wall));
+    const labels = { n: 'North', e: 'East', s: 'South', w: 'West' };
+    return `
+        <div class="guided-wall-scope">
+            <div class="guided-wall-scope-heading"><strong>Which walls are being cut?</strong><span>These walls will be highlighted on the blueprint and listed for the crew.</span></div>
+            <div class="guided-wall-options">
+                ${segments.map(segment => {
+                    const key = String(segment.wall);
+                    const length = Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1);
+                    const label = labels[key] || `Wall ${parseInt(key, 10) + 1}`;
+                    return `<label><input type="checkbox" ${selected.includes(key) ? 'checked' : ''} onchange="toggleRoomDrywallWall('${room.id}','${key}',this.checked)"><span>${label}</span><small>${length.toFixed(1)} ft</small></label>`;
+                }).join('')}
+            </div>
+            <div class="guided-wall-actions"><button type="button" onclick="setAllRoomDrywallWalls(true,'${room.id}')">Select all</button><button type="button" onclick="setAllRoomDrywallWalls(false,'${room.id}')">Clear</button></div>
+        </div>
+    `;
+}
+
 function generateGuidedStepHTML(stepIndex) {
     if (!state.costing) initDefaultCosting(state);
     
@@ -3373,6 +3400,7 @@ function generateGuidedStepHTML(stepIndex) {
                                     <option value="full" ${r.drywallHeight==='full'?'selected':''}>Full Wall Removal</option>
                                 </select>
                             </div>
+                            ${renderGuidedDrywallWallScope(r)}
                         </div>
 
                         <!-- Wall reinforcement Question -->
@@ -3596,6 +3624,9 @@ function generateGuidedStepHTML(stepIndex) {
     
     // Step 8: Proposal Configuration
     if (stepIndex === 8) {
+        if (window.RoomFlowDocuments && typeof window.RoomFlowDocuments.renderWorkflow === 'function') {
+            return window.RoomFlowDocuments.renderWorkflow();
+        }
         return `
             <div style="display: flex; flex-direction: column; gap: 1.5rem;">
                 <p style="color:#94a3b8; font-size:0.9rem;">Select which estimating items should be visible on the customer proposal document.</p>
@@ -3697,6 +3728,13 @@ function bindGuidedInputListeners(container) {
             el.addEventListener('input', () => {
                 if (!state.costing) initDefaultCosting(state);
                 state.costing[f.key] = el.value;
+                if (f.key === 'customerName') {
+                    const compactName = document.getElementById('customer-name');
+                    if (compactName) compactName.value = el.value;
+                } else if (f.key === 'customerAddress') {
+                    const compactAddress = document.getElementById('customer-address');
+                    if (compactAddress) compactAddress.value = el.value;
+                }
                 triggerAutosave();
             });
         }
@@ -3821,8 +3859,8 @@ window.renderGuidedStep = function() {
         "Equipment and Structural Items",
         "Measurement Review",
         "Materials and Internal Costing",
-        "Proposal and Work Order",
-        "Save and Export"
+        "Project Documents",
+        "Save and Finish"
     ];
     
     const titleEl = document.getElementById('guided-step-title');

@@ -63,7 +63,21 @@ function initDefaultCosting(projState) {
             customItems: [],
             treatmentSelections: {},
             manualQuantityOverrides: {},
-            excludedItems: {}
+            excludedItems: {},
+            documents: {
+                proposalNumber: '',
+                invoiceNumber: '',
+                invoiceStatus: 'Draft',
+                dueDate: '',
+                paymentTerms: 'Due within 30 days',
+                depositPaid: 0,
+                notes: '',
+                includeCustomerInfo: true,
+                includeBlueprint: true,
+                showItemizedPricing: true,
+                includeTotalPricing: true,
+                itemVisibility: {}
+            }
         };
     } else {
         // Migration and merging for backward compatibility
@@ -116,6 +130,24 @@ function initDefaultCosting(projState) {
         if (!costing.treatmentSelections) costing.treatmentSelections = {};
         if (!costing.manualQuantityOverrides) costing.manualQuantityOverrides = {};
         if (!costing.excludedItems) costing.excludedItems = {};
+        if (!costing.documents) costing.documents = {};
+        const documentDefaults = {
+            proposalNumber: '',
+            invoiceNumber: '',
+            invoiceStatus: 'Draft',
+            dueDate: '',
+            paymentTerms: 'Due within 30 days',
+            depositPaid: 0,
+            notes: '',
+            includeCustomerInfo: true,
+            includeBlueprint: true,
+            showItemizedPricing: true,
+            includeTotalPricing: true,
+            itemVisibility: {}
+        };
+        Object.keys(documentDefaults).forEach(k => {
+            if (costing.documents[k] === undefined) costing.documents[k] = documentDefaults[k];
+        });
         if (!costing.version) costing.version = "1.0";
     }
 }
@@ -217,17 +249,29 @@ function calculateProjectQuantities(projState) {
             q.totalNb1Area += netWallArea;
         }
 
-        // Drywall Cut Area
-        if (room.drywallHeight === '1ft') {
-            q.totalDrywallCutArea += perimeter * 1;
-        } else if (room.drywallHeight === '2ft') {
-            q.totalDrywallCutArea += perimeter * 2;
-        } else if (room.drywallHeight === '4ft') {
-            q.totalDrywallCutArea += perimeter * 4;
-        } else if (room.drywallHeight === '6ft') {
-            q.totalDrywallCutArea += perimeter * 6;
-        } else if (room.drywallHeight === 'full') {
-            q.totalDrywallCutArea += netWallArea;
+        // Drywall Cut Area. When drywallWalls is present, only selected wall
+        // segments are included. Older projects without this field retain the
+        // original full-perimeter behavior.
+        if (room.drywallHeight && room.drywallHeight !== 'none') {
+            const allSegments = typeof getRoomSegments === 'function' ? getRoomSegments(room) : [];
+            const scopedSegments = Array.isArray(room.drywallWalls)
+                ? allSegments.filter(seg => room.drywallWalls.includes(String(seg.wall)))
+                : allSegments;
+            const scopedPerimeter = scopedSegments.reduce((sum, seg) => {
+                return sum + Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1);
+            }, allSegments.length ? 0 : perimeter);
+            const heightMap = { '1ft': 1, '2ft': 2, '4ft': 4, '6ft': 6 };
+
+            if (room.drywallHeight === 'full') {
+                let scopedArea = scopedPerimeter * room.h;
+                (room.openings || []).forEach(op => {
+                    const wallIsIncluded = !Array.isArray(room.drywallWalls) || room.drywallWalls.includes(String(op.wall));
+                    if (wallIsIncluded) scopedArea -= (op.w || 0) * (op.h || 0);
+                });
+                q.totalDrywallCutArea += Math.max(0, scopedArea);
+            } else if (heightMap[room.drywallHeight]) {
+                q.totalDrywallCutArea += scopedPerimeter * heightMap[room.drywallHeight];
+            }
         }
 
         // Attic Insulation
@@ -1057,6 +1101,7 @@ function buildCustomerExportModel(projState) {
             floorPerimeterStrap: r.floorPerimeterStrap,
             nb1Height: r.nb1Height,
             drywallHeight: r.drywallHeight,
+            drywallWalls: Array.isArray(r.drywallWalls) ? [...r.drywallWalls] : null,
             removeInsulation: r.removeInsulation,
             blowInInsulation: r.blowInInsulation,
             joists: r.joists || 'none',

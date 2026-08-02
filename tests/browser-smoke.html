@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RoomFlow browser smoke test</title>
+    <style>
+        body { margin: 0; padding: 24px; background: #0b0f19; color: #e2e8f0; font: 16px/1.5 system-ui, sans-serif; }
+        iframe { position: fixed; left: -10000px; width: 390px; height: 844px; border: 0; }
+        pre { padding: 18px; border: 1px solid #334155; border-radius: 10px; background: #111827; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>RoomFlow browser smoke test</h1>
+    <pre id="smoke-result">RUNNING</pre>
+    <iframe id="roomflow-frame" src="../index.html?browser-smoke=1" title="RoomFlow test frame"></iframe>
+    <script>
+        const resultElement = document.getElementById('smoke-result');
+        const frame = document.getElementById('roomflow-frame');
+
+        function finish(result) {
+            resultElement.textContent = JSON.stringify(result, null, 2);
+            document.title = result.passed ? 'PASS - RoomFlow smoke test' : 'FAIL - RoomFlow smoke test';
+        }
+
+        frame.addEventListener('load', () => {
+            window.setTimeout(() => {
+                try {
+                    const result = frame.contentWindow.eval(`(() => {
+                        const checks = [];
+                        const assert = (name, condition, detail = '') => checks.push({ name, passed: !!condition, detail });
+
+                        state.currentJobName = 'Browser Smoke Job';
+                        state.currentLevelId = 'basement';
+                        state.rooms = [{
+                            id: 'room_smoke', name: 'Test Room', type: 'custom', levelId: 'basement',
+                            x: 6, y: 4, w: 10, l: 8, h: 8, color: '#a855f7', openings: [],
+                            vertices: [{x:0,y:0},{x:10,y:0},{x:10,y:8},{x:0,y:8}],
+                            drywallHeight: '2ft', drywallWalls: ['0','1'], nb1Height: 'none',
+                            foamBoard: false, foamBondPockets: false, carbonStraps: 0,
+                            floorPerimeterStrap: false, customCarbonStraps: []
+                        }];
+                        state.sumpPumps = [];
+                        state.dehumidifiers = [];
+                        state.dischargeLines = [];
+                        state.interiorPipes = [];
+                        state.floorHatches = [];
+                        state.stanchions = [];
+                        state.mainBeams = [];
+                        initDefaultCosting(state);
+                        state.costing.customerName = 'Test Customer';
+                        state.costing.customerAddress = '100 Test Street';
+                        state.costing.customItems = [{
+                            id: 'permit_smoke', name: 'Permit', category: 'permit', qty: 1, unit: 'ea',
+                            unitCost: 100, waste: 0, laborHours: 0, laborRate: 0, taxable: false,
+                            includeInOverhead: true, includeInMarkup: true, notes: 'Post permit on site'
+                        }];
+
+                        const quantities = calculateProjectQuantities(state);
+                        assert('Per-wall drywall quantity', Math.abs(quantities.totalDrywallCutArea - 36) < 0.001, quantities.totalDrywallCutArea);
+
+                        const model = RoomFlowDocuments.buildModel();
+                        assert('Custom item reaches proposal', model.proposalItems.some(item => item.name === 'Permit'));
+                        assert('Custom item reaches work order', model.workOrderItems.some(item => item.name === 'Permit'));
+                        assert('Invoice workflow renders', RoomFlowDocuments.renderWorkflow().includes('Invoice'));
+
+                        state.guidedStep3Mode = 'add_connected';
+                        const connectedRoomStep = generateGuidedStepHTML(3);
+                        assert('Connected-room form renders', connectedRoomStep.includes('Attach Connected Room'));
+                        const drywallStep = generateGuidedStepHTML(4);
+                        assert('Wall scope appears in drywall step', drywallStep.includes('Which walls are being cut?'));
+
+                        const workOrderModal = RoomFlowWorkOrder.createBuilderModalHTML();
+                        document.body.appendChild(workOrderModal);
+                        RoomFlowWorkOrder.populateBuilderForm();
+                        const roomLabel = document.querySelector('#wo-builder-rooms-list span');
+                        assert('Work-order room dimensions use current schema', roomLabel && roomLabel.textContent.includes('10.0 x 8.0 ft'), roomLabel ? roomLabel.textContent : 'missing');
+
+                        addRoom('bathroom', { x: 24, y: 18 });
+                        const placedRoom = state.rooms[state.rooms.length - 1];
+                        assert('Placed room honors drop coordinates', placedRoom.x + placedRoom.w / 2 === 24 && placedRoom.y + placedRoom.l / 2 === 18, placedRoom.x + ',' + placedRoom.y);
+                        assert('Room selection keeps mobile canvas open', !document.getElementById('right-sidebar').classList.contains('open'));
+                        state.rooms.pop();
+                        selectItem(null);
+
+                        toggleDrawWallsMode();
+                        assert('Angled room waits for chosen start point', state.sketchVertices.length === 0, state.sketchVertices.length);
+                        toggleDrawWallsMode();
+
+                        const formGrid = document.querySelector('#new-job-form > div[style*="grid-template-columns: 1fr 1fr"]');
+                        const gridColumns = formGrid ? getComputedStyle(formGrid).gridTemplateColumns.split(' ').filter(Boolean) : [];
+                        assert('Mobile new-job form is one column', gridColumns.length === 1, gridColumns.join(' | '));
+
+                        const costResults = runCostingTests();
+                        const costFailures = costResults.filter(result => result.status === 'FAILED');
+                        assert('Existing costing regression suite', costFailures.length === 0, costFailures.map(result => result.name + ': ' + result.message).join(' | '));
+
+                        switchView('checklist');
+                        const checklist = document.getElementById('checklist-container');
+                        assert('Room checklist opens and renders', checklist.classList.contains('active') && checklist.textContent.includes('Estimating Checklist'));
+                        assert('Checklist exposes per-wall drywall scope', checklist.textContent.includes('Which walls are being cut?'));
+
+                        return { passed: checks.every(check => check.passed), checks };
+                    })()`);
+                    finish(result);
+                } catch (error) {
+                    finish({ passed: false, error: error.stack || String(error) });
+                }
+            }, 1200);
+        });
+
+        window.setTimeout(() => {
+            if (resultElement.textContent === 'RUNNING') finish({ passed: false, error: 'Timed out waiting for the application frame.' });
+        }, 15000);
+    </script>
+</body>
+</html>
