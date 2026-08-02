@@ -30,7 +30,7 @@
     const {data,error}=await client.from('lead_imports').select('import_status,import_error,received_at,source_subject,normalized_payload').eq('organization_id',s.orgId).order('received_at',{ascending:false}).limit(1).maybeSingle();
     if(error){host.innerHTML=`<span class="sync-dot error"></span><div><strong>Zapier intake unavailable</strong><span>${esc(error.message)}</span></div>`;return;}
     if(!data){host.innerHTML='<span class="sync-dot warning"></span><div><strong>No Zapier deliveries recorded</strong><span>Create or check the Email Intake endpoint in RoomFlow Settings, then test the Zap.</span></div>';return;}
-    const normalized=data.normalized_payload||{},identity=normalized.fullName||data.source_subject||'Caller details received',when=new Date(data.received_at).toLocaleString();
+    const normalized=data.normalized_payload||{},identity=normalized.fullName||data.source_subject||'Lead details received',when=new Date(data.received_at).toLocaleString();
     host.innerHTML=`<span class="sync-dot ${data.import_error?'error':'ok'}"></span><div><strong>Last Zapier delivery: ${esc(identity)}</strong><span>${esc(data.import_error||`${data.import_status||'imported'} · ${when}`)}</span></div>`;
   }
   async function loadJobs(){

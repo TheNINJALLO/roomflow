@@ -3542,3 +3542,145 @@ html, body {
     touch-action: auto !important;
 }
 
+/* Leads dashboard: show the complete normalized intake record without hiding fields. */
+.roomflow-leads-heading,
+.roomflow-lead-card-header,
+.roomflow-lead-card-actions,
+.roomflow-lead-badges {
+    display: flex;
+    align-items: center;
+}
+
+.roomflow-leads-heading,
+.roomflow-lead-card-header,
+.roomflow-lead-card-actions {
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.roomflow-leads-heading {
+    margin-bottom: 0.8rem;
+}
+
+.roomflow-lead-card {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.3));
+}
+
+.roomflow-lead-card h4 {
+    margin: 0.1rem 0 0;
+    color: #fff;
+    font-size: 1rem;
+}
+
+.roomflow-lead-kicker,
+.roomflow-lead-field span {
+    color: #64748b;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.roomflow-lead-badges {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.roomflow-lead-badges span {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+    border-radius: 999px;
+    background: rgba(56, 189, 248, 0.09);
+    color: #7dd3fc;
+    font-size: 0.7rem;
+    font-weight: 750;
+}
+
+.roomflow-lead-field-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0.5rem;
+}
+
+.roomflow-lead-field {
+    min-width: 0;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    background: rgba(2, 6, 23, 0.25);
+}
+
+.roomflow-lead-field-wide {
+    grid-column: span 2;
+}
+
+.roomflow-lead-field span,
+.roomflow-lead-field strong {
+    display: block;
+}
+
+.roomflow-lead-field strong {
+    margin-top: 0.2rem;
+    color: #e2e8f0;
+    font-size: 0.78rem;
+    font-weight: 650;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.roomflow-lead-field .roomflow-lead-missing {
+    color: #64748b;
+    font-style: italic;
+    font-weight: 500;
+}
+
+.roomflow-lead-warning {
+    padding: 0.65rem 0.75rem;
+    border-left: 3px solid #f59e0b;
+    border-radius: 0 8px 8px 0;
+    background: rgba(245, 158, 11, 0.08);
+    color: #fcd34d;
+    font-size: 0.72rem;
+}
+
+.roomflow-lead-card-actions {
+    padding-top: 0.2rem;
+}
+
+.roomflow-lead-card-actions > span {
+    color: #64748b;
+    font-size: 0.72rem;
+}
+
+@media (max-width: 620px) {
+    .roomflow-leads-heading,
+    .roomflow-lead-card-header,
+    .roomflow-lead-card-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .roomflow-leads-heading button,
+    .roomflow-lead-card-actions button {
+        width: 100%;
+    }
+
+    .roomflow-lead-badges {
+        justify-content: flex-start;
+    }
+
+    .roomflow-lead-field-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .roomflow-lead-field-wide {
+        grid-column: auto;
+    }
+}
+

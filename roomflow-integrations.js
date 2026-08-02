@@ -246,8 +246,8 @@
             card.className = 'checklist-room-card';
             card.style.padding = '1.25rem';
             card.innerHTML = `
-                <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;margin-bottom:.8rem;">
-                    <div><h3 style="margin:0;color:#fff;">Email Leads</h3><p style="margin:.25rem 0 0;color:#94a3b8;font-size:.8rem;">New callers imported by Zapier appear here automatically.</p></div>
+                <div class="roomflow-leads-heading">
+                    <div><h3 style="margin:0;color:#fff;">Leads</h3><p style="margin:.25rem 0 0;color:#94a3b8;font-size:.8rem;">New inquiries from Zapier and RoomFlow appear here with every available lead field.</p></div>
                     <button id="roomflow-refresh-leads" class="btn-secondary">Refresh</button>
                 </div>
                 <div id="roomflow-inbound-leads-list" style="display:grid;gap:.65rem;"><div style="color:#64748b;">Sign in and select a company to load leads.</div></div>`;
@@ -256,41 +256,120 @@
             document.getElementById('roomflow-refresh-leads')?.addEventListener('click', () => this.refreshInboundLeads());
         },
 
+        leadAddress(street, city, region, postalCode) {
+            const base = String(street || '').trim();
+            const baseLower = base.toLowerCase();
+            const missing = value => value && !baseLower.includes(String(value).trim().toLowerCase());
+            const locality = [
+                missing(city) ? city : '',
+                [missing(region) ? region : '', missing(postalCode) ? postalCode : ''].filter(Boolean).join(' ')
+            ].filter(Boolean).join(', ');
+            return [base, locality].filter(Boolean).join(', ');
+        },
+
+        leadViewModel(job, intake = null) {
+            const customer = Array.isArray(job?.customers) ? job.customers[0] : job?.customers;
+            const normalized = intake?.normalized_payload || {};
+            const appointmentStart = job?.appointment_start || normalized.appointmentStart || null;
+            const appointmentEnd = normalized.appointmentEnd || null;
+            const appointment = appointmentStart
+                ? `${new Date(appointmentStart).toLocaleString()}${appointmentEnd ? ` to ${new Date(appointmentEnd).toLocaleString()}` : ''}`
+                : '';
+            return {
+                id: job?.id || '',
+                name: customer?.name || normalized.fullName || normalized.name || job?.name || 'Unidentified lead',
+                phone: customer?.phone || normalized.phone || '',
+                email: customer?.email || normalized.email || '',
+                address: this.leadAddress(
+                    job?.property_address || customer?.address || normalized.address,
+                    job?.city || customer?.city || normalized.city,
+                    job?.state || customer?.state || normalized.state,
+                    job?.postal_code || customer?.postal_code || normalized.postalCode
+                ),
+                issue: job?.issue_description || normalized.issueDescription || '',
+                appointment,
+                estimator: normalized.assignedEstimator || '',
+                source: job?.lead_source || intake?.source || normalized.leadSource || 'RoomFlow',
+                status: job?.status || 'New Lead',
+                estimateStatus: job?.estimate_status || 'not started',
+                sender: intake?.source_sender || normalized.sourceSender || '',
+                subject: intake?.source_subject || normalized.sourceSubject || '',
+                messageId: intake?.source_message_id || normalized.sourceMessageId || '',
+                externalKey: normalized.externalKey || '',
+                receivedAt: intake?.received_at ? new Date(intake.received_at).toLocaleString() : '',
+                importStatus: intake?.import_status || '',
+                warnings: Array.isArray(normalized.warnings) ? normalized.warnings : [],
+                updatedAt: job?.updated_at ? new Date(job.updated_at).toLocaleString() : ''
+            };
+        },
+
+        renderLeadCard(job, intake = null) {
+            const lead = this.leadViewModel(job, intake);
+            const field = (label, value, wide = false) => `<div class="roomflow-lead-field${wide ? ' roomflow-lead-field-wide' : ''}"><span>${this.escape(label)}</span><strong class="${value ? '' : 'roomflow-lead-missing'}">${this.escape(value || 'Not provided')}</strong></div>`;
+            return `<article class="roomflow-lead-card" data-lead-card="${this.escape(lead.id)}">
+                <div class="roomflow-lead-card-header">
+                    <div><span class="roomflow-lead-kicker">Lead</span><h4>${this.escape(lead.name)}</h4></div>
+                    <div class="roomflow-lead-badges"><span>${this.escape(lead.status)}</span><span>${this.escape(lead.source)}</span></div>
+                </div>
+                <div class="roomflow-lead-field-grid">
+                    ${field('Name', lead.name)}
+                    ${field('Phone', lead.phone)}
+                    ${field('Email', lead.email)}
+                    ${field('Service address', lead.address, true)}
+                    ${field('Appointment', lead.appointment)}
+                    ${field('Assigned estimator', lead.estimator)}
+                    ${field('Lead source', lead.source)}
+                    ${field('Estimate status', lead.estimateStatus)}
+                    ${field('Source sender', lead.sender)}
+                    ${field('Source subject', lead.subject, true)}
+                    ${field('Source record / message ID', lead.messageId, true)}
+                    ${lead.externalKey ? field('External lead ID', lead.externalKey) : ''}
+                    ${field('Received', lead.receivedAt || lead.updatedAt)}
+                    ${field('Issue / request', lead.issue, true)}
+                </div>
+                ${lead.warnings.length ? `<div class="roomflow-lead-warning"><strong>Intake notes:</strong> ${this.escape(lead.warnings.join(' '))}</div>` : ''}
+                <div class="roomflow-lead-card-actions"><span>${this.escape(lead.importStatus ? `Intake ${lead.importStatus}` : 'RoomFlow lead')}</span><button class="btn-primary roomflow-open-lead" data-job-id="${this.escape(lead.id)}">Open in RoomFlow</button></div>
+            </article>`;
+        },
+
         async refreshInboundLeads() {
             this.injectLeadPanel();
             const list = document.getElementById('roomflow-inbound-leads-list');
             const client = this.getClient();
             const orgId = this.currentOrgId();
             if (!list || !client || !orgId) return;
-            list.innerHTML = '<div style="color:#94a3b8;">Loading email leads…</div>';
+            list.innerHTML = '<div style="color:#94a3b8;">Loading leads…</div>';
 
-            const { data, error } = await client
-                .from('jobs')
-                .select('id,name,status,property_address,city,state,postal_code,issue_description,appointment_start,lead_source,tracking_color,estimate_status,updated_at,customers(id,name,first_name,last_name,email,phone,address,city,state,postal_code)')
-                .eq('organization_id', orgId)
-                .in('status', ['New Lead', 'Contacted', 'Inspection Scheduled', 'Layout In Progress', 'Estimate Draft'])
-                .order('updated_at', { ascending: false })
-                .limit(50);
+            const [jobResult, importResult] = await Promise.all([
+                client.from('jobs')
+                    .select('id,name,status,property_address,city,state,postal_code,issue_description,appointment_start,lead_source,tracking_color,estimate_status,updated_at,customers(id,name,first_name,last_name,email,phone,address,city,state,postal_code)')
+                    .eq('organization_id', orgId)
+                    .in('status', ['New Lead', 'Contacted', 'Inspection Scheduled', 'Layout In Progress', 'Estimate Draft'])
+                    .order('updated_at', { ascending: false })
+                    .limit(50),
+                client.from('lead_imports')
+                    .select('job_id,source,source_message_id,source_sender,source_subject,normalized_payload,import_status,import_error,received_at')
+                    .eq('organization_id', orgId)
+                    .order('received_at', { ascending: false })
+                    .limit(100)
+            ]);
 
-            if (error) {
-                list.innerHTML = `<div style="color:#fca5a5;">${this.escape(error.message)}</div>`;
+            if (jobResult.error) {
+                list.innerHTML = `<div style="color:#fca5a5;">${this.escape(jobResult.error.message)}</div>`;
                 return;
             }
-            if (!data?.length) {
-                list.innerHTML = '<div style="color:#64748b;">No imported leads yet.</div>';
+            const jobs = jobResult.data || [];
+            if (!jobs.length) {
+                list.innerHTML = '<div style="color:#64748b;">No leads yet.</div>';
                 return;
             }
-
-            list.innerHTML = data.map(job => {
-                const customer = Array.isArray(job.customers) ? job.customers[0] : job.customers;
-                const address = job.property_address || customer?.address || 'No address supplied';
-                const contact = [customer?.phone, customer?.email].filter(Boolean).join(' · ');
-                return `<article style="display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(160px,1fr) auto;gap:1rem;align-items:center;padding:.8rem;border:1px solid rgba(255,255,255,.08);border-radius:10px;background:rgba(15,23,42,.35);">
-                    <div><strong style="color:#fff;">${this.escape(customer?.name || job.name)}</strong><div style="font-size:.75rem;color:#94a3b8;">${this.escape(address)}</div><div style="font-size:.72rem;color:#64748b;">${this.escape(contact)}</div></div>
-                    <div><span style="display:inline-block;padding:.2rem .45rem;border-radius:999px;background:rgba(245,158,11,.15);color:#fbbf24;font-size:.72rem;font-weight:700;">${this.escape(job.status)}</span><div style="font-size:.75rem;color:#cbd5e1;margin-top:.3rem;">${this.escape(job.issue_description || 'No issue description')}</div></div>
-                    <button class="btn-primary roomflow-open-lead" data-job-id="${this.escape(job.id)}">Open in RoomFlow</button>
-                </article>`;
-            }).join('');
+            const importsByJob = new Map();
+            if (!importResult.error) {
+                (importResult.data || []).forEach(item => {
+                    if (item.job_id && !importsByJob.has(item.job_id)) importsByJob.set(item.job_id, item);
+                });
+            }
+            list.innerHTML = jobs.map(job => this.renderLeadCard(job, importsByJob.get(job.id))).join('');
 
             list.querySelectorAll('.roomflow-open-lead').forEach(button => {
                 button.addEventListener('click', () => this.openInboundLead(button.dataset.jobId));
@@ -300,13 +379,22 @@
         async openInboundLead(jobId) {
             const client = this.getClient();
             if (!client || !jobId) return;
-            const { data: job, error } = await client
-                .from('jobs')
-                .select('*,customers(*)')
-                .eq('id', jobId)
-                .single();
-            if (error) return this.toast(error.message, 'error');
+            const orgId = this.currentOrgId();
+            const [jobResult, importResult] = await Promise.all([
+                client.from('jobs').select('*,customers(*)').eq('organization_id', orgId).eq('id', jobId).single(),
+                client.from('lead_imports').select('source,source_message_id,source_sender,source_subject,normalized_payload,import_status,received_at').eq('organization_id', orgId).eq('job_id', jobId).order('received_at', { ascending: false }).limit(1).maybeSingle()
+            ]);
+            if (jobResult.error) return this.toast(jobResult.error.message, 'error');
+            const job = jobResult.data;
+            const intake = importResult.error ? null : importResult.data;
+            const normalized = intake?.normalized_payload || {};
             const customer = Array.isArray(job.customers) ? job.customers[0] : job.customers;
+            const fullAddress = this.leadAddress(
+                job.property_address || customer?.address || normalized.address,
+                job.city || customer?.city || normalized.city,
+                job.state || customer?.state || normalized.state,
+                job.postal_code || customer?.postal_code || normalized.postalCode
+            );
             let jobName = job.name || `${customer?.name || 'Customer'} Estimate`;
             const stored = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}');
             if (stored[jobName] && stored[jobName].jobId !== jobId) jobName += ` ${jobId.slice(0, 6)}`;
@@ -314,20 +402,32 @@
             const initial = typeof getInitialProjectState === 'function'
                 ? getInitialProjectState(
                     jobName,
-                    customer?.name || jobName,
-                    job.property_address || customer?.address || '',
-                    customer?.phone || '',
-                    customer?.email || '',
-                    '',
+                    customer?.name || normalized.fullName || jobName,
+                    fullAddress,
+                    customer?.phone || normalized.phone || '',
+                    customer?.email || normalized.email || '',
+                    normalized.assignedEstimator || '',
                     job.appointment_start ? job.appointment_start.slice(0, 10) : '',
                     'basement',
-                    job.issue_description || customer?.notes || '',
+                    job.issue_description || normalized.issueDescription || customer?.notes || '',
                     job.organization_id,
                     job.id
                 )
                 : { rooms: [], costing: {} };
             initial.jobId = job.id;
             initial.currentJobName = jobName;
+            initial.leadIntake = {
+                source: job.lead_source || intake?.source || normalized.leadSource || 'RoomFlow',
+                sender: intake?.source_sender || normalized.sourceSender || '',
+                subject: intake?.source_subject || normalized.sourceSubject || '',
+                sourceMessageId: intake?.source_message_id || normalized.sourceMessageId || '',
+                externalKey: normalized.externalKey || '',
+                receivedAt: intake?.received_at || '',
+                appointmentEnd: normalized.appointmentEnd || '',
+                city: job.city || customer?.city || normalized.city || '',
+                state: job.state || customer?.state || normalized.state || '',
+                postalCode: job.postal_code || customer?.postal_code || normalized.postalCode || ''
+            };
             state.currentJobName = jobName;
             this.setJobMapping(jobName, job.id);
             window.loadJobData(initial);
@@ -356,9 +456,9 @@
                 card.className = 'checklist-room-card';
                 card.style.padding = '1.25rem';
                 card.innerHTML = `
-                    <h3 style="color:#fff;margin:0 0 .35rem;">Email Intake / Zapier</h3>
-                    <p style="color:#94a3b8;font-size:.8rem;">Create a secure endpoint for Zapier. It accepts mapped caller fields, nested Zapier data, or a raw Gmail/Email Parser body. The secret is displayed once and only its SHA-256 hash is stored.</p>
-                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input id="roomflow-endpoint-name" value="Caller Email Intake" style="flex:1;min-width:220px;background:#1f2937;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;color:#fff;"><button id="roomflow-create-endpoint" class="btn-primary">Create Endpoint</button><button id="roomflow-refresh-endpoints" class="btn-secondary">Refresh Activity</button></div>
+                    <h3 style="color:#fff;margin:0 0 .35rem;">Lead Intake / Zapier</h3>
+                    <p style="color:#94a3b8;font-size:.8rem;">Create a secure endpoint for Zapier. It accepts mapped lead fields, nested Zapier data, or a raw Gmail/Email Parser body. The secret is displayed once and only its SHA-256 hash is stored.</p>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input id="roomflow-endpoint-name" value="Lead Intake" style="flex:1;min-width:220px;background:#1f2937;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;color:#fff;"><button id="roomflow-create-endpoint" class="btn-primary">Create Endpoint</button><button id="roomflow-refresh-endpoints" class="btn-secondary">Refresh Activity</button></div>
                     <pre id="roomflow-endpoint-output" style="display:none;white-space:pre-wrap;margin-top:.8rem;padding:.8rem;border-radius:8px;background:#020617;color:#cbd5e1;font-size:.72rem;overflow:auto;"></pre>
                     <div id="roomflow-endpoint-diagnostics" style="display:grid;gap:.65rem;margin-top:.8rem;"><div style="color:#64748b;font-size:.78rem;">Sign in and select a company to view webhook activity.</div></div>`;
                 host.appendChild(card);
@@ -389,7 +489,7 @@
             const secret = this.randomToken(24);
             const endpointKey = `${this.slug(state.currentOrganization.name)}-${this.randomToken(6)}`;
             const secretHash = await this.sha256(secret);
-            const name = document.getElementById('roomflow-endpoint-name')?.value?.trim() || 'Caller Email Intake';
+            const name = document.getElementById('roomflow-endpoint-name')?.value?.trim() || 'Lead Intake';
             const { error } = await client.from('integration_endpoints').insert({
                 organization_id: orgId,
                 endpoint_key: endpointKey,
@@ -864,7 +964,7 @@
                     this.refreshInboundLeads();
                 })
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_imports', filter: `organization_id=eq.${orgId}` }, payload => {
-                    if (payload.eventType === 'INSERT') this.toast(`New email lead imported${payload.new?.source_subject ? `: ${payload.new.source_subject}` : ''}.`, 'success');
+                    if (payload.eventType === 'INSERT') this.toast(`New lead imported${payload.new?.source_subject ? `: ${payload.new.source_subject}` : ''}.`, 'success');
                     this.refreshInboundLeads();
                     this.refreshIntegrationDiagnostics();
                 })

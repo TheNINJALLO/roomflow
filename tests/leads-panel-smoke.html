@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoomFlow Leads panel smoke test</title>
+  <link rel="stylesheet" href="../styles.css?v=67">
+  <style>body{display:grid;grid-template-columns:minmax(300px,.75fr) minmax(0,1.25fr);gap:16px;padding:16px}pre{white-space:pre-wrap}@media(max-width:620px){body{display:block;padding:10px}#test-result{display:none}}</style>
+</head>
+<body style="background:#07101d;color:#fff">
+  <pre id="test-result">RUNNING</pre>
+  <div id="jobs-viewport"><div class="jobs-list-section"></div></div>
+  <script>
+    window.state = { currentJobName: '', sessionUser: { id: 'user-1' } };
+    window.getInitialProjectState = function (jobName, customerName, address, phone, email, estimator, date, area, notes, orgId, jobId) {
+      return { jobId: jobId, currentJobName: jobName, rooms: [], costing: { customerName: customerName, customerAddress: address, customerPhone: phone, customerEmail: email, estimator: estimator, inspectionDate: date, notes: notes }, organizationId: orgId };
+    };
+    window.autosaveJob = function () {};
+    window.switchTab = function () {};
+  </script>
+  <script src="../roomflow-integrations.js?v=4"></script>
+  <script>
+    (async function () {
+      'use strict';
+      var checks = [];
+      var check = function (name, passed, detail) { checks.push({ name: name, passed: Boolean(passed), detail: detail || '' }); };
+      var job = {
+        id: 'lead-1', organization_id: 'org-1', name: 'Taylor Lead', status: 'New Lead',
+        property_address: '25 Service Road', city: 'Grand Rapids', state: 'MI', postal_code: '49503',
+        issue_description: 'Water entering along the north wall', appointment_start: '2026-08-04T14:30:00.000Z',
+        lead_source: 'Website form', estimate_status: 'not_started', updated_at: '2026-08-02T18:00:00.000Z',
+        customers: { name: 'Taylor Lead', phone: '6165550199', email: 'taylor@example.com' }
+      };
+      var intake = {
+        job_id: 'lead-1', source: 'Website form', source_message_id: 'gmail-message-123',
+        source_sender: 'forms@example.com', source_subject: 'New waterproofing inquiry',
+        import_status: 'imported', received_at: '2026-08-02T17:58:00.000Z',
+        normalized_payload: { assignedEstimator: 'Jordan', externalKey: 'FORM-42', warnings: [] }
+      };
+      var integration = window.RoomFlowIntegrations;
+      integration.injectLeadPanel();
+      check('Panel uses generic Leads title', document.querySelector('#roomflow-inbound-leads-card h3')?.textContent === 'Leads');
+
+      var model = integration.leadViewModel(job, intake);
+      check('Full service address is assembled', model.address === '25 Service Road, Grand Rapids, MI 49503', model.address);
+      check('Already complete addresses are not duplicated', integration.leadAddress('25 Service Road, Grand Rapids, MI 49503', 'Grand Rapids', 'MI', '49503') === '25 Service Road, Grand Rapids, MI 49503');
+      check('Phone and email remain separate', model.phone === '6165550199' && model.email === 'taylor@example.com');
+      check('Estimator and source are preserved', model.estimator === 'Jordan' && model.source === 'Website form');
+
+      var cardHost = document.getElementById('roomflow-inbound-leads-list');
+      cardHost.innerHTML = integration.renderLeadCard(job, intake);
+      var cardText = cardHost.textContent;
+      ['Name', 'Phone', 'Email', 'Service address', 'Appointment', 'Assigned estimator', 'Lead source', 'Source sender', 'Source subject', 'Source record / message ID', 'Received', 'Issue / request'].forEach(function (label) {
+        check('Card shows ' + label, cardText.includes(label));
+      });
+      check('Card shows original email values', cardText.includes('forms@example.com') && cardText.includes('New waterproofing inquiry') && cardText.includes('gmail-message-123'));
+
+      var captured = null;
+      window.loadJobData = function (data) { captured = data; };
+      integration.currentOrgId = function () { return 'org-1'; };
+      integration.toast = function () {};
+      integration.refreshInboundLeads = function () {};
+      integration.setJobMapping = function () {};
+      integration.getClient = function () {
+        return {
+          from: function (table) {
+            var action = 'select';
+            var query = {
+              select: function () { return query; }, eq: function () { return query; }, order: function () { return query; }, limit: function () { return query; },
+              update: function () { action = 'update'; return query; },
+              insert: async function () { return { error: null }; },
+              single: async function () { return table === 'jobs' ? { data: job, error: null } : { data: null, error: null }; },
+              maybeSingle: async function () { return table === 'lead_imports' ? { data: intake, error: null } : { data: null, error: null }; },
+              then: function (resolve) { resolve({ data: action === 'update' ? job : null, error: null }); }
+            };
+            return query;
+          }
+        };
+      };
+      await integration.openInboundLead('lead-1');
+      check('Opening lead keeps complete address', captured?.costing?.customerAddress === '25 Service Road, Grand Rapids, MI 49503', captured?.costing?.customerAddress);
+      check('Opening lead keeps estimator', captured?.costing?.estimator === 'Jordan', captured?.costing?.estimator);
+      check('Opening lead keeps intake metadata', captured?.leadIntake?.subject === 'New waterproofing inquiry' && captured?.leadIntake?.sourceMessageId === 'gmail-message-123');
+      check('Opening lead keeps locality fields', captured?.leadIntake?.city === 'Grand Rapids' && captured?.leadIntake?.state === 'MI' && captured?.leadIntake?.postalCode === '49503');
+
+      var result = { passed: checks.every(function (item) { return item.passed; }), checks: checks };
+      document.getElementById('test-result').textContent = JSON.stringify(result, null, 2);
+      document.title = result.passed ? 'PASS - RoomFlow Leads panel smoke test' : 'FAIL - RoomFlow Leads panel smoke test';
+    }());
+  </script>
+</body>
+</html>
