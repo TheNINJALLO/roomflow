@@ -64,3 +64,9 @@ A successful Zapier test returns HTTP 200 or 201 with:
 Then verify the delivery in **RoomFlow Settings → Email Intake / Zapier → Recent deliveries** or the Zapier intake status strip above the Tracker job board. A rejected delivery is recorded there with its parsing error when the webhook credentials were valid.
 
 If the response is 401, regenerate or recheck the endpoint URL and secret. If it is 422, inspect the returned normalized fields and make sure the Zap sends caller name, email, phone, or a labeled email body.
+
+## OutreachGenius voice-call emails
+
+For OutreachGenius “A new voice call completed” notifications, do not try to split the visual email cards into separate Zapier fields. Send Gmail's raw `Body Plain` and `Body HTML` values to RoomFlow. The intake parser understands the adjacent `Name`/value and `Phone`/value layout and extracts the unlabeled paragraph following `Outcome` as the job issue description.
+
+Upload [ZAPIER_COPILOT_OUTREACHGENIUS.md](ZAPIER_COPILOT_OUTREACHGENIUS.md) to Zapier Copilot to build this workflow. The file deliberately contains no webhook secret; paste a newly rotated secret into the request header manually.

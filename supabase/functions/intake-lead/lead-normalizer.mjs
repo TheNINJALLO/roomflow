@@ -117,7 +117,8 @@ const LABEL_FIELDS = new Map(Object.entries({
   problemreported: "issueDescription", reasonforcall: "issueDescription", reasonforcalling: "issueDescription",
   callreason: "issueDescription", serviceneeded: "issueDescription", servicerequest: "issueDescription",
   callerrequest: "issueDescription", message: "issueDescription", notes: "issueDescription",
-  description: "issueDescription", detailsofthecall: "issueDescription",
+  description: "issueDescription", detailsofthecall: "issueDescription", summary: "issueDescription",
+  callsummary: "issueDescription", conversationsummary: "issueDescription", conversationnotes: "issueDescription",
   appointment: "appointmentStart", appointmentdate: "appointmentStart", appointmenttime: "appointmentStart",
   appointmentdatetime: "appointmentStart", scheduledfor: "appointmentStart", scheduledat: "appointmentStart",
   estimator: "assignedEstimator", assignedestimator: "assignedEstimator", assignedto: "assignedEstimator",
@@ -126,6 +127,26 @@ const LABEL_FIELDS = new Map(Object.entries({
 function fieldForLabel(label) {
   const normalized = normalizeKey(label.replace(/^callers?/, "caller"));
   return LABEL_FIELDS.get(normalized) || null;
+}
+
+function outreachGeniusSummary(lines) {
+  const normalizedLines = lines.map(normalizeKey);
+  const isOutreachGenius = normalizedLines.includes("anewvoicecallcompleted")
+    || normalizedLines.includes("outreachgenius");
+  if (!isOutreachGenius) return null;
+  const outcomeIndex = normalizedLines.lastIndexOf("outcome");
+  if (outcomeIndex < 0) return null;
+
+  let index = outcomeIndex + 1;
+  if (/^(true|false|successful|completed|answered)$/i.test(lines[index] || "")) index += 1;
+  const summary = [];
+  for (; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (/^(listen to recording|view conversation|automated notification)(?:\s|$)/i.test(line)) break;
+    if (normalizeKey(line) === "outreachgenius") continue;
+    summary.push(line);
+  }
+  return clean(summary.join(" "));
 }
 
 export function parseEmailBody(value) {
@@ -150,10 +171,20 @@ export function parseEmailBody(value) {
       activeField = field === "issueDescription" ? field : null;
       continue;
     }
+    const adjacentField = fieldForLabel(line);
+    if (adjacentField && lines[index + 1] && !fieldForLabel(lines[index + 1])) {
+      const fieldValue = lines[index + 1].trim();
+      if (fieldValue && !result[adjacentField]) result[adjacentField] = fieldValue;
+      activeField = adjacentField === "issueDescription" ? adjacentField : null;
+      index += 1;
+      continue;
+    }
     if (activeField === "issueDescription" && result.issueDescription) {
       result.issueDescription += ` ${line}`;
     }
   }
+
+  if (!result.issueDescription) result.issueDescription = outreachGeniusSummary(lines);
 
   if (!result.email) result.email = text.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i)?.[0] || null;
   if (!result.phone) {
@@ -204,6 +235,7 @@ export function normalizeLead(payload) {
   const rawBody = lookupValue(lookup, BODY_KEYS);
   const body = parseEmailBody(rawBody);
   const sourceSubject = clean(lookupValue(lookup, ["source_subject", "sourceSubject", "email_subject", "emailSubject", "subject", "title"]));
+  const sourceSender = clean(lookupValue(lookup, ["source_sender", "sourceSender", "from_email", "fromEmail", "sender_email", "senderEmail", "from", "sender"]));
   const suppliedName = clean(lookupValue(lookup, [
     "customer_name", "customerName", "caller_name", "callerName", "contact_name", "contactName",
     "lead_name", "leadName", "full_name", "fullName",
@@ -242,7 +274,7 @@ export function normalizeLead(payload) {
 
   return {
     sourceMessageId,
-    sourceSender: clean(lookupValue(lookup, ["source_sender", "sourceSender", "from_email", "fromEmail", "sender_email", "senderEmail", "from", "sender"])),
+    sourceSender,
     sourceSubject,
     firstName: names.firstName,
     lastName: names.lastName,
@@ -260,7 +292,9 @@ export function normalizeLead(payload) {
     appointmentStart,
     appointmentEnd: safeIso(clean(lookupValue(lookup, ["appointment_end", "appointmentEnd", "scheduled_end", "scheduledEnd"]))),
     assignedEstimator: clean(lookupValue(lookup, ["assigned_estimator", "assignedEstimator", "estimator", "assigned_to", "assignedTo"])),
-    leadSource: clean(lookupValue(lookup, ["lead_source", "leadSource", "trigger_source", "triggerSource"])) || directValue(source, ["source"]) || "email",
+    leadSource: clean(lookupValue(lookup, ["lead_source", "leadSource", "trigger_source", "triggerSource"]))
+      || directValue(source, ["source"])
+      || (/outreach\s*genius/i.test(`${sourceSender || ""} ${sourceSubject || ""} ${rawBody || ""}`) ? "OutreachGenius" : "email"),
     externalKey: clean(lookupValue(lookup, ["external_key", "externalKey", "lead_id", "leadId", "caller_id", "callerId"])),
     warnings,
     raw: source,

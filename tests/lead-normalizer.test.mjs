@@ -73,6 +73,23 @@ test('extracts nested HTML payloads and separate appointment fields', () => {
   assert.ok(lead.appointmentStart?.startsWith('2030-05-10'));
 });
 
+test('extracts OutreachGenius label-value cards and the unlabeled call summary', () => {
+  const lead = normalizeLead({
+    source_sender: 'notifications@outreachgenius.ai',
+    source_subject: '[OutreachGenius] A new voice call completed',
+    source_message_id: 'outreach-message-1',
+    body_html: `<h1>A new voice call completed</h1>
+      <section><h2>Lead</h2><div>Name</div><div>Sample Caller</div><div>Phone</div><div>313-555-0177</div><div>Pipeline</div><div>new</div></section>
+      <section><h2>Conversation</h2><div>Channel</div><div>voice · inbound</div><div>Duration</div><div>42s</div><div>Classification</div><div>Call Answered</div><div>Outcome</div><div>true</div>
+      <p>The caller reported water entering along the basement wall and requested an inspection.</p><a>Listen to recording →</a></section>
+      <footer>Automated notification · OutreachGenius</footer>`,
+  });
+  assert.equal(lead.fullName, 'Sample Caller');
+  assert.equal(lead.phone, '3135550177');
+  assert.equal(lead.issueDescription, 'The caller reported water entering along the basement wall and requested an inspection.');
+  assert.equal(lead.leadSource, 'OutreachGenius');
+});
+
 test('parses email label aliases', () => {
   const body = parseEmailBody('Callback Number = 313.555.0123\nProblem Reported: Ceiling leak');
   assert.equal(body.phone, '313.555.0123');
