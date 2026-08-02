@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>RoomFlow Tracker delete smoke test</title>
+    <style>.hidden{display:none}.tab-page{display:none}.tab-page.active{display:block}</style>
+</head>
+<body>
+    <pre id="test-result">RUNNING</pre>
+    <div id="auth-overlay" class="hidden"><form id="login-form"><input id="login-email"><input id="login-password"><div id="login-error"></div></form></div>
+    <div id="app" class="hidden">
+        <span id="connection-status"></span><select id="organization-select"></select>
+        <button id="refresh-button"></button><button id="logout-button"></button>
+        <button class="tab active" data-tab="jobs"></button><button class="tab" data-tab="equipment"></button><button class="tab" data-tab="deployments"></button>
+        <section id="jobs-tab" class="tab-page active"><input id="job-search"><select id="job-status-filter"><option value=""></option></select><button id="add-job-button"></button><div id="job-metrics"></div><div id="jobs-board"></div><div id="board-carousel"><button id="board-previous"></button><span id="board-page-label"></span><div id="board-dots"></div><button id="board-pause"></button><button id="board-next"></button></div></section>
+        <section id="equipment-tab" class="tab-page"><button id="add-equipment-button"></button><div id="equipment-grid"></div></section>
+        <section id="deployments-tab" class="tab-page"><button id="add-deployment-button"></button><div id="deployments-grid"></div></section>
+    </div>
+    <div id="modal" class="hidden"><h2 id="modal-title"></h2><button id="modal-close"></button><form id="modal-form"></form></div>
+    <div id="toast" class="hidden"></div>
+    <script>
+        const testState = { deletedId: null };
+        const job = {
+            id: 'job-delete-1', organization_id: 'org-1', customer_id: 'customer-1', name: 'Delete Test',
+            status: 'New Lead', property_address: '10 Test Street', city: 'Ada', state: 'MI', postal_code: '49301',
+            issue_description: 'Deletion smoke test', appointment_start: null, estimate_status: 'not_started',
+            tracking_color: 'yellow', updated_at: new Date().toISOString(),
+            customers: { id: 'customer-1', name: 'Delete Test', email: 'delete@example.com', phone: '6165550100', address: '10 Test Street', city: 'Ada', state: 'MI', postal_code: '49301' }
+        };
+
+        class Query {
+            constructor(table) { this.table = table; this.action = 'select'; this.filters = {}; }
+            select() { return this; }
+            eq(key, value) { this.filters[key] = value; return this; }
+            in() { return this; }
+            order() { return this; }
+            limit() { return this; }
+            update() { this.action = 'update'; return this; }
+            insert() { this.action = 'insert'; return this; }
+            delete() { this.action = 'delete'; return this; }
+            single() { return this.execute(); }
+            maybeSingle() { return this.execute(); }
+            then(resolve, reject) { return this.execute().then(resolve, reject); }
+            async execute() {
+                if (this.table === 'organization_members') return { data: [{ organization_id: 'org-1' }], error: null };
+                if (this.table === 'organizations') return { data: [{ id: 'org-1', name: 'Test Company' }], error: null };
+                if (this.table === 'equipment_types' || this.table === 'equipment_deployments') return { data: [], error: null };
+                if (this.table === 'jobs' && this.action === 'delete') {
+                    testState.deletedId = this.filters.id;
+                    return { data: { id: this.filters.id }, error: null };
+                }
+                if (this.table === 'jobs') return { data: testState.deletedId ? [] : [job], error: null };
+                return { data: [], error: null };
+            }
+        }
+
+        const client = {
+            auth: {
+                getSession: async () => ({ data: { session: { user: { id: 'user-1' } } } }),
+                onAuthStateChange: () => ({ data: { subscription: { unsubscribe() {} } } }),
+                signInWithPassword: async () => ({ error: null }),
+                signOut: async () => ({ error: null })
+            },
+            from: table => new Query(table),
+            channel: () => ({ on() { return this; }, subscribe() { return this; } }),
+            removeChannel() {}
+        };
+        window.supabase = { createClient: () => client };
+        window.RoomFlowTrackerConfig = { supabaseUrl: 'https://example.invalid', supabaseAnonKey: 'test' };
+    </script>
+    <script src="../tracker/tracker.js?v=3"></script>
+    <script>
+        const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+        window.addEventListener('load', async () => {
+            const checks = [];
+            const check = (name, passed, detail = '') => checks.push({ name, passed: Boolean(passed), detail });
+            await wait(250);
+            const deleteButton = document.querySelector('[data-delete-job="job-delete-1"]');
+            check('Delete action renders on job card', deleteButton);
+            deleteButton?.click();
+            check('Delete confirmation explains shared removal', document.getElementById('modal-form').textContent.includes('permanently removes the shared cloud job'));
+            const confirmation = document.querySelector('input[name="confirmation"]');
+            if (confirmation) confirmation.value = 'DELETE';
+            document.getElementById('modal-form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+            await wait(150);
+            check('Confirmed deletion reaches Supabase', testState.deletedId === 'job-delete-1', testState.deletedId);
+            check('Deleted job leaves the board', !document.querySelector('[data-delete-job="job-delete-1"]'));
+            const result = { passed: checks.every(item => item.passed), checks };
+            document.getElementById('test-result').textContent = JSON.stringify(result, null, 2);
+            document.title = result.passed ? 'PASS - Tracker delete smoke test' : 'FAIL - Tracker delete smoke test';
+        });
+    </script>
+</body>
+</html>

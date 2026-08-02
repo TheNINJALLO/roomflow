@@ -47,3 +47,25 @@ Keep the Android asset copy synchronized with the root web files before producin
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-android-assets.ps1
 ```
+
+## Tracker and Zapier intake
+
+Tracker job cards include a **Delete** action. Deletion requires the user's `delete_jobs` capability, requires typing `DELETE`, and is blocked while equipment is actively deployed to the job.
+
+Create the Zapier webhook in RoomFlow under **Settings → Email Intake / Zapier**. Send the generated secret in the `x-roomflow-webhook-secret` header. The most reliable Zap payload is:
+
+```json
+{
+  "source_message_id": "{{Gmail Message ID}}",
+  "source_sender": "{{From Email}}",
+  "source_subject": "{{Subject}}",
+  "body_plain": "{{Body Plain}}",
+  "body_html": "{{Body HTML}}"
+}
+```
+
+RoomFlow accepts JSON, form data, URL-encoded fields, raw email text, and nested Zapier payloads. It extracts labeled caller fields such as name, phone, email, service address, issue, appointment, and estimator. Map Gmail's stable Message ID whenever possible so a Zap retry updates the same job instead of creating another one.
+
+Use **Refresh Activity** in RoomFlow Settings or the **Zapier intake** health strip in Tracker to confirm that a delivery arrived and see which caller fields were parsed. A successful webhook test returns `ok: true`, a `job_id`, normalized fields, and warnings.
+
+See [ZAPIER_SETUP.md](ZAPIER_SETUP.md) for the complete deployment, Zap configuration, verification, and error-response guide.

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>RoomFlow Job & Equipment Tracker</title>
-  <link rel="stylesheet" href="style.css?v=2">
+  <link rel="stylesheet" href="style.css?v=3">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="config.js?v=1"></script>
 </head>
@@ -44,6 +44,9 @@
           <div class="toolbar-actions"><input id="job-search" placeholder="Search customer, address, phone…"><select id="job-status-filter"><option value="">All statuses</option></select><button id="add-job-button" class="primary">Add Job</button></div>
         </div>
         <div class="metric-grid" id="job-metrics"></div>
+        <div id="lead-sync-health" class="lead-sync-health panel" role="status" aria-live="polite">
+          <span class="sync-dot pending"></span><div><strong>Zapier intake</strong><span>Checking the latest delivery…</span></div>
+        </div>
         <div id="jobs-board" class="job-board" aria-live="polite"></div>
         <div id="board-carousel" class="board-carousel panel">
           <button id="board-previous" class="secondary" aria-label="Previous page">←</button>
@@ -67,6 +70,6 @@
 
   <div id="modal" class="overlay hidden"><div class="panel modal-card"><div class="modal-head"><h2 id="modal-title">Edit</h2><button id="modal-close" class="icon">×</button></div><form id="modal-form"></form></div></div>
   <div id="toast" class="toast hidden"></div>
-  <script src="tracker.js?v=2"></script>
+  <script src="tracker.js?v=3"></script>
 </body>
 </html>

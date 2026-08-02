@@ -4,10 +4,12 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $assetRoot = Join-Path $repoRoot 'app\src\main\assets'
 $webFiles = @(
     'app.js',
+    'config.js',
     'cost-engine.js',
     'cost-ui.js',
     'document-workflow.js',
     'index.html',
+    'roomflow-integrations.js',
     'styles.css',
     'work-order.js'
 )

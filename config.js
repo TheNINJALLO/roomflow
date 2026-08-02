@@ -8,7 +8,7 @@ window.RoomFlowConfig = {
 (function loadRoomFlowIntegrations() {
     if (document.querySelector('script[data-roomflow-integrations]')) return;
     const script = document.createElement('script');
-    script.src = 'roomflow-integrations.js?v=2';
+    script.src = 'roomflow-integrations.js?v=3';
     script.dataset.roomflowIntegrations = 'true';
     script.async = true;
     document.head.appendChild(script);
