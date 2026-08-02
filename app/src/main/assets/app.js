@@ -31,6 +31,7 @@ const state = {
     sketchRedoVertices: [],      // temporary redo drawing vertices
     lastMouseWorldX: 0,          // live mouse positions for line previews
     lastMouseWorldY: 0,
+    pendingPlacement: null,      // { kind, type } for tap-to-place and drag/drop tools
     undoStack: [],
     redoStack: [],
     levels: [
@@ -86,6 +87,21 @@ const PRESETS = {
 const canvas = document.getElementById('sketch-canvas');
 const ctx = canvas.getContext('2d');
 const container = document.getElementById('canvas-container');
+
+// Keep the compact CAD customer fields synchronized with the guided job
+// record so every document reads the same source of truth.
+[
+    ['customer-name', 'customerName'],
+    ['customer-address', 'customerAddress']
+].forEach(([elementId, key]) => {
+    const input = document.getElementById(elementId);
+    if (!input) return;
+    input.addEventListener('input', () => {
+        initDefaultCosting(state);
+        state.costing[key] = input.value;
+        if (typeof window.triggerAutosave === 'function') window.triggerAutosave();
+    });
+});
 
 // Resize Canvas
 function resizeCanvas() {
@@ -147,7 +163,7 @@ function generateId() {
 }
 
 // Add Room Function
-function addRoom(type) {
+function addRoom(type, placement = null) {
     if (typeof saveHistoryState === 'function') saveHistoryState();
     const preset = PRESETS[type];
     const newRoom = {
@@ -158,8 +174,8 @@ function addRoom(type) {
         w: preset.w,
         l: preset.l,
         h: preset.h,
-        x: snap(toWorldX(canvas.width / 2) - preset.w / 2),
-        y: snap(toWorldY(canvas.height / 2) - preset.l / 2),
+        x: snap((placement ? placement.x : toWorldX(canvas.width / 2)) - preset.w / 2),
+        y: snap((placement ? placement.y : toWorldY(canvas.height / 2)) - preset.l / 2),
         color: preset.color,
         openings: [],
         foamBoard: false,
@@ -179,7 +195,6 @@ function addRoom(type) {
     }
     state.rooms.push(newRoom);
     selectItem('room', newRoom.id);
-    centerOnRoom(newRoom);
     draw();
     updateGlobalStats();
     
@@ -192,14 +207,14 @@ function centerOnRoom(room) {
 }
 
 // Add Sump Pump
-function addSumpPump() {
+function addSumpPump(placement = null) {
     if (typeof saveHistoryState === 'function') saveHistoryState();
     const newPump = {
         id: generateId(),
         levelId: state.currentLevelId,
         name: `Sump Pump ${state.sumpPumps.length + 1}`,
-        x: snap(toWorldX(canvas.width / 2)),
-        y: snap(toWorldY(canvas.height / 2))
+        x: snap(placement ? placement.x : toWorldX(canvas.width / 2)),
+        y: snap(placement ? placement.y : toWorldY(canvas.height / 2))
     };
     state.sumpPumps.push(newPump);
     selectItem('sump', newPump.id);
@@ -208,14 +223,14 @@ function addSumpPump() {
 }
 
 // Add Dehumidifier
-function addDehumidifier() {
+function addDehumidifier(placement = null) {
     if (typeof saveHistoryState === 'function') saveHistoryState();
     const newDehum = {
         id: generateId(),
         levelId: state.currentLevelId,
         name: `Dehumidifier ${state.dehumidifiers.length + 1}`,
-        x: snap(toWorldX(canvas.width / 2)),
-        y: snap(toWorldY(canvas.height / 2))
+        x: snap(placement ? placement.x : toWorldX(canvas.width / 2)),
+        y: snap(placement ? placement.y : toWorldY(canvas.height / 2))
     };
     state.dehumidifiers.push(newDehum);
     selectItem('dehumidifier', newDehum.id);
@@ -224,10 +239,10 @@ function addDehumidifier() {
 }
 
 // Add Discharge Line
-function addDischargeLine() {
+function addDischargeLine(placement = null) {
     if (typeof saveHistoryState === 'function') saveHistoryState();
-    const cx = snap(toWorldX(canvas.width / 2));
-    const cy = snap(toWorldY(canvas.height / 2));
+    const cx = snap(placement ? placement.x : toWorldX(canvas.width / 2));
+    const cy = snap(placement ? placement.y : toWorldY(canvas.height / 2));
     const newLine = {
         id: generateId(),
         levelId: state.currentLevelId,
@@ -244,10 +259,10 @@ function addDischargeLine() {
     updateGlobalStats();
 }
 // Add Interior Pipe
-function addInteriorPipe() {
+function addInteriorPipe(placement = null) {
     if (typeof saveHistoryState === 'function') saveHistoryState();
-    const cx = snap(toWorldX(canvas.width / 2));
-    const cy = snap(toWorldY(canvas.height / 2));
+    const cx = snap(placement ? placement.x : toWorldX(canvas.width / 2));
+    const cy = snap(placement ? placement.y : toWorldY(canvas.height / 2));
     const newPipe = {
         id: generateId(),
         levelId: state.currentLevelId,
@@ -265,10 +280,10 @@ function addInteriorPipe() {
 }
 
 // Add Stanchion
-function addStanchion() {
+function addStanchion(placement = null) {
     if (typeof saveHistoryState === 'function') saveHistoryState();
-    const cx = snap(toWorldX(canvas.width / 2));
-    const cy = snap(toWorldY(canvas.height / 2));
+    const cx = snap(placement ? placement.x : toWorldX(canvas.width / 2));
+    const cy = snap(placement ? placement.y : toWorldY(canvas.height / 2));
     const newStanchion = {
         id: generateId(),
         levelId: state.currentLevelId,
@@ -284,10 +299,10 @@ function addStanchion() {
 }
 
 // Add Support Beam
-function addSupportBeam() {
+function addSupportBeam(placement = null) {
     if (typeof saveHistoryState === 'function') saveHistoryState();
-    const cx = snap(toWorldX(canvas.width / 2));
-    const cy = snap(toWorldY(canvas.height / 2));
+    const cx = snap(placement ? placement.x : toWorldX(canvas.width / 2));
+    const cy = snap(placement ? placement.y : toWorldY(canvas.height / 2));
     const newBeam = {
         id: generateId(),
         levelId: state.currentLevelId,
@@ -422,6 +437,7 @@ function selectItem(type, id) {
             
             const drywallSelect = document.getElementById('room-drywall-select');
             if (drywallSelect) drywallSelect.value = room.drywallHeight || 'none';
+            renderDrywallWallCheckboxes(room);
 
             const removeInsulationCheckbox = document.getElementById('room-remove-insulation-checkbox');
             if (removeInsulationCheckbox) removeInsulationCheckbox.checked = !!room.removeInsulation;
@@ -594,14 +610,10 @@ function selectItem(type, id) {
         noEstMsg.classList.remove('hidden');
     }
 
-    // On mobile, if something is selected, slide open the details drawer
-    if (type && id && window.innerWidth <= 900) {
-        if (typeof leftSidebar !== 'undefined' && typeof rightSidebar !== 'undefined' && typeof backdrop !== 'undefined') {
-            leftSidebar.classList.remove('open');
-            rightSidebar.classList.add('open');
-            backdrop.classList.remove('hidden');
-        }
-    }
+    // Keep the mobile canvas available after selection so rooms and vertices
+    // can be dragged immediately. The explicit Details button opens the editor.
+    const mobileDetailsButton = document.getElementById('mobile-toggle-details');
+    if (mobileDetailsButton) mobileDetailsButton.classList.toggle('has-selection', !!(type && id));
     
     draw();
 }
@@ -965,28 +977,145 @@ function initializeCustomStraps(room) {
 function getRoomSegments(room) {
     const segs = [];
     if (room.type === 'custom' && room.vertices && room.vertices.length >= 3) {
+        const originX = Number(room.x) || 0;
+        const originY = Number(room.y) || 0;
         for (let i = 0; i < room.vertices.length; i++) {
             const v1 = room.vertices[i];
             const v2 = room.vertices[(i + 1) % room.vertices.length];
             segs.push({
-                x1: room.x + v1.x,
-                y1: room.y + v1.y,
-                x2: room.x + v2.x,
-                y2: room.y + v2.y,
+                x1: originX + v1.x,
+                y1: originY + v1.y,
+                x2: originX + v2.x,
+                y2: originY + v2.y,
                 wall: i.toString()
             });
         }
     } else {
-        const x = room.x;
-        const y = room.y;
-        const w = room.w;
-        const l = room.l;
+        const x = Number(room.x) || 0;
+        const y = Number(room.y) || 0;
+        const w = Number(room.w) || 0;
+        const l = Number(room.l) || 0;
         segs.push({ x1: x, y1: y, x2: x + w, y2: y, wall: 'n' }); // North
         segs.push({ x1: x + w, y1: y, x2: x + w, y2: y + l, wall: 'e' }); // East
         segs.push({ x1: x, y1: y + l, x2: x + w, y2: y + l, wall: 's' }); // South
         segs.push({ x1: x, y1: y, x2: x, y2: y + l, wall: 'w' }); // West
     }
     return segs;
+}
+
+function getWallDisplayName(room, wallKey) {
+    const cardinal = { n: 'North wall', e: 'East wall', s: 'South wall', w: 'West wall' };
+    return cardinal[wallKey] || `Wall ${parseInt(wallKey, 10) + 1}`;
+}
+
+function getSelectedDrywallSegments(room) {
+    const segments = getRoomSegments(room);
+    if (!Array.isArray(room.drywallWalls)) return segments;
+    return segments.filter(segment => room.drywallWalls.includes(String(segment.wall)));
+}
+
+function renderDrywallWallCheckboxes(room) {
+    const container = document.getElementById('room-drywall-walls-checkboxes');
+    const editor = document.getElementById('room-drywall-wall-scope');
+    if (!container || !editor || !room) return;
+
+    const segments = getRoomSegments(room);
+    const selectedKeys = Array.isArray(room.drywallWalls)
+        ? room.drywallWalls.map(String)
+        : segments.map(segment => String(segment.wall));
+    const disabled = !room.drywallHeight || room.drywallHeight === 'none';
+    editor.classList.toggle('is-disabled', disabled);
+    container.innerHTML = segments.map(segment => {
+        const key = String(segment.wall);
+        const length = Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1);
+        return `
+            <label class="wall-scope-option">
+                <input type="checkbox" ${selectedKeys.includes(key) ? 'checked' : ''} ${disabled ? 'disabled' : ''} onchange="toggleRoomDrywallWall('${room.id}','${key}',this.checked)">
+                <span class="wall-color-key"></span>
+                <strong>${getWallDisplayName(room, key)}</strong>
+                <small>${length.toFixed(1)} ft</small>
+            </label>
+        `;
+    }).join('');
+}
+
+window.toggleRoomDrywallWall = function(roomId, wallKey, checked) {
+    const room = state.rooms.find(item => item.id === roomId);
+    if (!room) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    const allKeys = getRoomSegments(room).map(segment => String(segment.wall));
+    const selected = Array.isArray(room.drywallWalls) ? [...room.drywallWalls].map(String) : [...allKeys];
+    if (checked && !selected.includes(String(wallKey))) selected.push(String(wallKey));
+    if (!checked) {
+        const index = selected.indexOf(String(wallKey));
+        if (index >= 0) selected.splice(index, 1);
+    }
+    room.drywallWalls = selected;
+    renderDrywallWallCheckboxes(room);
+    updateRoomEstimates(room);
+    updateGlobalStats();
+    draw();
+    if (typeof window.triggerAutosave === 'function') window.triggerAutosave();
+};
+
+window.setAllRoomDrywallWalls = function(checked, roomId = state.selectedRoomId) {
+    const room = state.rooms.find(item => item.id === roomId);
+    if (!room) return;
+    if (typeof saveHistoryState === 'function') saveHistoryState();
+    room.drywallWalls = checked ? getRoomSegments(room).map(segment => String(segment.wall)) : [];
+    renderDrywallWallCheckboxes(room);
+    updateRoomEstimates(room);
+    updateGlobalStats();
+    draw();
+    if (typeof window.renderGuidedStep === 'function' && state.currentStep === 4) window.renderGuidedStep();
+    if (typeof window.triggerAutosave === 'function') window.triggerAutosave();
+};
+
+function drawDrywallWallScopes(room) {
+    if (!room.drywallHeight || room.drywallHeight === 'none') return;
+    const segments = getSelectedDrywallSegments(room);
+    if (!segments.length) return;
+
+    ctx.save();
+    ctx.strokeStyle = state.isPrintingMode ? '#dc2626' : '#fb7185';
+    ctx.fillStyle = state.isPrintingMode ? '#991b1b' : '#fecdd3';
+    ctx.lineWidth = state.isPrintingMode ? 4 : 6;
+    ctx.setLineDash([10, 6]);
+    ctx.lineCap = 'round';
+    ctx.font = `700 10px var(--font-sans)`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+
+    segments.forEach(segment => {
+        const x1 = toCanvasX(segment.x1);
+        const y1 = toCanvasY(segment.y1);
+        const x2 = toCanvasX(segment.x2);
+        const y2 = toCanvasY(segment.y2);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const worldDx = segment.x2 - segment.x1;
+        const worldDy = segment.y2 - segment.y1;
+        const worldLength = Math.hypot(worldDx, worldDy) || 1;
+        const normalX = -worldDy / worldLength;
+        const normalY = worldDx / worldLength;
+        const midWorldX = (segment.x1 + segment.x2) / 2;
+        const midWorldY = (segment.y1 + segment.y2) / 2;
+        const insideCandidate = getRoomAt(midWorldX + normalX * 0.4, midWorldY + normalY * 0.4, room.levelId);
+        const direction = insideCandidate && insideCandidate.id === room.id ? 1 : -1;
+        const mx = (x1 + x2) / 2 + normalX * direction * 18;
+        const my = (y1 + y2) / 2 + normalY * direction * 18;
+        const label = room.drywallHeight === 'full' ? 'CUT FULL WALL' : `CUT ${room.drywallHeight.toUpperCase()}`;
+        const labelWidth = ctx.measureText(label).width + 10;
+        ctx.fillStyle = state.isPrintingMode ? 'rgba(255,255,255,0.9)' : 'rgba(15,23,42,0.88)';
+        ctx.fillRect(mx - labelWidth / 2, my - 14, labelWidth, 16);
+        ctx.fillStyle = state.isPrintingMode ? '#991b1b' : '#fecdd3';
+        ctx.fillText(label, mx, my);
+        ctx.setLineDash([10, 6]);
+    });
+    ctx.restore();
 }
 
 // Helper to estimate total PVC sticks and elbow fittings based on pipeline geometry
@@ -1404,6 +1533,12 @@ function draw(isPrinting = false) {
 
     // 2. Draw logical building walls & openings
     drawLogicalWallsAndOpenings();
+
+    // 3. Draw per-wall work overlays last so field scope stays visible above
+    // logical walls and openings in both the editor and printed blueprint.
+    state.rooms.forEach(room => {
+        if (!room.levelId || room.levelId === state.currentLevelId) drawDrywallWallScopes(room);
+    });
 
     // Draw committed segments of current custom drawing in progress
     if (state.drawMode === 'custom' && state.sketchVertices.length > 0) {
@@ -2552,12 +2687,54 @@ function getHitHandle(room, worldX, worldY) {
     return null;
 }
 
+function showCanvasPlacementHint(message = '') {
+    const hint = document.getElementById('canvas-placement-hint');
+    if (!hint) return;
+    hint.classList.toggle('hidden', !message);
+    const label = hint.querySelector('span');
+    if (label) label.textContent = message;
+}
+
+function placeCanvasTool(tool, x, y) {
+    const point = { x: snap(x), y: snap(y) };
+    if (tool.kind === 'room') addRoom(tool.type, point);
+    else if (tool.kind === 'sump') addSumpPump(point);
+    else if (tool.kind === 'dehumidifier') addDehumidifier(point);
+    else if (tool.kind === 'discharge') addDischargeLine(point);
+    else if (tool.kind === 'interiorPipe') addInteriorPipe(point);
+    else if (tool.kind === 'stanchion') addStanchion(point);
+    else if (tool.kind === 'beam') addSupportBeam(point);
+    state.pendingPlacement = null;
+    showCanvasPlacementHint('');
+    canvas.style.cursor = 'crosshair';
+}
+
+function beginCanvasToolPlacement(tool) {
+    state.drawMode = null;
+    state.sketchVertices = [];
+    state.sketchRedoVertices = [];
+    const drawingPanel = document.getElementById('custom-wall-drawer-panel');
+    const drawingButton = document.getElementById('btn-draw-walls-mode');
+    if (drawingPanel) drawingPanel.classList.add('hidden');
+    if (drawingButton) drawingButton.classList.remove('active');
+    state.pendingPlacement = tool;
+    if (typeof switchView === 'function') switchView('2d');
+    showCanvasPlacementHint(`Tap the blueprint to place ${tool.label}`);
+    canvas.style.cursor = 'copy';
+}
+
 canvas.addEventListener('mousedown', (e) => {
     const rect = canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
     const my = e.clientY - rect.top;
     const wx = toWorldX(mx);
     const wy = toWorldY(my);
+
+    if (state.pendingPlacement) {
+        placeCanvasTool(state.pendingPlacement, wx, wy);
+        if (typeof closeAllDrawers === 'function') closeAllDrawers();
+        return;
+    }
 
     // Save history snapshot in case dragging starts
     if (typeof getHistorySnapshot === 'function') {
@@ -2579,6 +2756,7 @@ canvas.addEventListener('mousedown', (e) => {
         }
         
         state.sketchVertices.push({ x: snapX, y: snapY });
+        showCanvasPlacementHint('');
         state.sketchRedoVertices = [];
         const btnRedoWall = document.getElementById('btn-draw-redo-wall');
         if (btnRedoWall) btnRedoWall.disabled = true;
@@ -3913,6 +4091,7 @@ document.getElementById('room-drywall-select').addEventListener('change', (e) =>
     if (room) {
         if (typeof saveHistoryState === 'function') saveHistoryState();
         room.drywallHeight = e.target.value;
+        renderDrywallWallCheckboxes(room);
         draw();
         updateGlobalStats();
         updateToolboxReinforcementLabels(room);
@@ -4081,6 +4260,72 @@ document.querySelectorAll('.add-room-btn').forEach(btn => {
         if (typeof closeAllDrawers === 'function') closeAllDrawers();
     });
 });
+
+function initializeCanvasToolPlacement() {
+    const tools = [];
+    document.querySelectorAll('.add-room-btn').forEach(button => {
+        tools.push({ button, kind: 'room', type: button.getAttribute('data-type'), label: button.textContent.trim() || 'room' });
+    });
+    [
+        ['btn-add-sump', 'sump', 'sump pump'],
+        ['btn-add-dehumidifier', 'dehumidifier', 'dehumidifier'],
+        ['btn-add-discharge', 'discharge', 'discharge line'],
+        ['btn-add-interior-pipe', 'interiorPipe', 'interior pipe'],
+        ['btn-add-stanchion', 'stanchion', 'stanchion'],
+        ['btn-add-beam', 'beam', 'support beam']
+    ].forEach(definition => {
+        const button = document.getElementById(definition[0]);
+        if (button) tools.push({ button, kind: definition[1], type: '', label: definition[2] });
+    });
+
+    tools.forEach(tool => {
+        tool.button.draggable = true;
+        tool.button.classList.add('canvas-placement-tool');
+        tool.button.title = `Drag onto the blueprint to place ${tool.label}`;
+        tool.button.addEventListener('dragstart', event => {
+            state.didDragTool = true;
+            event.dataTransfer.effectAllowed = 'copy';
+            event.dataTransfer.setData('application/x-roomflow-tool', JSON.stringify({ kind: tool.kind, type: tool.type, label: tool.label }));
+            showCanvasPlacementHint(`Drop to place ${tool.label}`);
+        });
+        tool.button.addEventListener('dragend', () => {
+            showCanvasPlacementHint('');
+            window.setTimeout(() => { state.didDragTool = false; }, 0);
+        });
+        tool.button.addEventListener('click', event => {
+            const mobilePlacement = window.matchMedia('(max-width: 900px), (pointer: coarse)').matches;
+            if (!mobilePlacement && !state.didDragTool) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if (!state.didDragTool) beginCanvasToolPlacement({ kind: tool.kind, type: tool.type, label: tool.label });
+            if (typeof closeAllDrawers === 'function') closeAllDrawers();
+        }, true);
+    });
+
+    canvas.addEventListener('dragover', event => {
+        if (!Array.from(event.dataTransfer.types || []).includes('application/x-roomflow-tool')) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'copy';
+        canvas.classList.add('is-drop-target');
+    });
+    canvas.addEventListener('dragleave', () => canvas.classList.remove('is-drop-target'));
+    canvas.addEventListener('drop', event => {
+        const raw = event.dataTransfer.getData('application/x-roomflow-tool');
+        canvas.classList.remove('is-drop-target');
+        showCanvasPlacementHint('');
+        if (!raw) return;
+        event.preventDefault();
+        try {
+            const tool = JSON.parse(raw);
+            const rect = canvas.getBoundingClientRect();
+            placeCanvasTool(tool, toWorldX(event.clientX - rect.left), toWorldY(event.clientY - rect.top));
+        } catch (error) {
+            console.warn('Unable to place dragged tool:', error);
+        }
+    });
+}
+
+initializeCanvasToolPlacement();
 
 document.getElementById('btn-add-door').addEventListener('click', () => {
     addOpening('door');
@@ -4326,7 +4571,7 @@ function switchView(viewName) {
     const showFloatingToggles = (viewName === '2d' || viewName === '3d');
     if (mobileToggleTools) mobileToggleTools.style.display = showFloatingToggles ? '' : 'none';
     if (mobileToggleDetails) mobileToggleDetails.style.display = showFloatingToggles ? '' : 'none';
-    if (mobileToggleChecklist) mobileToggleChecklist.style.display = (viewName !== 'checklist' && viewName !== 'ar') ? '' : 'none';
+    if (mobileToggleChecklist) mobileToggleChecklist.style.display = showFloatingToggles ? '' : 'none';
 
     if (viewName === 'ar') {
         if (window.startCamera) window.startCamera();
@@ -5015,6 +5260,10 @@ function printInternalCostSheet() {
 }
 
 function printCustomerProposal() {
+    if (window.RoomFlowDocuments && typeof window.RoomFlowDocuments.print === 'function') {
+        window.RoomFlowDocuments.print('proposal');
+        return;
+    }
     // Save current selections
     const oldSelRoom = state.selectedRoomId;
     const oldSelSump = state.selectedSumpPumpId;
@@ -5252,9 +5501,11 @@ document.getElementById('btn-export-proposal').addEventListener('click', printCu
 // --- ANGLED WALL SKETCHER & DRAWING LOGIC ---
 function toggleDrawWallsMode() {
     const drawWallsPanel = document.getElementById('custom-wall-drawer-panel');
+    state.pendingPlacement = null;
     if (state.drawMode === 'custom') {
         state.drawMode = null;
         state.sketchVertices = [];
+        showCanvasPlacementHint('');
         drawWallsPanel.classList.add('hidden');
         document.getElementById('btn-draw-walls-mode').classList.remove('active');
         document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
@@ -5267,12 +5518,13 @@ function toggleDrawWallsMode() {
         document.getElementById('btn-draw-walls-mode').classList.add('active');
         document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(168, 85, 247, 0.2)'; // purple
         
-        // Start sketching automatically at the center of the canvas if empty
+        // The first corner is placed by the user. This avoids anchoring an odd
+        // room to the viewport center and works the same with a mouse or touch.
         const canvasCenterX = toWorldX(canvas.width / 2);
         const canvasCenterY = toWorldY(canvas.height / 2);
-        state.sketchVertices = [{ x: snap(canvasCenterX), y: snap(canvasCenterY) }];
         state.lastMouseWorldX = snap(canvasCenterX);
         state.lastMouseWorldY = snap(canvasCenterY);
+        showCanvasPlacementHint('Tap or click the blueprint to place the first corner');
     }
     updateHistoryButtons();
     draw();
@@ -5340,6 +5592,7 @@ function finishCustomRoomDrawing() {
     document.getElementById('custom-wall-drawer-panel').classList.add('hidden');
     document.getElementById('btn-draw-walls-mode').classList.remove('active');
     document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
+    showCanvasPlacementHint('');
 
     updateHistoryButtons();
     draw();
@@ -5405,10 +5658,8 @@ window.changeCustomWallLength = function(roomId, wallIndex, newValueRaw) {
 
 function addSketchWallSegment() {
     if (state.sketchVertices.length === 0) {
-        const canvasCenterX = toWorldX(canvas.width / 2);
-        const canvasCenterY = toWorldY(canvas.height / 2);
-        state.sketchVertices.push({ x: snap(canvasCenterX), y: snap(canvasCenterY) });
-        draw();
+        showCanvasPlacementHint('Tap or click the blueprint to place the first corner');
+        alert('Tap or click the blueprint where the first corner should begin, then add measured wall segments.');
         return;
     }
 
@@ -5430,6 +5681,7 @@ function addSketchWallSegment() {
     const snapY = snap(nextY);
 
     state.sketchVertices.push({ x: snapX, y: snapY });
+    showCanvasPlacementHint('');
     state.sketchRedoVertices = [];
     const btnRedoWall = document.getElementById('btn-draw-redo-wall');
     if (btnRedoWall) btnRedoWall.disabled = true;
@@ -5487,6 +5739,7 @@ document.getElementById('btn-draw-cancel').addEventListener('click', () => {
     document.getElementById('custom-wall-drawer-panel').classList.add('hidden');
     document.getElementById('btn-draw-walls-mode').classList.remove('active');
     document.getElementById('btn-draw-walls-mode').style.backgroundColor = 'rgba(59, 130, 246, 0.12)';
+    showCanvasPlacementHint('');
     draw();
 });
 

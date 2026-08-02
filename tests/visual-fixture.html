@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RoomFlow visual fixture</title>
+    <style>html,body,iframe{width:100%;height:100%;margin:0;border:0;overflow:hidden;background:#0b0f19}</style>
+</head>
+<body>
+    <iframe id="fixture" src="../index.html?visual-fixture=1" title="RoomFlow visual fixture"></iframe>
+    <script>
+        const requestedView = new URLSearchParams(location.search).get('view') || 'documents';
+        const fixtureFrame = document.getElementById('fixture');
+        if (new URLSearchParams(location.search).get('mobile') === '1') fixtureFrame.style.width = '390px';
+        fixtureFrame.addEventListener('load', event => {
+                event.currentTarget.contentWindow.eval(`(() => {
+                    const fixtureStyle = document.createElement('style');
+                    fixtureStyle.textContent = '#auth-overlay{display:none!important}';
+                    document.head.appendChild(fixtureStyle);
+                    const auth = document.getElementById('auth-overlay');
+                    if (auth) auth.classList.add('hidden');
+                    state.currentJobName = 'Smith Residence · Foundation Repair';
+                    state.currentLevelId = 'basement';
+                    state.rooms = [{
+                        id:'family',name:'Family Room',type:'custom',levelId:'basement',x:-13,y:-7,w:15,l:13,h:8,color:'#3b82f6',
+                        vertices:[{x:0,y:0},{x:15,y:0},{x:15,y:8},{x:10,y:13},{x:0,y:13}],openings:[],drywallHeight:'2ft',drywallWalls:['0','1','2'],
+                        nb1Height:'4ft',foamBoard:true,foamBondPockets:false,carbonStraps:4,floorPerimeterStrap:true,customCarbonStraps:[]
+                    }];
+                    state.sumpPumps=[];state.dehumidifiers=[];state.dischargeLines=[];state.interiorPipes=[];state.floorHatches=[];state.stanchions=[];state.mainBeams=[];
+                    initDefaultCosting(state);
+                    Object.assign(state.costing,{customerName:'Jordan Smith',customerAddress:'1842 Evergreen Lane, Grand Rapids, MI',customerPhone:'(616) 555-0142',customerEmail:'jordan@example.com',estimator:'Alex Rivera',inspectionDate:'2026-08-02'});
+                    state.costing.customItems=[
+                        {id:'permit',name:'Municipal permit',category:'permit',qty:1,unit:'ea',unitCost:185,waste:0,laborHours:0,laborRate:0,taxable:false,includeInOverhead:true,includeInMarkup:true,notes:'Permit filing and inspection coordination'},
+                        {id:'haul',name:'Debris haul-away',category:'disposal',qty:1,unit:'load',unitCost:425,waste:0,laborHours:0,laborRate:0,taxable:false,includeInOverhead:true,includeInMarkup:true,notes:'Remove drywall and construction debris'}
+                    ];
+                    if ('${requestedView}' === 'cad') {
+                        setInterfaceMode('advanced');
+                        switchView('2d');
+                        selectItem('room','family');
+                        resizeCanvas();
+                        fitLayoutToCanvas();
+                        draw();
+                    } else if ('${requestedView}' === 'dashboard') {
+                        setInterfaceMode('guided');
+                        switchTab('jobs');
+                    } else if ('${requestedView}' === 'checklist') {
+                        setInterfaceMode('advanced');
+                        switchView('checklist');
+                        renderChecklistUI();
+                    } else {
+                        setInterfaceMode('guided');
+                        state.currentStep=8;
+                        switchView('guided');
+                        renderGuidedStep();
+                    }
+                    if (window.lucide) window.lucide.createIcons();
+                })()`);
+        });
+    </script>
+</body>
+</html>

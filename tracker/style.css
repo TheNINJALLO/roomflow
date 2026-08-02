@@ -19,6 +19,8 @@
 .job-card-foot{display:flex;align-items:center;justify-content:space-between;gap:6px;border-top:1px solid var(--line);padding-top:6px}
 .estimate-badge{padding:.2rem .38rem;border-radius:999px;background:rgba(59,130,246,.14);color:#93c5fd;font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.025em;white-space:nowrap}
 .job-card .card-edit{padding:.3rem .5rem;font-size:.66rem}
+.job-card-actions{display:flex;align-items:center;gap:5px}.job-card .card-delete{padding:.3rem .5rem;font-size:.66rem}.form-action-spacer{flex:1}.delete-warning{padding:12px;border:1px solid rgba(239,68,68,.28);border-radius:10px;background:rgba(127,29,29,.18)}.delete-warning strong{color:#fecaca;font-size:1rem}.delete-warning p{margin:.45rem 0 0;color:#cbd5e1;font-size:.78rem;line-height:1.45}.form-actions button:disabled{opacity:.55;cursor:wait}
+.lead-sync-health{display:flex;align-items:center;gap:10px;margin:10px 0 12px;padding:10px 12px}.lead-sync-health>div{display:grid;gap:2px}.lead-sync-health strong{font-size:.76rem;color:#e2e8f0}.lead-sync-health span:not(.sync-dot){font-size:.7rem;color:var(--muted)}.sync-dot{width:9px;height:9px;border-radius:999px;flex:none;background:#64748b;box-shadow:0 0 0 4px rgba(100,116,139,.13)}.sync-dot.ok{background:#10b981;box-shadow:0 0 0 4px rgba(16,185,129,.13)}.sync-dot.warning{background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.13)}.sync-dot.error{background:#ef4444;box-shadow:0 0 0 4px rgba(239,68,68,.13)}
 .empty-board{grid-column:1/-1;min-height:220px;display:grid;place-items:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px}
 .board-carousel{margin-top:8px;padding:6px 8px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:42px}
 .board-carousel>button{padding:.38rem .65rem;font-size:.7rem}
@@ -29,3 +31,4 @@
 .board-carousel.single-page{visibility:hidden}
 @media(min-width:1800px){.job-card{min-height:156px}.job-board{gap:7px}}
 @media(max-width:850px){.metric-grid{grid-template-columns:repeat(3,1fr)}.job-board{grid-template-columns:1fr!important}.board-carousel{position:sticky;bottom:4px}.job-card{min-height:170px}}
+.guide-link{min-height:39px;display:inline-flex;align-items:center;justify-content:center;padding:.55rem .8rem;border:1px solid rgba(56,189,248,.35);border-radius:9px;background:rgba(56,189,248,.1);color:#7dd3fc;text-decoration:none;font-size:.8rem;font-weight:800;white-space:nowrap}.guide-link:hover{background:rgba(56,189,248,.2);border-color:#38bdf8}@media(max-width:850px){.top-actions{flex-wrap:wrap}.guide-link{flex:1 1 110px}.top-actions select{flex:1 1 100%}}

@@ -5,9 +5,10 @@
     'use strict';
 
     const Integration = {
-        version: '1.1.0',
+        version: '1.2.0',
         client: null,
         leadChannel: null,
+        leadChannelOrgId: null,
         jobIdMapKey: 'roomflow_cloud_job_ids_v1',
         estimateDraftKey: 'roomflow_estimate_drafts_v1',
         catalogCache: [],
@@ -98,12 +99,13 @@
             if (this.initialized) return;
             this.initialized = true;
             this.patchCompanyCreation();
+            this.patchOrganizationSwitching();
             this.patchJobPersistence();
             this.patchRenderers();
             this.injectSettingsCards();
             this.injectLeadPanel();
             await this.waitForSession();
-            await Promise.allSettled([this.refreshInboundLeads(), this.loadCatalog()]);
+            await Promise.allSettled([this.refreshInboundLeads(), this.refreshIntegrationDiagnostics(), this.loadCatalog()]);
             this.subscribeRealtime();
         },
 
@@ -149,6 +151,28 @@
                     return newOrgId;
                 };
                 window.RoomFlowAuth.__phase1CompanyPatch = true;
+                return true;
+            };
+            if (!install()) setTimeout(install, 500);
+        },
+
+        patchOrganizationSwitching() {
+            const install = () => {
+                if (!window.RoomFlowAuth || window.RoomFlowAuth.__phase1OrganizationPatch) return false;
+                const original = window.RoomFlowAuth.setActiveOrganization?.bind(window.RoomFlowAuth);
+                if (!original) return false;
+                window.RoomFlowAuth.setActiveOrganization = async orgId => {
+                    const result = await original(orgId);
+                    Integration.resetRealtimeSubscription();
+                    await Promise.allSettled([
+                        Integration.refreshInboundLeads(),
+                        Integration.refreshIntegrationDiagnostics(),
+                        Integration.loadCatalog(true)
+                    ]);
+                    Integration.subscribeRealtime();
+                    return result;
+                };
+                window.RoomFlowAuth.__phase1OrganizationPatch = true;
                 return true;
             };
             if (!install()) setTimeout(install, 500);
@@ -333,11 +357,13 @@
                 card.style.padding = '1.25rem';
                 card.innerHTML = `
                     <h3 style="color:#fff;margin:0 0 .35rem;">Email Intake / Zapier</h3>
-                    <p style="color:#94a3b8;font-size:.8rem;">Create a secure endpoint for Zapier. The secret is displayed once and only its SHA-256 hash is stored.</p>
-                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input id="roomflow-endpoint-name" value="Caller Email Intake" style="flex:1;min-width:220px;background:#1f2937;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;color:#fff;"><button id="roomflow-create-endpoint" class="btn-primary">Create Endpoint</button></div>
-                    <pre id="roomflow-endpoint-output" style="display:none;white-space:pre-wrap;margin-top:.8rem;padding:.8rem;border-radius:8px;background:#020617;color:#cbd5e1;font-size:.72rem;overflow:auto;"></pre>`;
+                    <p style="color:#94a3b8;font-size:.8rem;">Create a secure endpoint for Zapier. It accepts mapped caller fields, nested Zapier data, or a raw Gmail/Email Parser body. The secret is displayed once and only its SHA-256 hash is stored.</p>
+                    <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input id="roomflow-endpoint-name" value="Caller Email Intake" style="flex:1;min-width:220px;background:#1f2937;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;color:#fff;"><button id="roomflow-create-endpoint" class="btn-primary">Create Endpoint</button><button id="roomflow-refresh-endpoints" class="btn-secondary">Refresh Activity</button></div>
+                    <pre id="roomflow-endpoint-output" style="display:none;white-space:pre-wrap;margin-top:.8rem;padding:.8rem;border-radius:8px;background:#020617;color:#cbd5e1;font-size:.72rem;overflow:auto;"></pre>
+                    <div id="roomflow-endpoint-diagnostics" style="display:grid;gap:.65rem;margin-top:.8rem;"><div style="color:#64748b;font-size:.78rem;">Sign in and select a company to view webhook activity.</div></div>`;
                 host.appendChild(card);
                 card.querySelector('#roomflow-create-endpoint')?.addEventListener('click', () => this.createIntegrationEndpoint());
+                card.querySelector('#roomflow-refresh-endpoints')?.addEventListener('click', () => this.refreshIntegrationDiagnostics());
             }
             if (!document.getElementById('roomflow-catalog-import-card')) {
                 const card = document.createElement('section');
@@ -377,9 +403,43 @@
             const output = document.getElementById('roomflow-endpoint-output');
             if (output) {
                 output.style.display = 'block';
-                output.textContent = `POST URL\n${base}/functions/v1/intake-lead?endpoint=${endpointKey}\n\nHEADER\nx-roomflow-webhook-secret: ${secret}\nContent-Type: application/json\n\nZapier JSON fields\ncustomer_name, email, phone, address, city, state, postal_code, issue_description, appointment_start, source_message_id, source_sender, source_subject\n\nSave this secret now. RoomFlow cannot display it again.`;
+                output.textContent = `POST URL\n${base}/functions/v1/intake-lead?endpoint=${endpointKey}\n\nHEADERS\nx-roomflow-webhook-secret: ${secret}\nContent-Type: application/json\n\nRECOMMENDED ZAPIER JSON\n{\n  "source_message_id": "{{Gmail Message ID}}",\n  "source_sender": "{{From Email}}",\n  "source_subject": "{{Subject}}",\n  "body_plain": "{{Body Plain}}"\n}\n\nOPTIONAL PRE-MAPPED CALLER FIELDS\ncustomer_name, email, phone, address, city, state, postal_code, issue_description, appointment_start\n\nRoomFlow extracts labeled caller information from plain-text or HTML email bodies. Always map Gmail's stable Message ID so Zapier retries update the same job. A successful test returns ok: true, job_id, normalized fields, and any warnings. Save this secret now; RoomFlow cannot display it again.`;
             }
             this.toast('Secure Zapier endpoint created.', 'success');
+            await this.refreshIntegrationDiagnostics();
+        },
+
+        async refreshIntegrationDiagnostics() {
+            const host = document.getElementById('roomflow-endpoint-diagnostics');
+            const client = this.getClient();
+            const orgId = this.currentOrgId();
+            if (!host || !client || !orgId) return;
+            host.innerHTML = '<div style="color:#94a3b8;font-size:.78rem;">Loading endpoint activity…</div>';
+            const [endpointResult, importResult] = await Promise.all([
+                client.from('integration_endpoints').select('id,name,endpoint_key,source_type,enabled,created_at,updated_at').eq('organization_id', orgId).order('created_at', { ascending: false }),
+                client.from('lead_imports').select('id,endpoint_id,job_id,source,source_message_id,source_sender,source_subject,normalized_payload,import_status,import_error,received_at').eq('organization_id', orgId).order('received_at', { ascending: false }).limit(8)
+            ]);
+            if (endpointResult.error) {
+                host.innerHTML = `<div style="color:#fca5a5;font-size:.78rem;">${this.escape(endpointResult.error.message)}</div>`;
+                return;
+            }
+            if (importResult.error) {
+                host.innerHTML = `<div style="color:#fca5a5;font-size:.78rem;">Endpoints loaded, but delivery history could not be read: ${this.escape(importResult.error.message)}</div>`;
+                return;
+            }
+            const endpoints = endpointResult.data || [];
+            const imports = importResult.data || [];
+            const endpointRows = endpoints.length ? endpoints.map(endpoint => {
+                const latest = imports.find(item => item.endpoint_id === endpoint.id);
+                return `<div style="display:grid;grid-template-columns:minmax(150px,1fr) auto;gap:.7rem;padding:.7rem;border:1px solid rgba(255,255,255,.08);border-radius:9px;background:rgba(2,6,23,.3);"><div><strong style="color:#fff;">${this.escape(endpoint.name)}</strong><div style="font-size:.7rem;color:#64748b;word-break:break-all;">${this.escape(endpoint.endpoint_key)}</div></div><div style="text-align:right;font-size:.72rem;color:${endpoint.enabled ? '#86efac' : '#fca5a5'};">${endpoint.enabled ? 'Enabled' : 'Disabled'}<div style="color:#94a3b8;">${latest ? `Last delivery ${this.escape(new Date(latest.received_at).toLocaleString())}` : 'No deliveries recorded'}</div></div></div>`;
+            }).join('') : '<div style="color:#64748b;font-size:.78rem;">No webhook endpoints have been created for this company.</div>';
+            const importRows = imports.length ? imports.map(item => {
+                const normalized = item.normalized_payload || {};
+                const identity = normalized.fullName || normalized.name || item.source_subject || 'Unidentified caller';
+                const details = [normalized.phone, normalized.email, normalized.address].filter(Boolean).join(' · ');
+                return `<div style="padding:.65rem;border-left:3px solid ${item.import_error ? '#ef4444' : '#10b981'};background:rgba(15,23,42,.35);border-radius:0 8px 8px 0;"><div style="display:flex;justify-content:space-between;gap:.7rem;"><strong style="color:#e2e8f0;font-size:.78rem;">${this.escape(identity)}</strong><span style="color:#94a3b8;font-size:.68rem;">${this.escape(item.import_status)} · ${this.escape(new Date(item.received_at).toLocaleString())}</span></div><div style="color:#64748b;font-size:.7rem;margin-top:.2rem;">${this.escape(details || item.source_sender || 'No contact fields parsed')}</div>${item.import_error ? `<div style="color:#fca5a5;font-size:.7rem;">${this.escape(item.import_error)}</div>` : ''}</div>`;
+            }).join('') : '<div style="color:#64748b;font-size:.76rem;">No Zapier deliveries have reached RoomFlow yet.</div>';
+            host.innerHTML = `<div><div style="color:#94a3b8;font-size:.7rem;font-weight:800;text-transform:uppercase;margin-bottom:.4rem;">Endpoints</div>${endpointRows}</div><div><div style="color:#94a3b8;font-size:.7rem;font-weight:800;text-transform:uppercase;margin-bottom:.4rem;">Recent deliveries</div><div style="display:grid;gap:.4rem;">${importRows}</div></div>`;
         },
 
         async importSeedCatalog() {
@@ -763,15 +823,50 @@
             this.refreshInboundLeads();
         },
 
+        resetRealtimeSubscription() {
+            const client = this.getClient();
+            if (client && this.leadChannel) client.removeChannel(this.leadChannel);
+            this.leadChannel = null;
+            this.leadChannelOrgId = null;
+        },
+
+        removeDeletedCloudJobMapping(jobId) {
+            if (!jobId) return;
+            const map = JSON.parse(localStorage.getItem(this.jobIdMapKey) || '{}');
+            const linkedNames = [];
+            let changed = false;
+            Object.keys(map).forEach(name => {
+                if (map[name] === jobId) { linkedNames.push(name); delete map[name]; changed = true; }
+            });
+            if (changed) localStorage.setItem(this.jobIdMapKey, JSON.stringify(map));
+            const jobs = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}');
+            let jobsChanged = false;
+            Object.keys(jobs).forEach(name => {
+                if (jobs[name]?.jobId === jobId || linkedNames.includes(name)) {
+                    delete jobs[name];
+                    jobsChanged = true;
+                }
+            });
+            if (jobsChanged) localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+            if (state.jobId === jobId) state.jobId = null;
+        },
+
         subscribeRealtime() {
             const client = this.getClient();
             const orgId = this.currentOrgId();
-            if (!client || !orgId || this.leadChannel) return;
+            if (!client || !orgId) return;
+            if (this.leadChannel && this.leadChannelOrgId === orgId) return;
+            this.resetRealtimeSubscription();
+            this.leadChannelOrgId = orgId;
             this.leadChannel = client.channel(`roomflow-tracker-${orgId}`)
-                .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `organization_id=eq.${orgId}` }, () => this.refreshInboundLeads())
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'lead_imports', filter: `organization_id=eq.${orgId}` }, payload => {
-                    this.toast(`New email lead imported${payload.new?.source_subject ? `: ${payload.new.source_subject}` : ''}.`, 'success');
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `organization_id=eq.${orgId}` }, payload => {
+                    if (payload.eventType === 'DELETE') this.removeDeletedCloudJobMapping(payload.old?.id);
                     this.refreshInboundLeads();
+                })
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_imports', filter: `organization_id=eq.${orgId}` }, payload => {
+                    if (payload.eventType === 'INSERT') this.toast(`New email lead imported${payload.new?.source_subject ? `: ${payload.new.source_subject}` : ''}.`, 'success');
+                    this.refreshInboundLeads();
+                    this.refreshIntegrationDiagnostics();
                 })
                 .subscribe();
         }

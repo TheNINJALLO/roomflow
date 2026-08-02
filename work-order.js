@@ -108,10 +108,12 @@ window.RoomFlowWorkOrder = {
 
         let html = '';
         state.rooms.forEach(r => {
+            const width = Number(r.w) || 0;
+            const length = Number(r.l) || 0;
             html += `
                 <label style="display:flex; align-items:center; gap:0.5rem; color:white; font-size:0.85rem; cursor:pointer;">
                     <input type="checkbox" name="wo-rooms" value="${r.id}" checked style="width:16px; height:16px;">
-                    <span>${r.name} (${r.levelId}) - ${r.width.toFixed(1)} x ${r.length.toFixed(1)} ft</span>
+                    <span>${r.name} (${r.levelId}) - ${width.toFixed(1)} x ${length.toFixed(1)} ft</span>
                 </label>
             `;
         });
@@ -144,7 +146,7 @@ window.RoomFlowWorkOrder = {
 
         // Grab layout 2D screenshot
         let blueprint2D = '';
-        const rawCanvas = document.getElementById('canvas');
+        const rawCanvas = document.getElementById('sketch-canvas');
         if (rawCanvas) {
             try {
                 blueprint2D = rawCanvas.toDataURL('image/png');
@@ -164,8 +166,11 @@ window.RoomFlowWorkOrder = {
         const companyAddr = state.currentOrganization?.address || '100 Main St, Grand Rapids, MI';
         const companyPhone = state.currentOrganization?.phone || '(616) 555-0199';
         
-        // Calculate project materials summary quantities (excluding prices)
-        const q = calculateProjectQuantities(state);
+        const documentModel = window.RoomFlowDocuments ? window.RoomFlowDocuments.buildModel() : null;
+        const customer = documentModel ? documentModel.customer : {
+            name: state.costing?.customerName || state.currentJobName,
+            address: state.costing?.customerAddress || 'No address specified'
+        };
         
         let roomHTML = '';
         state.rooms.forEach(r => {
@@ -173,6 +178,15 @@ window.RoomFlowWorkOrder = {
             
             // Build plain language tasks for this specific room
             const instructions = generateRoomWorkInstructions(r);
+            const roomWidth = Number(r.w) || 0;
+            const roomLength = Number(r.l) || 0;
+            const roomHeight = Number(r.h) || 8;
+            const floorArea = r.type === 'custom' && r.vertices && r.vertices.length >= 3
+                ? getPolygonArea(r.vertices)
+                : roomWidth * roomLength;
+            const perimeter = r.type === 'custom' && r.vertices && r.vertices.length >= 3
+                ? getPolygonPerimeter(r.vertices)
+                : (roomWidth + roomLength) * 2;
 
             roomHTML += `
                 <div class="page-break-before room-section" style="padding-top: 1rem;">
@@ -183,9 +197,9 @@ window.RoomFlowWorkOrder = {
                     
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; margin-bottom:1rem; font-size:0.9rem;">
                         <div>
-                            <strong>Physical Dimensions:</strong> ${r.width.toFixed(1)} x ${r.length.toFixed(1)} ft (Height ${r.height || 8} ft)<br>
-                            <strong>Floor Area:</strong> ${Math.round(r.width * r.length)} sq ft<br>
-                            <strong>Wall Perimeter:</strong> ${Math.round((r.width + r.length) * 2)} ft<br>
+                            <strong>Physical Dimensions:</strong> ${roomWidth.toFixed(1)} x ${roomLength.toFixed(1)} ft bounding area (Height ${roomHeight} ft)<br>
+                            <strong>Floor Area:</strong> ${Math.round(floorArea)} sq ft<br>
+                            <strong>Wall Perimeter:</strong> ${Math.round(perimeter)} ft<br>
                             <strong>Wall Layout:</strong> ${getRoomWallStatus(r)}
                         </div>
                         <div>
@@ -289,8 +303,8 @@ window.RoomFlowWorkOrder = {
                     <div style="border:1px solid #ddd; padding:1.25rem; border-radius:8px;">
                         <h3 style="border-bottom:1px solid #ccc; padding-bottom:0.25rem; font-size:1rem; text-transform:uppercase;">Project Details</h3>
                         <p style="font-size:0.9rem; line-height:1.6; margin:0;">
-                            <strong>Customer Name:</strong> ${state.costing?.customerName || state.currentJobName}<br>
-                            <strong>Job-Site Address:</strong> ${state.costing?.customerAddress || 'No Address Specified'}<br>
+                            <strong>Customer Name:</strong> ${customer.name}<br>
+                            <strong>Job-Site Address:</strong> ${customer.address}<br>
                             <strong>PM:</strong> ${pm}<br>
                             <strong>Assigned Crew:</strong> ${crew}
                         </p>
@@ -337,15 +351,13 @@ window.RoomFlowWorkOrder = {
                             </tr>
                         </thead>
                         <tbody>
-                            ${Object.keys(q).map(k => {
-                                const qty = q[k];
-                                if (qty <= 0) return '';
-                                const label = k.replace(/_/g, ' ').toUpperCase();
+                            ${(documentModel ? documentModel.workOrderItems : []).map(item => {
+                                if (!(item.qty > 0)) return '';
                                 return `
                                     <tr>
-                                        <td><strong>${label}</strong></td>
-                                        <td>${Math.ceil(qty)} units</td>
-                                        <td>Field Estimating Requirements</td>
+                                        <td><strong>${item.name}</strong>${item.notes ? `<br><small>${item.notes}</small>` : ''}</td>
+                                        <td>${Number(item.qty).toFixed(2).replace(/\.00$/, '')} ${item.unit || 'ea'}</td>
+                                        <td>${item.roomId ? ((state.rooms.find(room => room.id === item.roomId) || {}).name || 'Assigned room') : 'Whole project'}</td>
                                     </tr>
                                 `;
                             }).join('')}
@@ -401,50 +413,22 @@ function getRoomWallStatus(room) {
 
 // Plain text instructions builder matching costing items
 function generateRoomWorkInstructions(r) {
-    const list = [];
-    
-    // Drywall selections
-    if (r.drywallHeight && r.drywallHeight !== 'none') {
-        list.push(`Cut and remove drywall ${r.drywallHeight} high around full room perimeter.`);
-    } else if (r.drywallRemovalHeight && r.drywallRemovalHeight !== 'none') {
-        list.push(`Cut and remove drywall ${r.drywallRemovalHeight} high around full room perimeter.`);
-    }
-
-    // Vapor barrier floor installation
-    if (r.foamBoard) {
-        list.push(`Install foam board wall insulation panel shields.`);
-    }
-    
-    // Carbon straps counts
-    if (r.carbonStraps && r.carbonStraps > 0) {
-        list.push(`Install ${r.carbonStraps} carbon-fiber wall reinforcement reinforcement straps at marked locations.`);
-    }
-    
-    // Floor perimeter strap
-    if (r.floorPerimeterStrap) {
-        list.push(`Install base floor-perimeter wall reinforcement strap.`);
-    }
-
-    // Sump basin configs
-    if (state.sumpPumps && state.sumpPumps.length > 0) {
-        state.sumpPumps.forEach((p, idx) => {
-            list.push(`Install sump pump system #${idx + 1} with ${p.dischargeType || '1.5" PVC'} check-valve lines.`);
-        });
-    }
-
-    // Dehumidifiers
-    if (state.dehumidifiers && state.dehumidifiers.length > 0) {
-        list.push(`Install heavy-duty dehumidifiers and level mounting stands at designated placements.`);
-    }
-
-    // Treatments
-    if (r.moldTreatment) {
-        list.push(`Apply Benefect mold sanitization and RMR treatments to room surfaces.`);
+    const list = window.RoomFlowDocuments
+        ? window.RoomFlowDocuments.roomScope(r)
+        : [];
+    const documentModel = window.RoomFlowDocuments ? window.RoomFlowDocuments.buildModel() : null;
+    if (documentModel) {
+        documentModel.workOrderItems
+            .filter(item => item.roomId === r.id)
+            .forEach(item => {
+                const quantity = Number(item.qty).toFixed(2).replace(/\.00$/, '');
+                list.push(`Complete ${item.name}: ${quantity} ${item.unit || 'ea'}${item.notes ? ` — ${item.notes}` : ''}.`);
+            });
     }
 
     // Default room instruction if no scope matches
     if (list.length === 0) {
-        list.push("Perform standard spatial measurements validation and check general site safety conditions.");
+        list.push("Validate field measurements and confirm the room is ready for the approved project scope.");
     }
 
     return list;
