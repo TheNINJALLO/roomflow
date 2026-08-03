@@ -61,6 +61,8 @@ test('browser workflow opens Quick Actions before the combined estimate property
   assert.match(adapter, /property: \{ id, action: 'matched'/);
   assert.match(adapter, /openOrCreateDraft\(payload\.estimate, externalMappings, progress, true\)/);
   assert.match(adapter, /await this\.activateAndFill\(search, query\)/);
+  assert.ok(adapter.indexOf("'customerFirstName', 'customerLastName'") > adapter.indexOf("'propertyContactName'"));
+  assert.match(adapter, /this\.locator\.queryMapped\('propertyContactName'\)/);
   assert.match(adapter, /await this\.fillEstimateHeader\(estimate\)/);
   assert.match(adapter, /await this\.openLineItemPicker\(line\)/);
   assert.match(adapter, /LINE_ITEM_CREATE_CONTROL_REQUIRED/);
