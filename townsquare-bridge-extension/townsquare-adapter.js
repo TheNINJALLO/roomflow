@@ -664,24 +664,23 @@
       this.capture = null;
     }
 
-    suppressFollowupClick(target) {
+    suppressFollowupActivation(target) {
       const documentRef = target?.ownerDocument || this.document;
       let timeoutId;
       const cleanup = () => {
-        documentRef.removeEventListener('click', blocker, true);
+        for (const type of ['pointerup', 'mouseup', 'click']) documentRef.removeEventListener(type, blocker, true);
         if (timeoutId) clearTimeout(timeoutId);
       };
       const blocker = event => {
-        if (!event.isTrusted) return;
         const path = event.composedPath?.() || [];
         if (path.includes(target) || target === event.target || target?.contains?.(event.target)) {
           event.preventDefault();
           event.stopImmediatePropagation();
         }
-        cleanup();
+        if (event.type === 'click') cleanup();
       };
-      documentRef.addEventListener('click', blocker, true);
-      timeoutId = setTimeout(cleanup, 350);
+      for (const type of ['pointerup', 'mouseup', 'click']) documentRef.addEventListener(type, blocker, true);
+      timeoutId = setTimeout(cleanup, 500);
     }
 
     persistProgress() {
@@ -741,25 +740,20 @@
             return;
           }
         }
-        // Townsquare controls may activate on pointerdown and never expose a normal
-        // bubbling click. Capture the earliest event, then suppress its follow-up
-        // trusted click so mapping never performs the action twice.
-        if (event.type === 'pointerdown') this.suppressFollowupClick(target);
-        event.preventDefault();
-        event.stopImmediatePropagation();
+        // Map + use records at the earliest event and lets that one original
+        // pointer/click sequence continue. Normal mapping blocks pointerup and
+        // click too, because some Townsquare controls activate before click.
+        if (!allowActivation) {
+          if (event.type === 'pointerdown') this.suppressFollowupActivation(target);
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
         const selector = buildStableSelector(target, key);
         if (selector) this.mappings[key] = selector;
         this.index += 1;
         this.allowNextActivation = false;
         this.removeCapture();
         this.overlay?.remove();
-        if (allowActivation) {
-          setTimeout(() => {
-            if (!target.isConnected) return;
-            try { target.focus?.({ preventScroll: true }); } catch (_) { target.focus?.(); }
-            target.click();
-          }, 0);
-        }
         this.persistProgress().catch(() => {});
         setTimeout(() => this.render(), allowActivation ? 500 : 0);
       };
