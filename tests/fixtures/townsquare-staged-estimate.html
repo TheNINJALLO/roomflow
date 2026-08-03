@@ -1,0 +1,138 @@
+<!doctype html><html><body>
+  <button data-testid="quick-actions">Quick Actions</button>
+  <button data-testid="create-estimate">New estimate</button>
+
+  <section id="property-chooser">
+    <label>Search by name, email or tag <input data-testid="property-search"></label>
+    <div id="property-results"></div>
+    <button data-testid="create-property">New Property</button>
+  </section>
+
+  <section id="property-form" hidden>
+    <label>Name <input data-testid="property-contact-name"></label>
+    <label>Address <input data-testid="property-address"></label>
+    <label>Email <input data-testid="property-email"></label>
+    <label>Phone number <input data-testid="property-phone"></label>
+    <button data-testid="save-property" data-id="property-staged-321">Save Property</button>
+  </section>
+
+  <section id="estimate-editor" hidden>
+    <button data-testid="add-header">Add Header</button>
+    <div id="header-form" hidden>
+      <label>Header text <input data-testid="header-text"></label>
+      <button data-testid="save-header">Save Header</button>
+    </div>
+    <strong data-testid="saved-header"></strong>
+    <label>Estimate number <input data-testid="estimate-number"></label>
+    <label>Description <textarea data-testid="estimate-description"></textarea></label>
+
+    <button data-testid="add-line">Add Item</button>
+    <div id="item-picker" hidden>
+      <label>Search items <input data-testid="line-search"></label>
+      <div id="item-options"></div>
+    </div>
+    <div id="new-item-form" hidden>
+      <label>Item name <input data-testid="line-name"></label>
+      <label>Description <input data-testid="line-description"></label>
+      <label>Quantity <input data-testid="line-quantity"></label>
+      <label>Unit <input data-testid="line-unit"></label>
+      <label>Unit price <input data-testid="line-price"></label>
+      <label>Taxable <input type="checkbox" data-testid="line-taxable"></label>
+      <button data-testid="line-save">Save Item</button>
+    </div>
+    <div id="line-items"></div>
+
+    <label>Tax rate <input data-testid="tax-rate"></label><label>Discount <input data-testid="discount"></label>
+    <textarea data-testid="customer-notes"></textarea><textarea data-testid="internal-notes"></textarea>
+    <textarea data-testid="terms"></textarea><input data-testid="deposit"><input data-testid="due-date">
+    <strong data-testid="grand-total">$262.00</strong>
+    <button data-testid="save-draft" data-id="estimate-staged-654">Save Draft</button>
+    <div id="draft-confirmation" hidden><span data-testid="estimate-status">DRAFT</span><a data-testid="estimate-detail" data-id="estimate-staged-654">Estimate detail</a></div>
+    <div data-testid="validation-error" hidden></div><button data-testid="send-estimate">Send Estimate</button>
+  </section>
+
+  <script>
+    const chooser = document.getElementById('property-chooser');
+    const propertyForm = document.getElementById('property-form');
+    const editor = document.getElementById('estimate-editor');
+    const picker = document.getElementById('item-picker');
+    const options = document.getElementById('item-options');
+    const newItemForm = document.getElementById('new-item-form');
+    const rows = document.getElementById('line-items');
+    const catalog = new Set(['wall system']);
+
+    document.querySelector('[data-testid="property-search"]').addEventListener('input', event => {
+      document.body.dataset.propertyQuery = event.target.value;
+    });
+    document.querySelector('[data-testid="create-property"]').addEventListener('click', () => {
+      chooser.hidden = true;
+      propertyForm.hidden = false;
+    });
+    document.querySelector('[data-testid="save-property"]').addEventListener('click', () => {
+      propertyForm.hidden = true;
+      editor.hidden = false;
+    });
+    document.querySelector('[data-testid="add-header"]').addEventListener('click', () => {
+      document.getElementById('header-form').hidden = false;
+    });
+    document.querySelector('[data-testid="save-header"]').addEventListener('click', () => {
+      document.querySelector('[data-testid="saved-header"]').textContent = document.querySelector('[data-testid="header-text"]').value;
+      document.getElementById('header-form').hidden = true;
+    });
+
+    function appendRow(values = {}) {
+      const row = document.createElement('div');
+      row.dataset.testid = 'line-row';
+      row.innerHTML = `<input data-testid="line-name"><input data-testid="line-description"><input data-testid="line-quantity"><input data-testid="line-unit"><input data-testid="line-price"><input type="checkbox" data-testid="line-taxable"><button data-testid="remove-line">Remove Item</button>`;
+      for (const [key, value] of Object.entries(values)) {
+        const control = row.querySelector(`[data-testid="${key}"]`);
+        if (control) control.value = value;
+      }
+      row.querySelector('[data-testid="remove-line"]').addEventListener('click', () => row.remove());
+      rows.appendChild(row);
+    }
+
+    document.querySelector('[data-testid="add-line"]').addEventListener('click', () => {
+      picker.hidden = false;
+      options.replaceChildren();
+      const search = document.querySelector('[data-testid="line-search"]');
+      search.value = '';
+    });
+    document.querySelector('[data-testid="line-search"]').addEventListener('input', event => {
+      const value = event.target.value.trim();
+      options.replaceChildren();
+      if (!value) return;
+      const option = document.createElement('button');
+      option.setAttribute('role', 'option');
+      option.className = 'item-option';
+      if (catalog.has(value.toLowerCase())) {
+        option.textContent = value;
+        option.addEventListener('click', () => {
+          appendRow({ 'line-name': value });
+          picker.hidden = true;
+          document.body.dataset.selectedItems = String(Number(document.body.dataset.selectedItems || 0) + 1);
+        });
+      } else {
+        option.textContent = `Add "${value}" as a new item`;
+        option.dataset.createItem = 'true';
+        option.addEventListener('click', () => {
+          picker.hidden = true;
+          newItemForm.hidden = false;
+          newItemForm.querySelector('[data-testid="line-name"]').value = value;
+        });
+      }
+      options.appendChild(option);
+    });
+    document.querySelector('[data-testid="line-save"]').addEventListener('click', () => {
+      const values = {};
+      for (const key of ['line-name', 'line-description', 'line-quantity', 'line-unit', 'line-price']) values[key] = newItemForm.querySelector(`[data-testid="${key}"]`).value;
+      appendRow(values);
+      catalog.add(values['line-name'].toLowerCase());
+      newItemForm.hidden = true;
+      document.body.dataset.createdItems = String(Number(document.body.dataset.createdItems || 0) + 1);
+    });
+    document.querySelector('[data-testid="save-draft"]').addEventListener('click', () => {
+      document.getElementById('draft-confirmation').hidden = false;
+    });
+  </script>
+</body></html>

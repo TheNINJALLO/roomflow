@@ -14,6 +14,8 @@ The extension never reads passwords, exports cookies, automates login, or clicks
 6. Sign in to Townsquare normally.
 7. Start guided mapping from RoomFlow Settings or the popup.
 
+The mapper follows Townsquare's staged estimate workflow. Use **Map + use next control** for Quick Actions, New estimate, the property search field, New Property, Save Property, Add Header, Save Header, the item dropdown/search/choice, and any Add/Save Item control. Map only **Save Draft** at the end; sending and financial actions remain blocked.
+
 If Townsquare uses a branded host outside the optional host patterns in `manifest.json`, add that exact host pattern and reload the extension. Avoid all-site permissions.
 
 ## Files
