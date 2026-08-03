@@ -43,6 +43,18 @@ test('RoomFlow frontend never persists or displays the API token', async () => {
   assert.ok(frontend.indexOf("invoke('sync_estimate'") < frontend.indexOf('if (this.isAndroid)'), 'Android must attempt the server-side adapter before falling back to a queued desktop bridge');
 });
 
+test('web and Android entrypoints load the integration layers in dependency order', async () => {
+  for (const path of ['index.html', 'app/src/main/assets/index.html']) {
+    const entrypoint = await read(path);
+    const supabaseIndex = entrypoint.indexOf('src="supabase-service.js?v=61"');
+    const integrationsIndex = entrypoint.indexOf('src="roomflow-integrations.js?v=6"');
+    const townsquareIndex = entrypoint.indexOf('src="townsquare-integration.js?v=2"');
+    assert.ok(supabaseIndex >= 0, `${path} must load the Supabase service`);
+    assert.ok(integrationsIndex > supabaseIndex, `${path} must load RoomFlow integrations after Supabase`);
+    assert.ok(townsquareIndex > integrationsIndex, `${path} must load Townsquare after RoomFlow integrations`);
+  }
+});
+
 test('Edge Function encrypts credentials and explicitly validates JWT authorization', async () => {
   const edge = await read('supabase/functions/townsquare-sync/index.ts');
   assert.match(edge, /AES-GCM/);
