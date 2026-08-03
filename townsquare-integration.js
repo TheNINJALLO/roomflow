@@ -4,7 +4,7 @@
   'use strict';
 
   const Townsquare = {
-    version: '1.0.0',
+    version: '1.0.1',
     configuration: null,
     extension: { installed: false, configured: false, destinationOrigin: '' },
     stationStatus: { configured: false, online: false, stations: [] },
@@ -444,6 +444,7 @@
       try {
         const estimate = await this.integration.saveDraftEstimate({ throwOnError: true });
         if (!estimate?.id) throw new Error('RoomFlow did not return a saved estimate ID. Save Draft and retry.');
+        await this.loadStationStatus().catch(() => {});
         const response = await this.invoke('sync_estimate', { estimate_id: estimate.id, prefer_station: true });
         const result = response.result;
         if (result.completed) {
@@ -451,7 +452,13 @@
           return;
         }
         if (result.queued) {
-          this.updateProgress('completed', this.stationStatus.online ? 'Queued for the online Sync Station' : 'Queued until the Sync Station comes online');
+          const stationQueued = result.queue_target === 'station';
+          if (stationQueued) {
+            this.stationStatus = { ...this.stationStatus, configured: true, online: Boolean(result.station_online) };
+          }
+          this.updateProgress('completed', stationQueued
+            ? (result.station_online ? 'Queued for the online Sync Station' : 'Queued until the Sync Station comes online')
+            : 'Queued for a desktop browser');
           this.showQueued(result);
           await this.loadEstimateSync(estimate.id);
           return;
@@ -503,9 +510,10 @@
 
     showQueued(result) {
       const output = document.getElementById('townsquare-progress-result');
-      const stationQueued = this.stationStatus.configured;
+      const stationQueued = result?.queue_target === 'station';
+      const stationOnline = stationQueued && Boolean(result?.station_online);
       if (output) output.innerHTML = stationQueued
-        ? `<div class="townsquare-result-card"><strong>Queued for Sync Station</strong><p>${this.stationStatus.online ? 'The station is online and will claim this draft automatically.' : 'The station is offline. The draft will remain queued and will be claimed after it reconnects.'} Nothing will be sent to the customer.</p></div>`
+        ? `<div class="townsquare-result-card"><strong>Queued for Sync Station</strong><p>${stationOnline ? 'The station is online and will claim this draft automatically.' : 'The station is currently unavailable. The draft will remain queued and will be claimed after it reconnects.'} Nothing will be sent to the customer.</p></div>`
         : `<div class="townsquare-result-card"><strong>Queued for desktop</strong><p>Open this estimate in the desktop RoomFlow site with Chrome or Edge, then press Create Townsquare Draft. Browser extensions cannot run inside the Android application.</p></div>`;
       const close = document.querySelector('.townsquare-dialog-close');
       if (close) close.disabled = false;

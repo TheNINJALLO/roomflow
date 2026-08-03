@@ -182,7 +182,7 @@ The official API adapter reports attachments as skipped because the verified Ope
 
 ## Android behavior
 
-Chrome/Edge desktop extensions cannot run inside Android apps or normal Android WebViews. RoomFlow detects Android and shows **Queue Townsquare Sync for Desktop**. Finish the estimate on Android, queue it, then open the same estimate in desktop RoomFlow and run the draft action there.
+Chrome/Edge desktop extensions cannot run inside Android apps or normal Android WebViews. If an always-on Sync Station is paired, Android sends the queued draft directly to that station for automatic claiming. Without a paired station, finish the estimate on Android, queue it, then open the same estimate in desktop RoomFlow and run the draft action there.
 
 When an always-on Sync Station is paired, Android and desktop users instead queue the draft directly to that station. No extension is required on their device. The station claims the job automatically and still saves only a Townsquare draft.
 
