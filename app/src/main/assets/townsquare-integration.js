@@ -4,12 +4,13 @@
   'use strict';
 
   const Townsquare = {
-    version: '1.0.1',
+    version: '1.0.2',
     configuration: null,
     extension: { installed: false, configured: false, destinationOrigin: '' },
     stationStatus: { configured: false, online: false, stations: [] },
     stations: [],
     stationTimer: null,
+    queuedMonitorToken: 0,
     currentSync: null,
     syncCache: new Map(),
     observer: null,
@@ -405,7 +406,7 @@
 
     progressStages() {
       return [
-        ['validating', 'Validate RoomFlow estimate'], ['opening_townsquare', 'Open Townsquare'],
+        ['validating', 'Validate RoomFlow estimate'], ['queued', 'Queue for Sync Station'], ['opening_townsquare', 'Open Townsquare'],
         ['finding_customer', 'Match or create customer'], ['finding_property', 'Match or create property'],
         ['creating_estimate', 'Create or update draft'], ['attaching_documents', 'Attach selected documents'],
         ['draft_created', 'Confirm Townsquare draft'], ['completed', 'Ready for manual review']
@@ -456,11 +457,15 @@
           if (stationQueued) {
             this.stationStatus = { ...this.stationStatus, configured: true, online: Boolean(result.station_online) };
           }
-          this.updateProgress('completed', stationQueued
+          this.updateProgress('queued', stationQueued
             ? (result.station_online ? 'Queued for the online Sync Station' : 'Queued until the Sync Station comes online')
             : 'Queued for a desktop browser');
           this.showQueued(result);
           await this.loadEstimateSync(estimate.id);
+          if (stationQueued && result.run?.id) {
+            this.currentSync = { runId: result.run.id, estimateId: estimate.id, queueTarget: 'station' };
+            this.monitorQueuedSync(estimate.id, result.run.id).catch(error => this.failSync(error));
+          }
           return;
         }
         if (!result.bridge_required) throw new Error('Townsquare did not return a supported synchronization route.');
@@ -508,6 +513,51 @@
       this.currentSync = null;
     },
 
+    async monitorQueuedSync(estimateId, runId) {
+      const token = ++this.queuedMonitorToken;
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 1000 : 3000));
+        if (token !== this.queuedMonitorToken || this.currentSync?.runId !== runId) return;
+        let data;
+        try {
+          data = await this.invoke('get_estimate_sync', { estimate_id: estimateId });
+        } catch {
+          if (attempt < 3) continue;
+          this.updateProgress('queued', 'Queued; waiting for the next server status update');
+          continue;
+        }
+        const sync = data.sync || { mapping: null, runs: [] };
+        this.syncCache.set(estimateId, sync);
+        const run = sync.runs?.find(item => item.id === runId);
+        if (!run) continue;
+        if (run.status === 'queued') {
+          if (attempt >= 5) {
+            await this.loadStationStatus().catch(() => {});
+            this.updateProgress('queued', this.stationStatus.online
+              ? 'Queued; the online Sync Station has not claimed this draft yet'
+              : 'Queued; waiting for the Sync Station to reconnect');
+          }
+          continue;
+        }
+        if (run.status === 'opening_townsquare') {
+          this.updateProgress('opening_townsquare', 'The Sync Station claimed this draft and is opening Townsquare');
+          continue;
+        }
+        if (run.status === 'completed') {
+          this.updateProgress('completed', 'The Sync Station confirmed the saved Townsquare draft');
+          this.showSuccess(run);
+          this.currentSync = null;
+          document.querySelector('.townsquare-estimate-action')?.remove();
+          this.renderEstimateAction();
+          return;
+        }
+        if (run.status === 'failed') throw Object.assign(new Error(run.error_message || 'The Sync Station failed to create the Townsquare draft.'), { code: run.error_code || 'STATION_SYNC_FAILED' });
+        if (run.status === 'review_required') throw Object.assign(new Error(run.review_reason || 'Review Townsquare before retrying this draft.'), { code: 'STATION_REVIEW_REQUIRED' });
+        if (run.status === 'cancelled') throw Object.assign(new Error('The Sync Station synchronization was cancelled.'), { code: 'STATION_SYNC_CANCELLED' });
+      }
+      this.updateProgress('queued', 'Still queued; check that the paired Sync Station remains online and ready');
+    },
+
     showQueued(result) {
       const output = document.getElementById('townsquare-progress-result');
       const stationQueued = result?.queue_target === 'station';
@@ -536,6 +586,7 @@
     },
 
     failSync(error) {
+      this.queuedMonitorToken += 1;
       const output = document.getElementById('townsquare-progress-result');
       if (output) output.innerHTML = `<div class="townsquare-error-banner"><strong>Sync Failed</strong><p>${this.escape(error.message || String(error))}</p><button class="btn-secondary townsquare-retry">Retry Sync</button></div>`;
       output?.querySelector('.townsquare-retry')?.addEventListener('click', () => this.syncEstimate());
