@@ -788,6 +788,21 @@
             localStorage.setItem(this.estimateDraftKey, JSON.stringify(all));
         },
 
+        restoreEstimateDraftState() {
+            if (!state?.currentJobName) return;
+            const saved = this.estimateStorage().current;
+            const storedLines = Array.isArray(saved.lines) ? saved.lines : [];
+            const jobChanged = this.currentEstimateJobName !== state.currentJobName;
+            if (jobChanged || (!this.currentLines.length && storedLines.length)) {
+                this.currentEstimateJobName = state.currentJobName;
+                this.currentLines = JSON.parse(JSON.stringify(storedLines));
+                this.currentEstimateId = saved.estimateId || null;
+            }
+            if (!String(this.currentEstimateHeader || '').trim()) {
+                this.currentEstimateHeader = String(saved.header || storedLines.find(line => line.section_name)?.section_name || '').slice(0, 240);
+            }
+        },
+
         renderEstimateBuilder(forceCost = false) {
             if (!state?.currentJobName) return;
             const target = forceCost
@@ -904,6 +919,7 @@
                 if (throwOnError) throw error;
                 return null;
             };
+            this.restoreEstimateDraftState();
             if (!this.currentLines.length) return fail('Add at least one item to the Inline Customer Estimate before saving or syncing.', 'warning');
             this.currentEstimateHeader = String(this.currentEstimateHeader || '').trim().slice(0, 240);
             if (!this.currentEstimateHeader) return fail('Enter an Estimate Header before saving or syncing.', 'warning');
