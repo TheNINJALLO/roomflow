@@ -38,7 +38,7 @@
 
   const REQUIRED_MAPPING_KEYS = Object.freeze([
     'quickActionsButton', 'createEstimateButton', 'propertySearch', 'propertyResult', 'createPropertyButton',
-    'propertyContactName', 'propertyAddress', 'propertyEmail', 'propertyPhone', 'propertySaveButton',
+    'propertyContactName', 'customerFirstName', 'customerLastName', 'propertyAddress', 'propertyEmail', 'propertyPhone', 'propertySaveButton',
     'addEstimateHeaderButton', 'estimateHeaderText', 'estimateHeaderSaveButton',
     'addLineItemButton', 'lineItemSearch', 'lineItemOption', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnitPrice', 'lineItemSaveButton',
     'lineItemRows', 'deleteLineItemButton', 'estimateNumber', 'estimateDescription',
@@ -49,6 +49,12 @@
     propertySearch: 'Choose Map + use, click the search box, then type a sample customer name so the results appear.',
     propertyResult: 'Click one complete result row normally to map it without selecting it; then continue to New Property.',
     createPropertyButton: 'If no matching property exists, choose Map + use and click Create/New Property.',
+    propertyContactName: 'If Townsquare has separate First name and Last name fields, choose Skip. Otherwise choose Map + use and enter a full sample name.',
+    customerFirstName: 'For separate name fields, choose Map + use, click First name, and enter sample text. Skip if you mapped one combined Name field.',
+    customerLastName: 'For separate name fields, choose Map + use, click Last name, and enter sample text. Skip if you mapped one combined Name field.',
+    propertyAddress: 'Choose Map + use, click Address, and enter a valid sample address required by Townsquare.',
+    propertyEmail: 'Choose Map + use, click Email, and enter a valid sample email required by Townsquare.',
+    propertyPhone: 'Choose Map + use, click Phone number, and enter a valid sample number required by Townsquare.',
     propertySaveButton: 'Choose Map + use before clicking Save so the estimate editor opens.',
     addEstimateHeaderButton: 'Choose Map + use and click the Add Header button.',
     estimateHeaderSaveButton: 'Choose Map + use before saving the header so the item editor remains visible.',
@@ -61,7 +67,8 @@
   const MAPPING_LABELS = Object.freeze({
     quickActionsButton: 'Quick Actions', createEstimateButton: 'New estimate',
     propertySearch: 'Search by name, email or tag box', propertyResult: 'complete customer/property result row', createPropertyButton: 'New Property',
-    propertyContactName: 'New Property name', propertyAddress: 'New Property address', propertyEmail: 'New Property email', propertyPhone: 'New Property phone number', propertySaveButton: 'Save Property',
+    propertyContactName: 'single New Property Name field (skip when First/Last are separate)', customerFirstName: 'New Property First name', customerLastName: 'New Property Last name',
+    propertyAddress: 'New Property address', propertyEmail: 'New Property email', propertyPhone: 'New Property phone number', propertySaveButton: 'Save Property',
     addEstimateHeaderButton: 'Add Header', estimateHeaderText: 'header text box', estimateHeaderSaveButton: 'Save Header',
     addLineItemButton: 'Add Item or item dropdown', lineItemSearch: 'item search box', lineItemOption: 'item dropdown Add/Create choice',
     lineItemName: 'item name', lineItemDescription: 'item description', lineItemQuantity: 'item quantity', lineItemUnitPrice: 'item price', lineItemSaveButton: 'Save/Add Item',
@@ -493,7 +500,8 @@
       }
 
       await this.safeClick('createPropertyButton');
-      const combinedName = this.fill('propertyContactName', customerName, false);
+      const combinedName = this.locator.queryMapped('propertyContactName');
+      if (combinedName) dispatchValue(combinedName, customerName);
       const combinedAddress = this.fill('propertyAddress', property.fullAddress || property.streetAddress, false);
       const combinedEmail = this.fill('propertyEmail', customer.email, false);
       const combinedPhone = this.fill('propertyPhone', customer.phone, false);
@@ -501,7 +509,7 @@
       // the same form into first/last name and street/city/state/postal controls.
       if (!combinedName) {
         this.fill('customerFirstName', customer.firstName);
-        this.fill('customerLastName', customer.lastName, false);
+        this.fill('customerLastName', customer.lastName, Boolean(customer.lastName));
       }
       if (!combinedEmail) this.fill('customerEmail', customer.email);
       if (!combinedPhone) this.fill('customerPhone', customer.phone);
