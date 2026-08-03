@@ -584,7 +584,7 @@
           this.allowNextActivation = true;
           event.target.disabled = true;
           event.target.textContent = 'Next control will be used';
-          overlay.querySelector('[data-mapping-help]').textContent = 'Now click the Townsquare control. RoomFlow will map it and allow its normal action.';
+          overlay.querySelector('[data-mapping-help]').textContent = 'Now click the Townsquare control. RoomFlow will map it, remove the mapper interception, and use the control.';
         }
         if (action === 'skip') {
           this.index += 1;
@@ -598,6 +598,7 @@
       this.capture = event => {
         if (overlay.contains(event.target)) return;
         const target = event.target?.closest?.('button,a,input,textarea,select,[role="button"],[role="row"],[role="option"],[data-testid],[data-test]') || event.target;
+        const allowActivation = this.allowNextActivation;
         if (this.allowNextActivation) {
           try {
             const actionable = target?.matches?.('button,a,[role="button"],input[type="button"],input[type="submit"]');
@@ -612,17 +613,25 @@
             activate.textContent = 'Map + use next control';
             return;
           }
-        } else {
-          event.preventDefault();
-          event.stopImmediatePropagation();
         }
+        // Always consume the intercepted click. For Map + use, replay it only after
+        // removing this capture listener and completing the original event dispatch.
+        // Browsers suppress a recursive .click() while that same click is in flight.
+        event.preventDefault();
+        event.stopImmediatePropagation();
         const selector = buildStableSelector(target, key);
         if (selector) this.mappings[key] = selector;
         this.index += 1;
-        const allowActivation = this.allowNextActivation;
         this.allowNextActivation = false;
         this.removeCapture();
         this.overlay?.remove();
+        if (allowActivation) {
+          setTimeout(() => {
+            if (!target.isConnected) return;
+            try { target.focus?.({ preventScroll: true }); } catch (_) { target.focus?.(); }
+            target.click();
+          }, 0);
+        }
         this.persistProgress().catch(() => {});
         setTimeout(() => this.render(), allowActivation ? 500 : 0);
       };
