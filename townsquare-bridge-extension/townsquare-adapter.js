@@ -26,7 +26,7 @@
     estimateDescription: ['scope of work', 'estimate description', 'description'], lineItemRows: ['line items', 'estimate items'],
     addLineItemButton: ['add line item', 'add item', 'new item'], deleteLineItemButton: ['delete line item', 'remove item'],
     lineItemSearch: ['search items', 'search item', 'select item', 'item search'], lineItemOption: ['item option', 'service item', 'product item'],
-    createLineItemButton: ['create item', 'add new item', 'new item'], lineItemSaveButton: ['save item', 'add item to estimate'],
+    createLineItemButton: ['create item', 'add item', 'add new item', 'new item'], lineItemSaveButton: ['save item', 'add item to estimate'],
     lineItemDescription: ['line item description', 'item description'], lineItemName: ['line item name', 'item name'],
     lineItemQuantity: ['quantity', 'qty'], lineItemUnit: ['unit'], lineItemUnitPrice: ['unit price', 'price', 'rate'], lineItemTaxable: ['taxable'],
     taxSetting: ['tax', 'tax rate'], discount: ['discount'], customerNotes: ['customer notes', 'note'], internalNotes: ['internal notes'],
@@ -40,7 +40,7 @@
     'quickActionsButton', 'createEstimateButton', 'propertySearch', 'propertyResult', 'createPropertyButton',
     'propertyContactName', 'customerFirstName', 'customerLastName', 'propertyAddress', 'propertyEmail', 'propertyPhone', 'propertySaveButton',
     'addEstimateHeaderButton', 'estimateHeaderText', 'estimateHeaderSaveButton',
-    'addLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemUnitPrice', 'lineItemQuantity', 'lineItemSaveButton',
+    'addLineItemButton', 'lineItemSearch', 'createLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemUnitPrice', 'lineItemQuantity', 'lineItemSaveButton',
     'lineItemRows', 'deleteLineItemButton', 'estimateNumber', 'estimateDescription',
     'taxSetting', 'discount', 'customerNotes', 'internalNotes', 'terms', 'deposit', 'expirationDate', 'grandTotal', 'estimateStatus', 'saveDraftButton', 'estimateDetail'
   ]);
@@ -58,7 +58,9 @@
     propertySaveButton: 'Choose Map + use before clicking Save so the estimate editor opens.',
     addEstimateHeaderButton: 'Choose Map + use and click the Add Header button.',
     estimateHeaderSaveButton: 'Choose Map + use before saving the header so the item editor remains visible.',
-    addLineItemButton: 'Choose Map + use and click Add Item so the four item text boxes open.',
+    addLineItemButton: 'After saving the header, choose Map + use and click the item dropdown so its search box opens.',
+    lineItemSearch: 'Choose Map + use, click the dropdown search box, and enter a made-up item name that does not exist so Add Item appears.',
+    createLineItemButton: 'Choose Map + use and click Add Item in the dropdown so the four new-item text boxes open.',
     lineItemName: 'Choose Map + use, click the Name text box, and enter a sample item name.',
     lineItemDescription: 'Choose Map + use, click the Description text box, and enter a sample description.',
     lineItemUnitPrice: 'Choose Map + use, click the Price text box, and enter a valid sample price such as 10.00.',
@@ -74,7 +76,7 @@
     propertyContactName: 'single New Property Name field (skip when First/Last are separate)', customerFirstName: 'New Property First name', customerLastName: 'New Property Last name',
     propertyAddress: 'New Property address', propertyEmail: 'New Property email', propertyPhone: 'New Property phone number', propertySaveButton: 'Save Property',
     addEstimateHeaderButton: 'Add Header', estimateHeaderText: 'header text box', estimateHeaderSaveButton: 'Save Header',
-    addLineItemButton: 'Add Item', lineItemSearch: 'item search box', lineItemOption: 'item dropdown Add/Create choice',
+    addLineItemButton: 'item dropdown', lineItemSearch: 'item dropdown search box', lineItemOption: 'existing item dropdown result', createLineItemButton: 'dropdown Add Item choice',
     lineItemName: 'item Name text box', lineItemDescription: 'item Description text box', lineItemUnitPrice: 'item Price text box', lineItemQuantity: 'item Quantity text box', lineItemSaveButton: 'item Save button',
     lineItemRows: 'complete estimate item row', deleteLineItemButton: 'Remove Item', estimateNumber: 'estimate number', estimateDescription: 'estimate description',
     taxSetting: 'tax setting', discount: 'discount', customerNotes: 'customer notes', internalNotes: 'internal notes', terms: 'terms', deposit: 'deposit', expirationDate: 'expiration date',
@@ -137,6 +139,12 @@
     automaticCandidates(key) {
       const terms = FIELD_DEFINITIONS[key] || [key];
       const controls = accessibleDocuments(this.document).flatMap(current => [...current.querySelectorAll('input,textarea,select,button,a,[role="button"],[role="row"],[role="option"],[data-testid],[data-test]')]).filter(visible);
+      if (key === 'lineItemOption') {
+        const semanticOptions = accessibleDocuments(this.document)
+          .flatMap(current => [...current.querySelectorAll('[role="option"],[role="menuitem"]')])
+          .filter(visible);
+        if (semanticOptions.length) return semanticOptions;
+      }
       const results = [];
       for (const control of controls) {
         const text = normalized(candidateText(control));
@@ -327,7 +335,10 @@
 
       await this.activateAndFill(search, line.name);
       const itemName = normalized(line.name);
-      const options = this.locator.all('lineItemOption');
+      const options = [...new Set([
+        ...this.locator.all('lineItemOption'),
+        ...accessibleDocuments(this.document).flatMap(current => [...current.querySelectorAll('[role="option"],[role="menuitem"]')]).filter(visible)
+      ])];
       const isCreateAction = element => /\b(add|create|new)\b/.test(normalized(Core.elementActionText(element)));
       const matches = options.filter(element => !isCreateAction(element) && normalized(candidateText(element)).includes(itemName));
       if (matches.length > 1) {

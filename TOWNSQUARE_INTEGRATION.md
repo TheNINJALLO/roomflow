@@ -128,7 +128,7 @@ Codex cannot see a private authenticated Townsquare account, so the bridge first
 5. Finish the list. Only selectors are saved.
 6. Use **Test / Reset Mapping** after Townsquare changes its interface.
 
-Mappings follow the Townsquare screen order: Quick Actions, New estimate, name-based property search, the New Property first-name/last-name/address/email/phone form (with an optional combined-name fallback), the Add Header dialog, and the direct Add Item form. For each item, map and enter sample values in Name, Description, Price, and Quantity, then map and use Save. Repeated line items, totals, status, Save Draft, and estimate detail/review confirmation follow. Accounts that expose a searchable catalog remain supported through automatic detection or existing saved mappings.
+Mappings follow the Townsquare screen order: Quick Actions, New estimate, name-based property search, the New Property first-name/last-name/address/email/phone form (with an optional combined-name fallback), and the Add Header dialog. After Save Header, map and open the item dropdown, map its search box, and enter a made-up name so the dropdown's Add Item choice appears. Map and use Add Item to open the new-item form, then map and enter sample values in Name, Description, Price, and Quantity before mapping and using Save. During synchronization RoomFlow selects an exact existing dropdown item when one is found; otherwise it opens and completes Add Item. Repeated line items, totals, status, Save Draft, and estimate detail/review confirmation follow.
 
 Automatic control discovery prefers labels, `aria-label`, roles, `name`, placeholder, stable `data-*` attributes, and visible headings. It does not rely only on generated class names.
 
