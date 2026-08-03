@@ -13,3 +13,14 @@ window.RoomFlowConfig = {
     script.async = true;
     document.head.appendChild(script);
 })();
+
+// Townsquare draft integration. This module waits for the main RoomFlow
+// integration and authenticated company context before rendering controls.
+(function loadTownsquareIntegration() {
+    if (document.querySelector('script[data-roomflow-townsquare]')) return;
+    const script = document.createElement('script');
+    script.src = 'townsquare-integration.js?v=1';
+    script.dataset.roomflowTownsquare = 'true';
+    script.async = true;
+    document.head.appendChild(script);
+})();

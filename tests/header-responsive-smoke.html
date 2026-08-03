@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>RoomFlow responsive header smoke test</title>
+    <style>
+        body { margin: 0; padding: 20px; background: #07101d; color: #e2e8f0; font: 14px ui-monospace, monospace; }
+        pre { white-space: pre-wrap; }
+        iframe { position: absolute; left: -10000px; top: 0; height: 900px; border: 0; }
+    </style>
+</head>
+<body>
+    <h1>RoomFlow responsive header smoke test</h1>
+    <pre id="result">Running…</pre>
+    <script>
+    (async function () {
+        const checks = [];
+        const add = (name, passed, detail = '') => checks.push({ name, passed: Boolean(passed), detail: String(detail) });
+        const indexSource = await fetch('../index.html').then(response => response.text());
+        const sourceDocument = new DOMParser().parseFromString(indexSource, 'text/html');
+        const headerMarkup = sourceDocument.querySelector('.app-header').outerHTML;
+        const stylesheet = new URL('../styles.css?v=69', location.href).href;
+        const cases = [
+            { width: 320, mode: 'guided' }, { width: 320, mode: 'advanced' },
+            { width: 360, mode: 'advanced' }, { width: 390, mode: 'guided' },
+            { width: 430, mode: 'advanced' }, { width: 768, mode: 'advanced' },
+            { width: 901, mode: 'guided' }, { width: 1024, mode: 'advanced' },
+            { width: 1366, mode: 'guided' }, { width: 1600, mode: 'advanced' },
+            { width: 1920, mode: 'guided' }
+        ];
+
+        for (const testCase of cases) {
+            const frame = document.createElement('iframe');
+            frame.width = String(testCase.width);
+            frame.style.width = `${testCase.width}px`;
+            const loaded = new Promise((resolve, reject) => { frame.onload = resolve; frame.onerror = reject; });
+            document.body.appendChild(frame);
+            frame.srcdoc = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="${stylesheet}"></head><body><div id="app-container" class="interface-mode-${testCase.mode}">${headerMarkup}<main class="app-body"></main></div></body></html>`;
+            await loaded;
+            await new Promise(resolve => setTimeout(resolve, 75));
+
+            const win = frame.contentWindow;
+            const doc = frame.contentDocument;
+            const header = doc.querySelector('.app-header');
+            const headerRect = header.getBoundingClientRect();
+            const visibleButtons = [...header.querySelectorAll('button')].filter(button => {
+                const style = win.getComputedStyle(button);
+                const rect = button.getBoundingClientRect();
+                return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+            });
+            const outOfBounds = visibleButtons.filter(button => {
+                const rect = button.getBoundingClientRect();
+                return rect.left < -0.5 || rect.right > win.innerWidth + 0.5;
+            });
+            const label = `${testCase.width}px ${testCase.mode}`;
+            add(`${label}: document has no horizontal overflow`, doc.documentElement.scrollWidth <= win.innerWidth + 1, `${doc.documentElement.scrollWidth}/${win.innerWidth}`);
+            add(`${label}: header fits the viewport`, headerRect.left >= -0.5 && headerRect.right <= win.innerWidth + 0.5 && header.scrollWidth <= header.clientWidth + 1, `${header.scrollWidth}/${header.clientWidth}`);
+            add(`${label}: every visible header button stays onscreen`, outOfBounds.length === 0, outOfBounds.map(button => button.id || button.title).join(', '));
+            if (testCase.width >= 901) {
+                const actionButtons = [...header.querySelectorAll('.project-actions button')];
+                add(`${label}: all desktop action buttons remain available`, actionButtons.every(button => win.getComputedStyle(button).display !== 'none'), `${visibleButtons.length} visible buttons`);
+            }
+            frame.remove();
+        }
+
+        const report = { passed: checks.every(check => check.passed), checks };
+        document.getElementById('result').textContent = JSON.stringify(report, null, 2);
+        document.body.dataset.passed = String(report.passed);
+    })().catch(error => {
+        const report = { passed: false, checks: [{ name: 'Unexpected harness error', passed: false, detail: error.message }] };
+        document.getElementById('result').textContent = JSON.stringify(report, null, 2);
+        document.body.dataset.passed = 'false';
+    });
+    </script>
+</body>
+</html>
