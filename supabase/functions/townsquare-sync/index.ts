@@ -316,13 +316,6 @@ async function revokeSyncStation(organizationId: string, userId: string, station
   return publicStation(data);
 }
 
-async function hasEnabledSyncStation(integrationId: string) {
-  const { count, error } = await service.from('external_sync_stations').select('id', { count: 'exact', head: true })
-    .eq('integration_id', integrationId).eq('enabled', true).is('revoked_at', null);
-  if (error) throwHttp('Sync Station availability could not be checked.', 'STATION_STATUS_READ_FAILED', 500);
-  return Number(count || 0) > 0;
-}
-
 function safeHttpsUrl(value: unknown, kind: 'api' | 'browser') {
   const raw = cleanText(value, 2000);
   if (!raw) return '';
@@ -514,7 +507,14 @@ async function addExternalMappings(integration: Record<string, any>, bundle: Rec
   return payload;
 }
 
-async function prepareBridge(integration: Record<string, any>, bundle: Record<string, any>, userId: string, queuedOnly = false) {
+async function prepareBridge(
+  integration: Record<string, any>,
+  bundle: Record<string, any>,
+  userId: string,
+  queuedOnly = false,
+  queueTarget: 'station' | 'desktop' = 'desktop',
+  stationOnline = false
+) {
   if (!integration.enabled) throwHttp('Enable the Townsquare integration before syncing.', 'INTEGRATION_DISABLED', 409);
   if (!integration.browser_destination_url) throwHttp('Set the Townsquare browser destination URL in Settings.', 'BROWSER_DESTINATION_REQUIRED', 409);
   const created = await createOrReuseRun(integration, bundle, 'browser_bridge', userId);
@@ -534,9 +534,18 @@ async function prepareBridge(integration: Record<string, any>, bundle: Record<st
       review_reason: null,
       completed_at: null
     }).eq('id', created.run.id);
-    if (error) throwHttp('The desktop synchronization could not be queued.', 'SYNC_QUEUE_UPDATE_FAILED', 500);
-    await addEvent(created.run, 'queued', 'Synchronization queued for an authenticated desktop browser.');
-    return { queued: true, run: { ...created.run, status: 'queued' }, payload: null };
+    if (error) throwHttp('The Townsquare synchronization could not be queued.', 'SYNC_QUEUE_UPDATE_FAILED', 500);
+    const queueMessage = queueTarget === 'station'
+      ? 'Synchronization queued for the paired Sync Station.'
+      : 'Synchronization queued for an authenticated desktop browser.';
+    await addEvent(created.run, 'queued', queueMessage);
+    return {
+      queued: true,
+      queue_target: queueTarget,
+      station_online: queueTarget === 'station' && stationOnline,
+      run: { ...created.run, status: 'queued' },
+      payload: null
+    };
   }
   const bridgeToken = bytesToBase64(crypto.getRandomValues(new Uint8Array(32)));
   const bridgeTokenHash = await sha256(bridgeToken);
@@ -905,7 +914,9 @@ Deno.serve(async (req: Request) => {
       : 'none';
     const bundle = await loadEstimateBundle(organizationId, body.estimate_id, attachmentMode);
     if (action === 'queue_bridge_sync') {
-      return json(req, 200, { ok: true, result: await prepareBridge(integration, bundle, auth.userId, true) });
+      const stationStatus = await syncStationStatus(organizationId);
+      const queueTarget = stationStatus.configured ? 'station' : 'desktop';
+      return json(req, 200, { ok: true, result: await prepareBridge(integration, bundle, auth.userId, true, queueTarget, stationStatus.online) });
     }
     if (action === 'prepare_bridge_sync') {
       return json(req, 200, { ok: true, result: await prepareBridge(integration, bundle, auth.userId, false) });
@@ -917,8 +928,12 @@ Deno.serve(async (req: Request) => {
         bridgeAvailable: true
       });
       if (decision.adapter === 'browser_bridge') {
-        const sendToStation = Boolean(body.prefer_station) && await hasEnabledSyncStation(integration.id);
-        return json(req, 200, { ok: true, result: await prepareBridge(integration, bundle, auth.userId, sendToStation) });
+        const stationStatus = Boolean(body.prefer_station)
+          ? await syncStationStatus(organizationId)
+          : { configured: false, online: false };
+        const sendToStation = stationStatus.configured;
+        const queueTarget = sendToStation ? 'station' : 'desktop';
+        return json(req, 200, { ok: true, result: await prepareBridge(integration, bundle, auth.userId, sendToStation, queueTarget, stationStatus.online) });
       }
       if (decision.error === 'PROPERTY_API_UNAVAILABLE') {
         throwHttp('The verified official inTandem API does not publish a service-property endpoint. Select Auto or Browser Bridge mode.', 'PROPERTY_API_UNAVAILABLE', 422);

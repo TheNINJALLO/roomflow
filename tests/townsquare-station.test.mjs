@@ -117,9 +117,17 @@ test('Windows installer protects the token and schedules an interactive extensio
 
 test('RoomFlow dispatches to paired stations while preserving an explicit user action', async () => {
   const frontend = await read('townsquare-integration.js');
+  const edge = await read('supabase/functions/townsquare-sync/index.ts');
+  const queuedRenderer = frontend.slice(frontend.lastIndexOf('showQueued(result)'), frontend.lastIndexOf('showSuccess(result)'));
   assert.match(frontend, /prefer_station: true/);
+  assert.match(frontend, /result\.queue_target === 'station'/);
+  assert.match(frontend, /await this\.loadStationStatus\(\)/);
   assert.match(frontend, /Create Pairing Key/);
   assert.match(frontend, /station_token/);
   assert.match(frontend, /Create.*via Sync Station/);
   assert.doesNotMatch(frontend, /localStorage[^\n]+station_token/i);
+  assert.doesNotMatch(queuedRenderer, /stationStatus\.configured/);
+  assert.match(edge, /queue_target: queueTarget/);
+  assert.match(edge, /await syncStationStatus\(organizationId\)/);
+  assert.match(edge, /queueTarget === 'station'/);
 });
