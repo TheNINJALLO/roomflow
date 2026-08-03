@@ -58,10 +58,38 @@
     lineItemSaveButton: 'Map the Save/Add control inside the new-item form; skip it if selecting an item immediately adds the row.',
     saveDraftButton: 'Map only the control explicitly labeled Save Draft. Send, issue, email, approve, charge, and payment actions stay blocked.'
   });
+  const MAPPING_LABELS = Object.freeze({
+    quickActionsButton: 'Quick Actions', createEstimateButton: 'New estimate',
+    propertySearch: 'Search by name, email or tag box', propertyResult: 'complete customer/property result row', createPropertyButton: 'New Property',
+    propertyContactName: 'New Property name', propertyAddress: 'New Property address', propertyEmail: 'New Property email', propertyPhone: 'New Property phone number', propertySaveButton: 'Save Property',
+    addEstimateHeaderButton: 'Add Header', estimateHeaderText: 'header text box', estimateHeaderSaveButton: 'Save Header',
+    addLineItemButton: 'Add Item or item dropdown', lineItemSearch: 'item search box', lineItemOption: 'item dropdown Add/Create choice',
+    lineItemName: 'item name', lineItemDescription: 'item description', lineItemQuantity: 'item quantity', lineItemUnitPrice: 'item price', lineItemSaveButton: 'Save/Add Item',
+    lineItemRows: 'complete estimate item row', deleteLineItemButton: 'Remove Item', estimateNumber: 'estimate number', estimateDescription: 'estimate description',
+    taxSetting: 'tax setting', discount: 'discount', customerNotes: 'customer notes', internalNotes: 'internal notes', terms: 'terms', deposit: 'deposit', expirationDate: 'expiration date',
+    grandTotal: 'grand total', estimateStatus: 'Draft status', saveDraftButton: 'Save Draft', estimateDetail: 'saved estimate detail/review link'
+  });
   const MAPPING_SESSION_KEY = 'selectorMappingSession';
 
   function normalized(value) {
     return Core.cleanText(value, 1000).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  }
+
+  function accessibleDocuments(documentRef) {
+    const documents = [];
+    const seen = new Set();
+    const visit = current => {
+      if (!current || seen.has(current)) return;
+      seen.add(current);
+      documents.push(current);
+      for (const frame of current.querySelectorAll?.('iframe,frame') || []) {
+        try {
+          if (frame.contentDocument?.documentElement) visit(frame.contentDocument);
+        } catch { /* cross-origin frames require their own granted extension access */ }
+      }
+    };
+    visit(documentRef);
+    return documents;
   }
 
   function visible(element) {
@@ -90,18 +118,18 @@
       const selector = this.mappings[key];
       if (!selector) return all ? [] : null;
       try {
-        const matches = [...this.document.querySelectorAll(selector)].filter(visible);
+        const matches = accessibleDocuments(this.document).flatMap(current => [...current.querySelectorAll(selector)]).filter(visible);
         return all ? matches : matches[0] || null;
       } catch { return all ? [] : null; }
     }
 
     automaticCandidates(key) {
       const terms = FIELD_DEFINITIONS[key] || [key];
-      const controls = [...this.document.querySelectorAll('input,textarea,select,button,a,[role="button"],[role="row"],[role="option"],[data-testid],[data-test]')].filter(visible);
+      const controls = accessibleDocuments(this.document).flatMap(current => [...current.querySelectorAll('input,textarea,select,button,a,[role="button"],[role="row"],[role="option"],[data-testid],[data-test]')]).filter(visible);
       const results = [];
       for (const control of controls) {
         const text = normalized(candidateText(control));
-        const label = control.id ? this.document.querySelector(`label[for="${cssEscape(control.id)}"]`) : null;
+        const label = control.id ? control.ownerDocument.querySelector(`label[for="${cssEscape(control.id)}"]`) : null;
         const combined = `${normalized(label?.textContent)} ${text}`.trim();
         const score = terms.reduce((best, term) => {
           const expected = normalized(term);
@@ -640,6 +668,8 @@
       this.index = 0;
       this.mappings = {};
       this.capture = null;
+      this.captureDocuments = [];
+      this.captureRefreshId = null;
       this.allowNextActivation = false;
     }
 
@@ -657,10 +687,15 @@
     }
 
     removeCapture() {
+      if (this.captureRefreshId) clearInterval(this.captureRefreshId);
+      this.captureRefreshId = null;
       if (this.capture) {
-        this.document.removeEventListener('pointerdown', this.capture, true);
-        this.document.removeEventListener('click', this.capture, true);
+        for (const documentRef of this.captureDocuments) {
+          documentRef.removeEventListener('pointerdown', this.capture, true);
+          documentRef.removeEventListener('click', this.capture, true);
+        }
       }
+      this.captureDocuments = [];
       this.capture = null;
     }
 
@@ -697,11 +732,12 @@
       this.overlay?.remove();
       const key = REQUIRED_MAPPING_KEYS[this.index];
       if (!key) { this.finish(); return; }
+      const label = MAPPING_LABELS[key] || key;
       const hint = MAPPING_HINTS[key] || 'For a control that must open a panel or receive input, choose <strong>Map + use next control</strong> first.';
       const overlay = this.document.createElement('div');
       overlay.id = 'roomflow-townsquare-mapper';
       overlay.style.cssText = 'position:fixed;right:16px;top:16px;z-index:2147483647;width:min(420px,calc(100vw - 32px));background:#0f172a;color:#fff;border:2px solid #38bdf8;border-radius:14px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);font:14px system-ui;';
-      overlay.innerHTML = `<strong>RoomFlow guided mapping</strong><p style="margin:.5rem 0">${this.index + 1}/${REQUIRED_MAPPING_KEYS.length}: click the Townsquare control for <code>${key}</code>.</p><p data-mapping-help style="margin:.5rem 0;color:#bae6fd">${hint}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-action="activate">Map + use next control</button><button data-action="skip">Skip</button><button data-action="cancel">Cancel</button></div>`;
+      overlay.innerHTML = `<strong>RoomFlow guided mapping</strong><p style="margin:.5rem 0">${this.index + 1}/${REQUIRED_MAPPING_KEYS.length}: click <strong>${label}</strong>.<br><small style="color:#94a3b8">Mapping key: ${key}</small></p><p data-mapping-help style="margin:.5rem 0;color:#bae6fd">${hint}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-action="activate">Map + use next control</button><button data-action="skip">Skip</button><button data-action="cancel">Cancel</button></div>`;
       overlay.addEventListener('click', event => {
         event.stopPropagation();
         const action = event.target?.dataset?.action;
@@ -709,7 +745,7 @@
           this.allowNextActivation = true;
           event.target.disabled = true;
           event.target.textContent = 'Next control will be used';
-          overlay.querySelector('[data-mapping-help]').textContent = 'Now click the Townsquare control. RoomFlow will map it, remove the mapper interception, and use the control.';
+          overlay.querySelector('[data-mapping-help]').textContent = `Now click ${label}. RoomFlow will map it and let that one original interaction continue.`;
         }
         if (action === 'skip') {
           this.index += 1;
@@ -757,8 +793,16 @@
         this.persistProgress().catch(() => {});
         setTimeout(() => this.render(), allowActivation ? 500 : 0);
       };
-      this.document.addEventListener('pointerdown', this.capture, true);
-      this.document.addEventListener('click', this.capture, true);
+      const installCapture = () => {
+        for (const documentRef of accessibleDocuments(this.document)) {
+          if (this.captureDocuments.includes(documentRef)) continue;
+          documentRef.addEventListener('pointerdown', this.capture, true);
+          documentRef.addEventListener('click', this.capture, true);
+          this.captureDocuments.push(documentRef);
+        }
+      };
+      installCapture();
+      this.captureRefreshId = setInterval(installCapture, 200);
     }
 
     async finish() {
@@ -777,5 +821,5 @@
     }
   }
 
-  root.RoomFlowTownsquarePageAdapter = { FIELD_DEFINITIONS, REQUIRED_MAPPING_KEYS, MAPPING_HINTS, ControlLocator, TownsquarePageAdapter, GuidedMapper, buildStableSelector, parseMoney };
+  root.RoomFlowTownsquarePageAdapter = { FIELD_DEFINITIONS, REQUIRED_MAPPING_KEYS, MAPPING_HINTS, MAPPING_LABELS, ControlLocator, TownsquarePageAdapter, GuidedMapper, accessibleDocuments, buildStableSelector, parseMoney };
 })(globalThis);

@@ -44,6 +44,9 @@ test('guided mapping can use nested Townsquare controls and resume safely', asyn
   assert.match(adapter, /if \(!allowActivation\)/);
   assert.match(adapter, /suppressFollowupActivation\(target\)/);
   assert.match(adapter, /\['pointerup', 'mouseup', 'click'\]/);
+  assert.match(adapter, /accessibleDocuments\(this\.document\)/);
+  assert.match(adapter, /querySelectorAll\?\.\('iframe,frame'\)/);
+  assert.match(adapter, /setInterval\(installCapture, 200\)/);
   assert.match(adapter, /selectorMappingSession/);
   assert.match(adapter, /persistProgress\(\)/);
   assert.match(content, /resumeGuidedMapping/);
