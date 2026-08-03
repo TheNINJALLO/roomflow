@@ -54,6 +54,10 @@ test('browser workflow opens Quick Actions before the combined estimate property
   assert.match(adapter, /customer: \{ id, action: 'matched'/);
   assert.match(adapter, /property: \{ id, action: 'matched'/);
   assert.match(adapter, /openOrCreateDraft\(payload\.estimate, externalMappings, progress, true\)/);
+  assert.match(adapter, /await this\.activateAndFill\(search, query\)/);
+  assert.match(adapter, /await this\.fillEstimateHeader\(estimate\)/);
+  assert.match(adapter, /await this\.openLineItemPicker\(line\)/);
+  assert.match(adapter, /LINE_ITEM_CREATE_CONTROL_REQUIRED/);
 });
 
 test('RoomFlow frontend never persists or displays the API token', async () => {
@@ -105,7 +109,8 @@ test('all required Townsquare fixtures are present in the browser suite', async 
   for (const fixture of [
     'townsquare-customer-creation.html', 'townsquare-estimate-creation.html',
     'townsquare-missing-controls.html', 'townsquare-multiple-customers.html',
-    'townsquare-validation-error.html', 'townsquare-estimate-update.html'
+    'townsquare-validation-error.html', 'townsquare-estimate-update.html',
+    'townsquare-staged-estimate.html'
   ]) assert.match(harness, new RegExp(fixture.replace('.', '\\.')));
   assert.match(harness, /Send\/Issue\/Email\/Approve controls are never clicked/);
   assert.match(harness, /Repeated synchronization updates mapped draft/);

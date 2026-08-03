@@ -14,13 +14,19 @@
     customerBillingAddress: ['billing address', 'customer address', 'address'], customerSaveButton: ['save customer', 'save client', 'create customer', 'create client'],
     propertySearch: ['search by name email or tag', 'property search', 'search properties', 'service location search'], propertySearchSubmit: ['find property', 'search properties'],
     propertyResult: ['property result', 'service location result', 'recently active'], createPropertyButton: ['new property', 'create property', 'add property', 'new service location'],
+    propertyContactName: ['property contact name', 'customer name', 'client name', 'name'], propertyAddress: ['property address', 'service address', 'address'],
+    propertyEmail: ['property email', 'customer email', 'email address', 'email'], propertyPhone: ['property phone', 'customer phone', 'phone number', 'mobile number'],
     propertyName: ['property name', 'service location name'], propertyStreetAddress: ['service address', 'street address', 'property address'],
     propertyCity: ['city'], propertyState: ['state', 'province'], propertyPostalCode: ['postal code', 'zip code', 'zip'],
     propertyAccessNotes: ['access notes', 'property notes'], propertySaveButton: ['save property', 'create property', 'save service location'],
     estimateSearch: ['estimate search', 'search estimates'], estimateResult: ['estimate result'], createEstimateButton: ['create estimate', 'new estimate', 'add estimate'],
+    addEstimateHeaderButton: ['add header', 'new header'], estimateHeaderText: ['header text', 'estimate header', 'section header'],
+    estimateHeaderSaveButton: ['save header', 'add header'],
     estimateTitle: ['estimate title', 'title'], estimateNumber: ['estimate number', 'reference'], estimateJobNumber: ['job number', 'purchase order'],
     estimateDescription: ['scope of work', 'estimate description', 'description'], lineItemRows: ['line items', 'estimate items'],
     addLineItemButton: ['add line item', 'add item', 'new item'], deleteLineItemButton: ['delete line item', 'remove item'],
+    lineItemSearch: ['search items', 'search item', 'select item', 'item search'], lineItemOption: ['item option', 'service item', 'product item'],
+    createLineItemButton: ['create item', 'add new item', 'new item'], lineItemSaveButton: ['save item', 'add item to estimate'],
     lineItemDescription: ['line item description', 'item description'], lineItemName: ['line item name', 'item name'],
     lineItemQuantity: ['quantity', 'qty'], lineItemUnit: ['unit'], lineItemUnitPrice: ['unit price', 'price', 'rate'], lineItemTaxable: ['taxable'],
     taxSetting: ['tax', 'tax rate'], discount: ['discount'], customerNotes: ['customer notes', 'note'], internalNotes: ['internal notes'],
@@ -32,12 +38,26 @@
 
   const REQUIRED_MAPPING_KEYS = Object.freeze([
     'quickActionsButton', 'createEstimateButton', 'propertySearch', 'propertyResult', 'createPropertyButton',
-    'customerFirstName', 'customerLastName', 'customerEmail', 'customerPhone', 'customerBillingAddress',
-    'propertyName', 'propertyStreetAddress', 'propertyCity', 'propertyState', 'propertyPostalCode', 'propertySaveButton',
-    'estimateTitle', 'estimateNumber', 'estimateDescription', 'lineItemRows', 'deleteLineItemButton', 'addLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnitPrice',
+    'propertyContactName', 'propertyAddress', 'propertyEmail', 'propertyPhone', 'propertySaveButton',
+    'addEstimateHeaderButton', 'estimateHeaderText', 'estimateHeaderSaveButton',
+    'addLineItemButton', 'lineItemSearch', 'lineItemOption', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnitPrice', 'lineItemSaveButton',
+    'lineItemRows', 'deleteLineItemButton', 'estimateNumber', 'estimateDescription',
     'taxSetting', 'discount', 'customerNotes', 'internalNotes', 'terms', 'deposit', 'expirationDate', 'grandTotal', 'estimateStatus', 'saveDraftButton', 'estimateDetail'
   ]);
-  const REPEATED_LINE_KEYS = new Set(['lineItemRows', 'deleteLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnit', 'lineItemUnitPrice', 'lineItemTaxable']);
+  const REPEATED_LINE_KEYS = new Set(['propertyResult', 'estimateResult', 'lineItemOption', 'lineItemRows', 'deleteLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnit', 'lineItemUnitPrice', 'lineItemTaxable']);
+  const MAPPING_HINTS = Object.freeze({
+    propertySearch: 'Choose Map + use, click the search box, then type a sample customer name so the results appear.',
+    propertyResult: 'Click one complete result row normally to map it without selecting it; then continue to New Property.',
+    createPropertyButton: 'If no matching property exists, choose Map + use and click Create/New Property.',
+    propertySaveButton: 'Choose Map + use before clicking Save so the estimate editor opens.',
+    addEstimateHeaderButton: 'Choose Map + use and click the Add Header button.',
+    estimateHeaderSaveButton: 'Choose Map + use before saving the header so the item editor remains visible.',
+    addLineItemButton: 'Choose Map + use and click the estimate item dropdown or Add Item control.',
+    lineItemSearch: 'Choose Map + use, click the item search box, then type a made-up item name so the Add/Create choice appears.',
+    lineItemOption: 'Choose Map + use and click the Add/Create dropdown choice. Its shared role/class will also match existing catalog choices.',
+    lineItemSaveButton: 'Map the Save/Add control inside the new-item form; skip it if selecting an item immediately adds the row.',
+    saveDraftButton: 'Map only the control explicitly labeled Save Draft. Send, issue, email, approve, charge, and payment actions stay blocked.'
+  });
   const MAPPING_SESSION_KEY = 'selectorMappingSession';
 
   function normalized(value) {
@@ -45,7 +65,7 @@
   }
 
   function visible(element) {
-    if (!element || element.hidden || element.getAttribute('aria-hidden') === 'true') return false;
+    if (!element || element.hidden || element.getAttribute('aria-hidden') === 'true' || element.closest?.('[hidden],[aria-hidden="true"]')) return false;
     const style = element.ownerDocument?.defaultView?.getComputedStyle(element) || getComputedStyle(element);
     return style.display !== 'none' && style.visibility !== 'hidden';
   }
@@ -115,8 +135,16 @@
   function dispatchValue(element, value) {
     if (!element) return;
     const text = value === null || value === undefined ? '' : String(value);
-    if (element.type === 'checkbox') element.checked = Boolean(value);
-    else element.value = text;
+    const view = element.ownerDocument?.defaultView || root;
+    const property = element.type === 'checkbox' ? 'checked' : 'value';
+    const nextValue = property === 'checked' ? Boolean(value) : text;
+    const prototype = view.HTMLInputElement && element instanceof view.HTMLInputElement ? view.HTMLInputElement.prototype
+      : view.HTMLTextAreaElement && element instanceof view.HTMLTextAreaElement ? view.HTMLTextAreaElement.prototype
+        : view.HTMLSelectElement && element instanceof view.HTMLSelectElement ? view.HTMLSelectElement.prototype
+          : Object.getPrototypeOf(element);
+    const setter = Object.getOwnPropertyDescriptor(prototype, property)?.set;
+    if (setter) setter.call(element, nextValue);
+    else element[property] = nextValue;
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new Event('change', { bubbles: true }));
   }
@@ -150,7 +178,7 @@
   function buildStableSelector(element, key = '') {
     if (!element) return '';
     const attributes = REPEATED_LINE_KEYS.has(key)
-      ? ['data-testid', 'data-test', 'name', 'aria-label', 'placeholder']
+      ? ['role', 'data-testid', 'data-test', 'name', 'aria-label', 'placeholder']
       : ['id', 'data-testid', 'data-test', 'name', 'aria-label', 'placeholder'];
     for (const attribute of attributes) {
       if (attribute === 'id' && element.id) return `#${cssEscape(element.id)}`;
@@ -185,11 +213,26 @@
     async safeClick(key, required = true) {
       const element = this.locator.find(key, { required });
       if (!element) return null;
+      await this.clickElement(element);
+      return element;
+    }
+
+    async clickElement(element, delayMs = Number(this.settings.actionDelayMs || 450)) {
       Core.assertDraftSafeElement(element);
       element.click();
-      await this.wait(Number(this.settings.actionDelayMs || 450));
+      await this.wait(delayMs);
       const error = this.validationError();
       if (error) throw Object.assign(new Error(`Townsquare validation error: ${error}`), { code: 'TOWNSQUARE_VALIDATION_ERROR' });
+      return element;
+    }
+
+    async activateAndFill(element, value) {
+      Core.assertDraftSafeElement(element);
+      try { element.focus?.({ preventScroll: true }); } catch (_) { element.focus?.(); }
+      element.click();
+      await this.wait(Number(this.settings.inputActivationDelayMs || 100));
+      dispatchValue(element, value);
+      await this.wait(Number(this.settings.searchDelayMs || 500));
       return element;
     }
 
@@ -207,6 +250,48 @@
       }
       if (element) dispatchValue(element, value);
       return element;
+    }
+
+    lineControlCount() {
+      return Math.max(...['lineItemRows', 'lineItemName', 'lineItemQuantity', 'lineItemUnitPrice'].map(key => this.locator.all(key).length), 0);
+    }
+
+    async fillEstimateHeader(estimate) {
+      const addHeader = this.locator.find('addEstimateHeaderButton', { required: false });
+      if (!addHeader) {
+        this.fill('estimateTitle', estimate.title);
+        return;
+      }
+      await this.clickElement(addHeader);
+      this.fill('estimateHeaderText', estimate.title);
+      await this.safeClick('estimateHeaderSaveButton');
+    }
+
+    async openLineItemPicker(line) {
+      await this.safeClick('addLineItemButton');
+      const search = this.locator.find('lineItemSearch', { required: false });
+      if (!search) return { pickerUsed: false, created: false };
+
+      await this.activateAndFill(search, line.name);
+      const itemName = normalized(line.name);
+      const options = this.locator.all('lineItemOption');
+      const isCreateAction = element => /\b(add|create|new)\b/.test(normalized(Core.elementActionText(element)));
+      const matches = options.filter(element => !isCreateAction(element) && normalized(candidateText(element)).includes(itemName));
+      if (matches.length > 1) {
+        throw Object.assign(new Error(`More than one Townsquare catalog item matches "${line.name}". Sync stopped so the wrong item is not selected.`), { code: 'LINE_ITEM_MATCH_AMBIGUOUS' });
+      }
+      if (matches.length === 1) {
+        await this.clickElement(matches[0]);
+        return { pickerUsed: true, created: false };
+      }
+
+      const create = options.find(element => isCreateAction(element) && normalized(candidateText(element)).includes(itemName))
+        || this.locator.find('createLineItemButton', { required: false });
+      if (!create) {
+        throw Object.assign(new Error(`Townsquare has no catalog item named "${line.name}" and its Add/Create item choice is not mapped.`), { code: 'LINE_ITEM_CREATE_CONTROL_REQUIRED' });
+      }
+      await this.clickElement(create);
+      return { pickerUsed: true, created: true };
     }
 
     candidateMatches(element, values) {
@@ -278,7 +363,7 @@
     async findOrCreateCustomer(customer, externalMappings, progress) {
       progress('finding_customer', 'Matching the Townsquare customer');
       const search = this.locator.find('customerSearch');
-      dispatchValue(search, externalMappings?.customerId || customer.email || customer.phone || `${customer.firstName} ${customer.lastName}`);
+      await this.activateAndFill(search, externalMappings?.customerId || `${customer.firstName} ${customer.lastName}` || customer.email || customer.phone);
       await this.safeClick('customerSearchSubmit', false);
       await this.wait();
       const match = this.matchCustomerRows(this.locator.all('customerResult'), customer, externalMappings?.customerId);
@@ -311,7 +396,7 @@
     async findOrCreateProperty(property, externalMappings, progress) {
       progress('finding_property', 'Matching the Townsquare service property');
       const search = this.locator.find('propertySearch');
-      dispatchValue(search, externalMappings?.propertyId || property.fullAddress);
+      await this.activateAndFill(search, externalMappings?.propertyId || property.name || property.fullAddress);
       await this.safeClick('propertySearchSubmit', false);
       await this.wait();
       const match = this.matchPropertyRows(this.locator.all('propertyResult'), property, externalMappings?.propertyId);
@@ -350,8 +435,9 @@
     async selectOrCreateEstimateProperty(customer, property, externalMappings, progress) {
       progress('finding_property', 'Matching the Townsquare property/customer record');
       const search = this.locator.find('propertySearch');
-      const query = externalMappings?.propertyId || externalMappings?.customerId || customer.email || customer.phone || `${customer.firstName} ${customer.lastName}` || property.fullAddress;
-      dispatchValue(search, query);
+      const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
+      const query = customerName || customer.email || customer.phone || property.fullAddress || externalMappings?.propertyId || externalMappings?.customerId;
+      await this.activateAndFill(search, query);
       await this.safeClick('propertySearchSubmit', false);
       await this.wait();
 
@@ -368,8 +454,7 @@
 
       const selected = await this.chooseCandidate('property/customer', propertyMatch.matches);
       if (selected) {
-        selected.click();
-        await this.wait();
+        await this.clickElement(selected);
         const id = extractEntityId(selected) || extractEntityId();
         if (!id) throw Object.assign(new Error('The selected Townsquare property/customer ID could not be confirmed. Map the complete result row and retry.'), { code: 'PROPERTY_ID_NOT_CONFIRMED' });
         progress('property_matched', 'Existing Townsquare property/customer selected');
@@ -380,13 +465,20 @@
       }
 
       await this.safeClick('createPropertyButton');
-      this.fill('customerFirstName', customer.firstName);
-      this.fill('customerLastName', customer.lastName, false);
-      this.fill('customerEmail', customer.email, false);
-      this.fill('customerPhone', customer.phone, false);
-      this.fill('customerBillingAddress', customer.billingAddress, false);
+      const combinedName = this.fill('propertyContactName', customerName, false);
+      const combinedAddress = this.fill('propertyAddress', property.fullAddress || property.streetAddress, false);
+      const combinedEmail = this.fill('propertyEmail', customer.email, false);
+      const combinedPhone = this.fill('propertyPhone', customer.phone, false);
+      // Retain support for Townsquare accounts and earlier mappings that split
+      // the same form into first/last name and street/city/state/postal controls.
+      if (!combinedName) {
+        this.fill('customerFirstName', customer.firstName);
+        this.fill('customerLastName', customer.lastName, false);
+      }
+      if (!combinedEmail) this.fill('customerEmail', customer.email);
+      if (!combinedPhone) this.fill('customerPhone', customer.phone);
+      if (!combinedAddress) this.fill('propertyStreetAddress', property.fullAddress || property.streetAddress);
       this.fill('propertyName', property.name, false);
-      this.fill('propertyStreetAddress', property.streetAddress, false);
       this.fill('propertyCity', property.city, false);
       this.fill('propertyState', property.state, false);
       this.fill('propertyPostalCode', property.postalCode, false);
@@ -427,7 +519,7 @@
         progress('creating_estimate', 'Creating the Townsquare draft');
       }
 
-      this.fill('estimateTitle', estimate.title);
+      await this.fillEstimateHeader(estimate);
       this.fill('estimateNumber', estimate.estimateNumber, false);
       this.fill('estimateJobNumber', estimate.jobNumber, false);
       this.fill('estimateDescription', estimate.scopeOfWork, false);
@@ -439,15 +531,25 @@
       this.fill('deposit', moneyFromMinor(estimate.depositRequestMinor), false);
       this.fill('expirationDate', estimate.expirationDate, false);
 
-      let priorLineControlCount = this.locator.all('lineItemName').length;
-      for (const [lineIndex, line] of estimate.lines.entries()) {
-        await this.safeClick('addLineItemButton');
-        const currentLineControlCount = this.locator.all('lineItemName').length;
-        if (lineIndex > 0 && currentLineControlCount <= priorLineControlCount) {
+      let priorLineControlCount = this.lineControlCount();
+      for (const line of estimate.lines) {
+        const picker = await this.openLineItemPicker(line);
+        if (picker.created) {
+          const formIndex = Math.max(0, this.lineControlCount() - 1);
+          this.fillLineItem('lineItemName', line.name, formIndex);
+          this.fillLineItem('lineItemDescription', line.description, formIndex, false);
+          this.fillLineItem('lineItemQuantity', line.quantity, formIndex, false);
+          this.fillLineItem('lineItemUnit', line.unit, formIndex, false);
+          this.fillLineItem('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), formIndex, false);
+          this.fillLineItem('lineItemTaxable', line.taxable, formIndex, false);
+          await this.safeClick('lineItemSaveButton', false);
+        }
+        const currentLineControlCount = this.lineControlCount();
+        if (currentLineControlCount <= priorLineControlCount) {
           throw Object.assign(new Error('Townsquare did not create another line-item row. Sync stopped before saving an incomplete draft.'), { code: 'LINE_ITEM_ROW_NOT_CREATED' });
         }
         const rowIndex = Math.max(0, currentLineControlCount - 1);
-        this.fillLineItem('lineItemName', line.name, rowIndex);
+        this.fillLineItem('lineItemName', line.name, rowIndex, !picker.pickerUsed || picker.created);
         this.fillLineItem('lineItemDescription', line.description, rowIndex, false);
         this.fillLineItem('lineItemQuantity', line.quantity, rowIndex);
         this.fillLineItem('lineItemUnit', line.unit, rowIndex, false);
@@ -573,10 +675,11 @@
       this.overlay?.remove();
       const key = REQUIRED_MAPPING_KEYS[this.index];
       if (!key) { this.finish(); return; }
+      const hint = MAPPING_HINTS[key] || 'For a control that must open a panel or receive input, choose <strong>Map + use next control</strong> first.';
       const overlay = this.document.createElement('div');
       overlay.id = 'roomflow-townsquare-mapper';
       overlay.style.cssText = 'position:fixed;right:16px;top:16px;z-index:2147483647;width:min(420px,calc(100vw - 32px));background:#0f172a;color:#fff;border:2px solid #38bdf8;border-radius:14px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);font:14px system-ui;';
-      overlay.innerHTML = `<strong>RoomFlow guided mapping</strong><p style="margin:.5rem 0">${this.index + 1}/${REQUIRED_MAPPING_KEYS.length}: click the Townsquare control for <code>${key}</code>.</p><p data-mapping-help style="margin:.5rem 0;color:#bae6fd">For a control that must open a panel or receive input, choose <strong>Map + use next control</strong> first.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-action="activate">Map + use next control</button><button data-action="skip">Skip</button><button data-action="cancel">Cancel</button></div>`;
+      overlay.innerHTML = `<strong>RoomFlow guided mapping</strong><p style="margin:.5rem 0">${this.index + 1}/${REQUIRED_MAPPING_KEYS.length}: click the Townsquare control for <code>${key}</code>.</p><p data-mapping-help style="margin:.5rem 0;color:#bae6fd">${hint}</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-action="activate">Map + use next control</button><button data-action="skip">Skip</button><button data-action="cancel">Cancel</button></div>`;
       overlay.addEventListener('click', event => {
         event.stopPropagation();
         const action = event.target?.dataset?.action;
@@ -654,5 +757,5 @@
     }
   }
 
-  root.RoomFlowTownsquarePageAdapter = { FIELD_DEFINITIONS, REQUIRED_MAPPING_KEYS, ControlLocator, TownsquarePageAdapter, GuidedMapper, buildStableSelector, parseMoney };
+  root.RoomFlowTownsquarePageAdapter = { FIELD_DEFINITIONS, REQUIRED_MAPPING_KEYS, MAPPING_HINTS, ControlLocator, TownsquarePageAdapter, GuidedMapper, buildStableSelector, parseMoney };
 })(globalThis);

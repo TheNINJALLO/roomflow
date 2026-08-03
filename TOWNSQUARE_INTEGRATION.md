@@ -122,12 +122,12 @@ Codex cannot see a private authenticated Townsquare account, so the bridge first
 
 1. Sign in to Townsquare normally.
 2. In RoomFlow Settings, choose **Start Guided Mapping**, or use the extension popup.
-3. For each requested control, click the matching Townsquare control. The click is captured for mapping and does not submit the form.
+3. For controls that open the next panel or activate a search box, choose **Map + use next control**, then click the matching Townsquare control. RoomFlow records it and replays one clean click after removing the mapper interception.
 4. Skip controls that do not exist in the account. Required skipped controls will stop synchronization later with their exact mapping key.
 5. Finish the list. Only selectors are saved.
 6. Use **Test / Reset Mapping** after Townsquare changes its interface.
 
-Mappings include customer/property search and creation, estimate fields, repeated line items, tax, discount, notes, terms, deposit, expiration, attachment input, total, status, Save Draft, and estimate detail/review confirmation.
+Mappings follow the Townsquare screen order: Quick Actions, New estimate, name-based property search, the New Property name/address/email/phone form, the Add Header dialog, the searchable item dropdown (including its Add/Create choice), repeated line items, totals, status, Save Draft, and estimate detail/review confirmation.
 
 Automatic control discovery prefers labels, `aria-label`, roles, `name`, placeholder, stable `data-*` attributes, and visible headings. It does not rely only on generated class names.
 
