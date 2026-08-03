@@ -46,6 +46,15 @@ test('guided mapping can use nested Townsquare controls and resume safely', asyn
   assert.match(content, /mapper\.start\(false, true\)/);
 });
 
+test('browser workflow opens Quick Actions before the combined estimate property chooser', async () => {
+  const adapter = await read('townsquare-bridge-extension/townsquare-adapter.js');
+  assert.ok(adapter.indexOf("safeClick('quickActionsButton')") < adapter.indexOf("safeClick('createEstimateButton')"));
+  assert.match(adapter, /selectOrCreateEstimateProperty/);
+  assert.match(adapter, /customer: \{ id, action: 'matched'/);
+  assert.match(adapter, /property: \{ id, action: 'matched'/);
+  assert.match(adapter, /openOrCreateDraft\(payload\.estimate, externalMappings, progress, true\)/);
+});
+
 test('RoomFlow frontend never persists or displays the API token', async () => {
   const frontend = await read('townsquare-integration.js');
   assert.doesNotMatch(frontend, /localStorage\.(setItem|getItem)[^\n]*api[_-]?token/i);
