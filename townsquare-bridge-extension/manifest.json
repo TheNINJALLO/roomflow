@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "RoomFlow Townsquare Draft Bridge",
-  "version": "1.4.7",
+  "version": "1.4.8",
   "description": "Creates or updates Townsquare draft estimates from an explicit RoomFlow action or a paired RoomFlow Sync Station.",
   "permissions": ["storage", "tabs", "scripting", "alarms"],
   "optional_host_permissions": [
