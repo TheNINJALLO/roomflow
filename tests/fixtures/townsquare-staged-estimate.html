@@ -61,24 +61,25 @@
     const newItemForm = document.getElementById('new-item-form');
     const rows = document.getElementById('line-items');
     const catalog = new Set(['wall system']);
+    const afterUiUpdate = callback => setTimeout(callback, 75);
 
     document.querySelector('[data-testid="property-search"]').addEventListener('input', event => {
       document.body.dataset.propertyQuery = event.target.value;
     });
     document.querySelector('[data-testid="create-property"]').addEventListener('click', () => {
-      chooser.hidden = true;
-      propertyForm.hidden = false;
+      afterUiUpdate(() => { chooser.hidden = true; propertyForm.hidden = false; });
     });
     document.querySelector('[data-testid="save-property"]').addEventListener('click', () => {
-      propertyForm.hidden = true;
-      editor.hidden = false;
+      afterUiUpdate(() => { propertyForm.hidden = true; editor.hidden = false; });
     });
     document.querySelector('[data-testid="add-header"]').addEventListener('click', () => {
-      document.getElementById('header-form').hidden = false;
+      afterUiUpdate(() => { document.getElementById('header-form').hidden = false; });
     });
     document.querySelector('[data-testid="save-header"]').addEventListener('click', () => {
-      document.querySelector('[data-testid="saved-header"]').textContent = document.querySelector('[data-testid="header-text"]').value;
-      document.getElementById('header-form').hidden = true;
+      afterUiUpdate(() => {
+        document.querySelector('[data-testid="saved-header"]').textContent = document.querySelector('[data-testid="header-text"]').value;
+        document.getElementById('header-form').hidden = true;
+      });
     });
 
     function appendRow(values = {}) {
@@ -94,48 +95,58 @@
     }
 
     document.querySelector('[data-testid="add-line"]').addEventListener('click', () => {
-      picker.hidden = false;
-      options.replaceChildren();
-      document.querySelector('[data-testid="line-search"]').value = '';
+      afterUiUpdate(() => {
+        picker.hidden = false;
+        options.replaceChildren();
+        document.querySelector('[data-testid="line-search"]').value = '';
+      });
     });
     document.querySelector('[data-testid="line-search"]').addEventListener('input', event => {
       const value = event.target.value.trim();
-      options.replaceChildren();
-      if (!value) return;
-      const option = document.createElement('button');
-      option.setAttribute('role', 'option');
-      if (catalog.has(value.toLowerCase())) {
-        option.textContent = value;
-        option.addEventListener('click', () => {
-          appendRow({ 'line-name': value });
-          picker.hidden = true;
-          document.body.dataset.selectedItems = String(Number(document.body.dataset.selectedItems || 0) + 1);
-        });
-      } else {
-        option.textContent = 'Add Item';
-        option.dataset.createItem = 'true';
-        option.addEventListener('click', () => {
-          picker.hidden = true;
-          for (const input of newItemForm.querySelectorAll('input')) {
-            if (input.type === 'checkbox') input.checked = false;
-            else input.value = '';
-          }
-          newItemForm.querySelector('[data-testid="line-name"]').value = value;
-          newItemForm.hidden = false;
-        });
-      }
-      options.appendChild(option);
+      afterUiUpdate(() => {
+        options.replaceChildren();
+        if (!value) return;
+        const option = document.createElement('button');
+        option.setAttribute('role', 'option');
+        if (catalog.has(value.toLowerCase())) {
+          option.textContent = value;
+          option.addEventListener('click', () => {
+            afterUiUpdate(() => {
+              appendRow({ 'line-name': value });
+              picker.hidden = true;
+              document.body.dataset.selectedItems = String(Number(document.body.dataset.selectedItems || 0) + 1);
+            });
+          });
+        } else {
+          option.textContent = 'Add Item';
+          option.dataset.createItem = 'true';
+          option.addEventListener('click', () => {
+            afterUiUpdate(() => {
+              picker.hidden = true;
+              for (const input of newItemForm.querySelectorAll('input')) {
+                if (input.type === 'checkbox') input.checked = false;
+                else input.value = '';
+              }
+              newItemForm.querySelector('[data-testid="line-name"]').value = value;
+              newItemForm.hidden = false;
+            });
+          });
+        }
+        options.appendChild(option);
+      });
     });
     document.querySelector('[data-testid="line-save"]').addEventListener('click', () => {
-      const values = {};
-      for (const key of ['line-name', 'line-description', 'line-quantity', 'line-unit', 'line-price']) values[key] = newItemForm.querySelector(`[data-testid="${key}"]`).value;
-      appendRow(values);
-      catalog.add(values['line-name'].toLowerCase());
-      newItemForm.hidden = true;
-      document.body.dataset.savedItems = String(Number(document.body.dataset.savedItems || 0) + 1);
+      afterUiUpdate(() => {
+        const values = {};
+        for (const key of ['line-name', 'line-description', 'line-quantity', 'line-unit', 'line-price']) values[key] = newItemForm.querySelector(`[data-testid="${key}"]`).value;
+        appendRow(values);
+        catalog.add(values['line-name'].toLowerCase());
+        newItemForm.hidden = true;
+        document.body.dataset.savedItems = String(Number(document.body.dataset.savedItems || 0) + 1);
+      });
     });
     document.querySelector('[data-testid="save-draft"]').addEventListener('click', () => {
-      document.getElementById('draft-confirmation').hidden = false;
+      afterUiUpdate(() => { document.getElementById('draft-confirmation').hidden = false; });
     });
   </script>
 </body></html>

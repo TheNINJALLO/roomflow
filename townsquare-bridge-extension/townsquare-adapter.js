@@ -246,6 +246,45 @@
 
     async wait(ms = 500) { await new Promise(resolve => setTimeout(resolve, ms)); }
 
+    controlTimeoutMs() { return Math.max(1000, Number(this.settings.controlTimeoutMs || 12000)); }
+
+    inputSettleDelayMs() {
+      if (this.settings.inputSettleDelayMs !== undefined) return Math.max(0, Number(this.settings.inputSettleDelayMs));
+      return Math.max(50, Math.min(300, Number(this.settings.actionDelayMs || 800) / 2));
+    }
+
+    async waitUntil(reader, { timeoutMs = this.controlTimeoutMs(), required = true, code = 'TOWNSQUARE_STATE_TIMEOUT', message = 'Townsquare did not finish loading the next step.' } = {}) {
+      const started = Date.now();
+      while (Date.now() - started < timeoutMs) {
+        this.ensureLoggedIn();
+        const value = reader();
+        if (value) return value;
+        const error = this.validationError();
+        if (error) throw Object.assign(new Error(`Townsquare validation error: ${error}`), { code: 'TOWNSQUARE_VALIDATION_ERROR' });
+        await this.wait(100);
+      }
+      if (!required) return null;
+      throw Object.assign(new Error(message), { code });
+    }
+
+    waitForControl(key, required = true, timeoutMs = required ? this.controlTimeoutMs() : 900) {
+      return this.waitUntil(() => this.locator.find(key, { required: false }), {
+        timeoutMs,
+        required,
+        code: 'CONTROL_NOT_FOUND',
+        message: `Required Townsquare control not found after waiting: ${key}. Open guided mapping and identify this control.`
+      });
+    }
+
+    waitForAnyControl(keys, required = true, timeoutMs = required ? this.controlTimeoutMs() : 900) {
+      return this.waitUntil(() => keys.map(key => ({ key, element: this.locator.find(key, { required: false }) })).find(item => item.element) || null, {
+        timeoutMs,
+        required,
+        code: 'CONTROL_NOT_FOUND',
+        message: `Townsquare did not open the expected form (${keys.join(', ')}).`
+      });
+    }
+
     ensureLoggedIn() {
       const password = [...this.document.querySelectorAll('input[type="password"]')].find(visible);
       const loginText = normalized(this.document.body?.textContent).includes('sign in') || normalized(this.document.body?.textContent).includes('log in');
@@ -258,13 +297,13 @@
     }
 
     async safeClick(key, required = true) {
-      const element = this.locator.find(key, { required });
+      const element = await this.waitForControl(key, required);
       if (!element) return null;
       await this.clickElement(element);
       return element;
     }
 
-    async clickElement(element, delayMs = Number(this.settings.actionDelayMs || 450)) {
+    async clickElement(element, delayMs = Number(this.settings.actionDelayMs || 800)) {
       Core.assertDraftSafeElement(element);
       element.click();
       await this.wait(delayMs);
@@ -277,9 +316,37 @@
       Core.assertDraftSafeElement(element);
       try { element.focus?.({ preventScroll: true }); } catch (_) { element.focus?.(); }
       element.click();
-      await this.wait(Number(this.settings.inputActivationDelayMs || 100));
+      await this.wait(Number(this.settings.inputActivationDelayMs || 200));
       dispatchValue(element, value);
-      await this.wait(Number(this.settings.searchDelayMs || 500));
+      await this.wait(Number(this.settings.searchDelayMs || 900));
+      await this.confirmInputValue(element, value, true);
+      return element;
+    }
+
+    inputValueMatches(element, value) {
+      if (!element) return false;
+      if (element.type === 'checkbox') return Boolean(element.checked) === Boolean(value);
+      const actual = String(element.value ?? '').trim();
+      const expected = String(value ?? '').trim();
+      if (actual === expected) return true;
+      if (element.type === 'number' && Number.isFinite(Number(actual)) && Number.isFinite(Number(expected))) return Number(actual) === Number(expected);
+      return false;
+    }
+
+    async confirmInputValue(element, value, required = true) {
+      await this.wait(this.inputSettleDelayMs());
+      if (this.inputValueMatches(element, value)) return element;
+      dispatchValue(element, value);
+      await this.wait(this.inputSettleDelayMs());
+      if (this.inputValueMatches(element, value) || !required) return element;
+      throw Object.assign(new Error('Townsquare did not retain a value entered by RoomFlow. Sync stopped before saving an incomplete draft.'), { code: 'INPUT_VALUE_NOT_RETAINED' });
+    }
+
+    async fillAndConfirm(key, value, required = true) {
+      const element = await this.waitForControl(key, required);
+      if (!element) return null;
+      dispatchValue(element, value);
+      await this.confirmInputValue(element, value, required);
       return element;
     }
 
@@ -302,11 +369,44 @@
     fillNewLineItemControl(key, value, controlsBeforeOpen, required = true) {
       const controls = this.locator.all(key);
       const previous = controlsBeforeOpen?.[key] || new Set();
-      const element = controls.find(control => !previous.has(control)) || controls.at(-1) || null;
+      const element = controls.find(control => !previous.has(control)) || null;
       if (!element && required) {
         throw Object.assign(new Error(`Required Townsquare new-item control not found: ${key}.`), { code: 'CONTROL_NOT_FOUND', control: key });
       }
       if (element) dispatchValue(element, value);
+      return element;
+    }
+
+    async fillNewLineItemControlAndConfirm(key, value, controlsBeforeOpen, required = true) {
+      const previous = controlsBeforeOpen?.[key] || new Set();
+      const element = await this.waitUntil(() => {
+        const controls = this.locator.all(key);
+        return controls.find(control => !previous.has(control)) || null;
+      }, {
+        required,
+        timeoutMs: required ? this.controlTimeoutMs() : 900,
+        code: 'CONTROL_NOT_FOUND',
+        message: `Required Townsquare new-item control not found after waiting: ${key}.`
+      });
+      if (!element) return null;
+      dispatchValue(element, value);
+      await this.confirmInputValue(element, value, required);
+      return element;
+    }
+
+    async fillLineItemAndConfirm(key, value, rowIndex, required = true) {
+      const element = await this.waitUntil(() => {
+        const controls = this.locator.all(key);
+        return controls[rowIndex] || controls.at(-1) || null;
+      }, {
+        required,
+        timeoutMs: required ? this.controlTimeoutMs() : 900,
+        code: 'CONTROL_NOT_FOUND',
+        message: `Required Townsquare line-item control not found after waiting: ${key}.`
+      });
+      if (!element) return null;
+      dispatchValue(element, value);
+      await this.confirmInputValue(element, value, required);
       return element;
     }
 
@@ -315,19 +415,35 @@
     }
 
     async fillEstimateHeader(estimate) {
-      const addHeader = this.locator.find('addEstimateHeaderButton', { required: false });
+      const editor = await this.waitForAnyControl(['addEstimateHeaderButton', 'estimateTitle', 'addLineItemButton']);
+      const addHeader = editor.key === 'addEstimateHeaderButton' ? editor.element : this.locator.find('addEstimateHeaderButton', { required: false });
       if (!addHeader) {
-        this.fill('estimateTitle', estimate.title);
+        await this.fillAndConfirm('estimateTitle', estimate.title);
         return;
       }
       await this.clickElement(addHeader);
-      this.fill('estimateHeaderText', estimate.title);
+      const headerInput = await this.fillAndConfirm('estimateHeaderText', estimate.title);
       await this.safeClick('estimateHeaderSaveButton');
+      await this.waitUntil(() => !visible(headerInput) || normalized(this.document.body?.textContent).includes(normalized(estimate.title)), {
+        code: 'ESTIMATE_HEADER_NOT_SAVED',
+        message: 'Townsquare did not close or confirm the estimate header form after Save Header.'
+      });
+      await this.waitForControl('addLineItemButton');
     }
 
-    async openLineItemPicker(line) {
+    async openLineItemPicker(line, controlsBeforeOpen = {}) {
       await this.safeClick('addLineItemButton');
-      const search = this.locator.find('lineItemSearch', { required: false });
+      const opened = await this.waitUntil(() => {
+        const search = this.locator.find('lineItemSearch', { required: false });
+        if (search) return { search };
+        const previousNames = controlsBeforeOpen.lineItemName || new Set();
+        const name = this.locator.all('lineItemName').find(control => !previousNames.has(control));
+        return name ? { name } : null;
+      }, {
+        code: 'LINE_ITEM_PICKER_NOT_OPENED',
+        message: 'Townsquare did not open the item picker or new-item form.'
+      });
+      const search = opened.search || null;
       // Some Townsquare accounts open the new-item text form directly instead
       // of presenting a searchable catalog. Treat that form as a new item so
       // its fields are filled and its Save control is activated below.
@@ -335,10 +451,16 @@
 
       await this.activateAndFill(search, line.name);
       const itemName = normalized(line.name);
-      const options = [...new Set([
-        ...this.locator.all('lineItemOption'),
-        ...accessibleDocuments(this.document).flatMap(current => [...current.querySelectorAll('[role="option"],[role="menuitem"]')]).filter(visible)
-      ])];
+      const options = await this.waitUntil(() => {
+        const found = [...new Set([
+          ...this.locator.all('lineItemOption'),
+          ...accessibleDocuments(this.document).flatMap(current => [...current.querySelectorAll('[role="option"],[role="menuitem"]')]).filter(visible)
+        ])];
+        return found.length ? found : null;
+      }, {
+        code: 'LINE_ITEM_OPTIONS_NOT_LOADED',
+        message: `Townsquare did not finish searching for the item "${line.name}".`
+      });
       const isCreateAction = element => /\b(add|create|new)\b/.test(normalized(Core.elementActionText(element)));
       const matches = options.filter(element => !isCreateAction(element) && normalized(candidateText(element)).includes(itemName));
       if (matches.length > 1) {
@@ -498,7 +620,7 @@
 
     async selectOrCreateEstimateProperty(customer, property, externalMappings, progress) {
       progress('finding_property', 'Matching the Townsquare property/customer record');
-      const search = this.locator.find('propertySearch');
+      const search = await this.waitForControl('propertySearch');
       const customerName = `${customer.firstName || ''} ${customer.lastName || ''}`.trim();
       const query = customerName || customer.email || customer.phone || property.fullAddress || externalMappings?.propertyId || externalMappings?.customerId;
       await this.activateAndFill(search, query);
@@ -519,6 +641,7 @@
       const selected = await this.chooseCandidate('property/customer', propertyMatch.matches);
       if (selected) {
         await this.clickElement(selected);
+        await this.waitForAnyControl(['addEstimateHeaderButton', 'estimateTitle', 'addLineItemButton']);
         const id = extractEntityId(selected) || extractEntityId();
         if (!id) throw Object.assign(new Error('The selected Townsquare property/customer ID could not be confirmed. Map the complete result row and retry.'), { code: 'PROPERTY_ID_NOT_CONFIRMED' });
         progress('property_matched', 'Existing Townsquare property/customer selected');
@@ -529,25 +652,30 @@
       }
 
       await this.safeClick('createPropertyButton');
+      await this.waitForAnyControl(['propertyContactName', 'customerFirstName', 'propertyAddress', 'propertyStreetAddress']);
       const combinedName = this.locator.queryMapped('propertyContactName');
-      if (combinedName) dispatchValue(combinedName, customerName);
-      const combinedAddress = this.fill('propertyAddress', property.fullAddress || property.streetAddress, false);
-      const combinedEmail = this.fill('propertyEmail', customer.email, false);
-      const combinedPhone = this.fill('propertyPhone', customer.phone, false);
+      if (combinedName) {
+        dispatchValue(combinedName, customerName);
+        await this.confirmInputValue(combinedName, customerName);
+      }
+      const combinedAddress = await this.fillAndConfirm('propertyAddress', property.fullAddress || property.streetAddress, false);
+      const combinedEmail = await this.fillAndConfirm('propertyEmail', customer.email, false);
+      const combinedPhone = await this.fillAndConfirm('propertyPhone', customer.phone, false);
       // Retain support for Townsquare accounts and earlier mappings that split
       // the same form into first/last name and street/city/state/postal controls.
       if (!combinedName) {
-        this.fill('customerFirstName', customer.firstName);
-        this.fill('customerLastName', customer.lastName, Boolean(customer.lastName));
+        await this.fillAndConfirm('customerFirstName', customer.firstName);
+        await this.fillAndConfirm('customerLastName', customer.lastName, Boolean(customer.lastName));
       }
-      if (!combinedEmail) this.fill('customerEmail', customer.email);
-      if (!combinedPhone) this.fill('customerPhone', customer.phone);
-      if (!combinedAddress) this.fill('propertyStreetAddress', property.fullAddress || property.streetAddress);
-      this.fill('propertyName', property.name, false);
-      this.fill('propertyCity', property.city, false);
-      this.fill('propertyState', property.state, false);
-      this.fill('propertyPostalCode', property.postalCode, false);
+      if (!combinedEmail) await this.fillAndConfirm('customerEmail', customer.email);
+      if (!combinedPhone) await this.fillAndConfirm('customerPhone', customer.phone);
+      if (!combinedAddress) await this.fillAndConfirm('propertyStreetAddress', property.fullAddress || property.streetAddress);
+      await this.fillAndConfirm('propertyName', property.name, false);
+      await this.fillAndConfirm('propertyCity', property.city, false);
+      await this.fillAndConfirm('propertyState', property.state, false);
+      await this.fillAndConfirm('propertyPostalCode', property.postalCode, false);
       const save = await this.safeClick('propertySaveButton');
+      await this.waitForAnyControl(['addEstimateHeaderButton', 'estimateTitle', 'addLineItemButton']);
       const id = extractEntityId(save) || extractEntityId();
       if (!id) throw Object.assign(new Error('The new Townsquare property/customer ID could not be confirmed. Map the Save control and the resulting record detail.'), { code: 'PROPERTY_ID_NOT_CONFIRMED' });
       progress('property_created', 'Townsquare property/customer created');
@@ -596,58 +724,76 @@
       this.fill('deposit', moneyFromMinor(estimate.depositRequestMinor), false);
       this.fill('expirationDate', estimate.expirationDate, false);
 
+      let priorLineRowCount = this.locator.all('lineItemRows').length;
       let priorLineControlCount = this.lineControlCount();
       for (const line of estimate.lines) {
         const controlsBeforeOpen = Object.fromEntries(
           ['lineItemName', 'lineItemDescription', 'lineItemUnitPrice', 'lineItemQuantity', 'lineItemUnit', 'lineItemTaxable']
             .map(key => [key, new Set(this.locator.all(key))])
         );
-        const picker = await this.openLineItemPicker(line);
+        const picker = await this.openLineItemPicker(line, controlsBeforeOpen);
         if (picker.created) {
-          this.fillNewLineItemControl('lineItemName', line.name, controlsBeforeOpen);
-          this.fillNewLineItemControl('lineItemDescription', line.description, controlsBeforeOpen);
-          this.fillNewLineItemControl('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), controlsBeforeOpen);
-          this.fillNewLineItemControl('lineItemQuantity', line.quantity, controlsBeforeOpen);
-          this.fillNewLineItemControl('lineItemUnit', line.unit, controlsBeforeOpen, false);
-          this.fillNewLineItemControl('lineItemTaxable', line.taxable, controlsBeforeOpen, false);
+          await this.fillNewLineItemControlAndConfirm('lineItemName', line.name, controlsBeforeOpen);
+          await this.fillNewLineItemControlAndConfirm('lineItemDescription', line.description, controlsBeforeOpen);
+          await this.fillNewLineItemControlAndConfirm('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), controlsBeforeOpen);
+          await this.fillNewLineItemControlAndConfirm('lineItemQuantity', line.quantity, controlsBeforeOpen);
+          await this.fillNewLineItemControlAndConfirm('lineItemUnit', line.unit, controlsBeforeOpen, false);
+          await this.fillNewLineItemControlAndConfirm('lineItemTaxable', line.taxable, controlsBeforeOpen, false);
           // Direct forms use Save; older inline-row layouts commit immediately
           // and therefore legitimately have no separate item Save control.
           await this.safeClick('lineItemSaveButton', false);
-          await this.wait();
         }
-        const currentLineControlCount = this.lineControlCount();
-        if (currentLineControlCount <= priorLineControlCount) {
-          throw Object.assign(new Error('Townsquare did not create another line-item row. Sync stopped before saving an incomplete draft.'), { code: 'LINE_ITEM_ROW_NOT_CREATED' });
-        }
+        const lineCreation = await this.waitUntil(() => {
+          const rowCount = this.locator.all('lineItemRows').length;
+          const controlCount = this.lineControlCount();
+          return rowCount > priorLineRowCount || controlCount > priorLineControlCount ? { rowCount, controlCount } : null;
+        }, {
+          code: 'LINE_ITEM_ROW_NOT_CREATED',
+          message: 'Townsquare did not create another line-item row. Sync stopped before saving an incomplete draft.'
+        });
+        const currentLineRowCount = lineCreation.rowCount;
+        const currentLineControlCount = lineCreation.controlCount;
         if (!picker.created) {
           const rowIndex = Math.max(0, currentLineControlCount - 1);
-          this.fillLineItem('lineItemDescription', line.description, rowIndex, false);
-          this.fillLineItem('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), rowIndex);
-          this.fillLineItem('lineItemQuantity', line.quantity, rowIndex);
+          await this.fillLineItemAndConfirm('lineItemDescription', line.description, rowIndex, false);
+          await this.fillLineItemAndConfirm('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), rowIndex);
+          await this.fillLineItemAndConfirm('lineItemQuantity', line.quantity, rowIndex);
           this.fillLineItem('lineItemUnit', line.unit, rowIndex, false);
           this.fillLineItem('lineItemTaxable', line.taxable, rowIndex, false);
         }
+        priorLineRowCount = currentLineRowCount;
         priorLineControlCount = currentLineControlCount;
       }
-      await this.wait();
-      const totalElement = this.locator.find('grandTotal');
-      const providerTotalMinor = parseMoney(totalElement.value || totalElement.textContent);
-      if (providerTotalMinor !== estimate.grandTotalMinor) {
-        throw Object.assign(new Error(`Totals do not match. RoomFlow: ${moneyFromMinor(estimate.grandTotalMinor)}; Townsquare: ${moneyFromMinor(providerTotalMinor)}.`), { code: 'TOTAL_MISMATCH', providerTotalMinor });
+      const totalElement = await this.waitForControl('grandTotal');
+      let observedProviderTotalMinor = parseMoney(totalElement.value || totalElement.textContent);
+      const matchedTotal = await this.waitUntil(() => {
+        const current = this.locator.find('grandTotal', { required: false });
+        if (!current) return null;
+        observedProviderTotalMinor = parseMoney(current.value || current.textContent);
+        return observedProviderTotalMinor === estimate.grandTotalMinor ? observedProviderTotalMinor : null;
+      }, { required: false, timeoutMs: this.controlTimeoutMs() });
+      if (matchedTotal === null) {
+        throw Object.assign(new Error(`Totals do not match. RoomFlow: ${moneyFromMinor(estimate.grandTotalMinor)}; Townsquare: ${moneyFromMinor(observedProviderTotalMinor)}.`), { code: 'TOTAL_MISMATCH', providerTotalMinor: observedProviderTotalMinor });
       }
-      const save = this.locator.find('saveDraftButton');
+      const providerTotalMinor = matchedTotal;
+      const save = await this.waitForControl('saveDraftButton');
       Core.assertDraftSafeElement(save);
       if (!normalized(Core.elementActionText(save)).includes('draft')) throw Object.assign(new Error('The mapped save control is not explicitly a draft action.'), { code: 'SAVE_DRAFT_NOT_CONFIRMED' });
-      save.click();
-      await this.wait(Number(this.settings.saveDelayMs || 900));
+      await this.clickElement(save, Number(this.settings.saveDelayMs || 2000));
       const validation = this.validationError();
       if (validation) throw Object.assign(new Error(`Townsquare validation error: ${validation}`), { code: 'TOWNSQUARE_VALIDATION_ERROR' });
-      const statusElement = this.locator.find('estimateStatus');
-      const status = normalized(statusElement.textContent || statusElement.value).toUpperCase();
-      const detail = this.locator.find('estimateDetail', { required: false }) || this.locator.find('successIndicator', { required: false });
-      if (!status.includes('DRAFT') || !detail) throw Object.assign(new Error('Townsquare did not confirm that a draft exists. No success was recorded.'), { code: 'DRAFT_NOT_CONFIRMED' });
-      const id = extractEntityId(detail) || extractEntityId(save) || extractEntityId();
-      if (!id) throw Object.assign(new Error('The Townsquare draft exists, but its ID could not be confirmed. Map the estimate detail control.'), { code: 'ESTIMATE_ID_NOT_CONFIRMED' });
+      const confirmation = await this.waitUntil(() => {
+        const statusElement = this.locator.find('estimateStatus', { required: false });
+        const status = normalized(statusElement?.textContent || statusElement?.value).toUpperCase();
+        const detail = this.locator.find('estimateDetail', { required: false }) || this.locator.find('successIndicator', { required: false });
+        const id = extractEntityId(detail) || extractEntityId(save) || extractEntityId();
+        return status.includes('DRAFT') && detail && id ? { status, detail, id } : null;
+      }, {
+        timeoutMs: Math.max(this.controlTimeoutMs(), 15000),
+        code: 'DRAFT_NOT_CONFIRMED',
+        message: 'Townsquare did not confirm a saved draft with an estimate ID. No success was recorded.'
+      });
+      const id = confirmation.id;
       progress('draft_created', 'Townsquare confirmed the draft');
       return { id, status: 'DRAFT', action, totalMinor: providerTotalMinor, url: location.href };
     }
