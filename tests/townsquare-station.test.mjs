@@ -122,6 +122,11 @@ test('RoomFlow dispatches to paired stations while preserving an explicit user a
   assert.match(frontend, /prefer_station: true/);
   assert.match(frontend, /result\.queue_target === 'station'/);
   assert.match(frontend, /await this\.loadStationStatus\(\)/);
+  assert.match(frontend, /\['queued', 'Queue for Sync Station'\]/);
+  assert.match(frontend, /monitorQueuedSync\(estimate\.id, result\.run\.id\)/);
+  assert.match(frontend, /run\.status === 'opening_townsquare'/);
+  assert.match(frontend, /run\.status === 'completed'/);
+  assert.doesNotMatch(frontend, /if \(result\.queued\)[\s\S]{0,500}updateProgress\('completed'/);
   assert.match(frontend, /Create Pairing Key/);
   assert.match(frontend, /station_token/);
   assert.match(frontend, /Create.*via Sync Station/);

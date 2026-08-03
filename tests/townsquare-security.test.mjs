@@ -87,7 +87,7 @@ test('web and Android entrypoints load the integration layers in dependency orde
     const appIndex = entrypoint.indexOf('src="app.js?v=69"');
     const supabaseIndex = entrypoint.indexOf('src="supabase-service.js?v=63"');
     const integrationsIndex = entrypoint.indexOf('src="roomflow-integrations.js?v=9"');
-    const townsquareIndex = entrypoint.indexOf('src="townsquare-integration.js?v=4"');
+    const townsquareIndex = entrypoint.indexOf('src="townsquare-integration.js?v=5"');
     assert.ok(appIndex >= 0, `${path} must load the current application state`);
     assert.ok(supabaseIndex > appIndex, `${path} must load the Supabase service after application state`);
     assert.ok(integrationsIndex > supabaseIndex, `${path} must load RoomFlow integrations after Supabase`);
