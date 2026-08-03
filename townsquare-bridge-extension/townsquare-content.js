@@ -17,14 +17,19 @@
     if (new URL(location.href).origin !== operation.destinationOrigin) return;
     const config = await chrome.storage.local.get({ selectorMappings: {}, workflowSettings: {} });
     const adapter = new Page.TownsquarePageAdapter(document, config.selectorMappings, config.workflowSettings);
+    let lastStage = 'opening_townsquare';
     try {
-      const result = await adapter.run(operation, (status, message) => progress(status, message));
+      const result = await adapter.run(operation, (status, message) => {
+        lastStage = Core.cleanText(status, 80) || lastStage;
+        return progress(status, message);
+      });
       await chrome.runtime.sendMessage({ type: 'SYNC_RESULT_FROM_TOWNSQUARE', result });
     } catch (error) {
       const result = {
         status: error.code === 'USER_CANCELLED' ? 'cancelled' : 'failed',
         code: error.code || 'TOWNSQUARE_AUTOMATION_FAILED',
         message: Core.cleanText(error.message || 'Townsquare automation failed.', 500),
+        stage: lastStage,
         confirmedDraft: false,
         providerTotalMinor: Number.isSafeInteger(error.providerTotalMinor) ? error.providerTotalMinor : undefined
       };

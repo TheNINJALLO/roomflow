@@ -323,7 +323,7 @@ async function addEvent(run: Record<string, any>, status: string, message: strin
   if (error) throwHttp('The Townsquare audit event could not be recorded.', 'AUDIT_EVENT_WRITE_FAILED', 500);
 }
 
-async function markRunFailed(run: Record<string, any>, code: string, message: string) {
+async function markRunFailed(run: Record<string, any>, code: string, message: string, metadata: Record<string, unknown> = {}) {
   const safeCode = cleanText(code || 'TOWNSQUARE_SYNC_FAILED', 100);
   const safeMessage = cleanText(message || 'Townsquare synchronization failed.', 500);
   const now = new Date().toISOString();
@@ -336,7 +336,7 @@ async function markRunFailed(run: Record<string, any>, code: string, message: st
     last_failed_sync_at: now, last_error_code: safeCode
   }).eq('id', run.integration_id);
   if (integrationError) throwHttp('The Townsquare failure status could not be recorded.', 'INTEGRATION_STATUS_UPDATE_FAILED', 500);
-  await addEvent(run, 'failed', safeMessage, { errorCode: safeCode });
+  await addEvent(run, 'failed', safeMessage, { errorCode: safeCode, ...metadata });
   return { status: 'failed', error: { code: safeCode, message: safeMessage } };
 }
 
@@ -477,7 +477,7 @@ async function completeBridge(organizationId: string, userId: string, body: Reco
   }
   if (result.status !== 'completed' || result.confirmedDraft !== true) {
     const message = cleanText(result.message || 'The browser bridge could not confirm a Townsquare draft.', 500);
-    return markRunFailed(run, result.code || 'BRIDGE_SYNC_FAILED', message);
+    return markRunFailed(run, result.code || 'BRIDGE_SYNC_FAILED', message, { stage: cleanText(result.stage, 80) || 'unknown' });
   }
 
   const providerStatus = cleanText(result.estimate?.status, 80).toUpperCase();
@@ -499,6 +499,9 @@ async function completeBridge(organizationId: string, userId: string, body: Reco
   const integration = await getIntegration(organizationId);
   const bundle = await loadEstimateBundle(organizationId, run.estimate_id, 'none');
   if (bundle.job.id !== run.job_id) throwHttp('The synchronization run no longer matches its RoomFlow job.', 'SYNC_RUN_MISMATCH', 409);
+  if (!['created', 'matched'].includes(result.customer?.action) || !['created', 'matched'].includes(result.property?.action) || !['created', 'updated'].includes(result.estimate?.action)) {
+    return markRunFailed(run, 'BRIDGE_RESULT_INCOMPLETE', 'The browser bridge returned an invalid customer, property, or estimate action.');
+  }
   const estimateUrl = safeResultUrl(result.estimate?.url, integration.browser_destination_url);
   try {
     await upsertMapping(run, 'customer', bundle.customer.id, result.customer?.id, 'active', safeResultUrl(result.customer?.url, integration.browser_destination_url), userId);
@@ -527,6 +530,15 @@ async function completeBridge(organizationId: string, userId: string, body: Reco
     estimate: cleanText(result.estimate?.action || 'created', 40),
     confirmedDraft: true
   };
+  await addEvent(run, 'finding_customer', 'RoomFlow searched Townsquare for the customer.');
+  await addEvent(run, result.customer?.action === 'created' ? 'customer_created' : 'customer_matched', `Townsquare customer ${result.customer?.action === 'created' ? 'created' : 'matched'}.`);
+  await addEvent(run, 'finding_property', 'RoomFlow searched Townsquare for the service property.');
+  await addEvent(run, result.property?.action === 'created' ? 'property_created' : 'property_matched', `Townsquare property ${result.property?.action === 'created' ? 'created' : 'matched'}.`);
+  await addEvent(run, result.estimate?.action === 'updated' ? 'updating_estimate' : 'creating_estimate', `Townsquare draft ${result.estimate?.action === 'updated' ? 'updated' : 'created'}.`);
+  if (attachmentSummary.completed || attachmentSummary.failed || attachmentSummary.skipped) {
+    await addEvent(run, 'attaching_documents', 'Optional attachment processing finished.', attachmentSummary);
+  }
+  await addEvent(run, 'draft_created', 'Townsquare confirmed that the estimate exists as a draft.', { providerEstimateId: cleanText(result.estimate.id, 300) });
   const { error: completionError } = await service.from('external_sync_runs').update({
     status: 'completed', provider_total_minor: providerTotalMinor,
     provider_estimate_id: cleanText(result.estimate.id, 300), provider_estimate_url: estimateUrl || null,
@@ -536,12 +548,6 @@ async function completeBridge(organizationId: string, userId: string, body: Reco
   if (completionError) throwHttp('The completed Townsquare run could not be recorded.', 'SYNC_RUN_UPDATE_FAILED', 500);
   const { error: successIntegrationError } = await service.from('external_integrations').update({ last_successful_sync_at: now, last_error_code: null }).eq('id', run.integration_id);
   if (successIntegrationError) throwHttp('The Townsquare success status could not be recorded.', 'INTEGRATION_STATUS_UPDATE_FAILED', 500);
-  await addEvent(run, result.customer?.action === 'created' ? 'customer_created' : 'customer_matched', `Townsquare customer ${result.customer?.action === 'created' ? 'created' : 'matched'}.`);
-  await addEvent(run, result.property?.action === 'created' ? 'property_created' : 'property_matched', `Townsquare property ${result.property?.action === 'created' ? 'created' : 'matched'}.`);
-  if (attachmentSummary.completed || attachmentSummary.failed || attachmentSummary.skipped) {
-    await addEvent(run, 'attaching_documents', 'Optional attachment processing finished.', attachmentSummary);
-  }
-  await addEvent(run, 'draft_created', 'Townsquare confirmed that the estimate exists as a draft.', { providerEstimateId: cleanText(result.estimate.id, 300) });
   await addEvent(run, 'completed', 'Townsquare draft synchronization completed. Final customer delivery remains manual.');
   return { status: 'completed', completed_at: now, draft: { id: cleanText(result.estimate.id, 300), url: estimateUrl, total_minor: providerTotalMinor }, summary, attachment_summary: attachmentSummary };
 }
