@@ -4,7 +4,7 @@
   'use strict';
 
   const Townsquare = {
-    version: '1.0.2',
+    version: '1.0.3',
     configuration: null,
     extension: { installed: false, configured: false, destinationOrigin: '' },
     stationStatus: { configured: false, online: false, stations: [] },
@@ -404,6 +404,13 @@
       } catch { /* button remains usable; server will validate on click */ }
     },
 
+    async activeSyncForEstimate(estimateId) {
+      const data = await this.invoke('get_estimate_sync', { estimate_id: estimateId });
+      const sync = data.sync || { mapping: null, runs: [] };
+      this.syncCache.set(estimateId, sync);
+      return sync.runs?.find(run => ['validating', 'queued', 'opening_townsquare'].includes(run.status)) || null;
+    },
+
     progressStages() {
       return [
         ['validating', 'Validate RoomFlow estimate'], ['queued', 'Queue for Sync Station'], ['opening_townsquare', 'Open Townsquare'],
@@ -441,8 +448,36 @@
       if (!this.canSync) return this.toast('Estimate permission is required.', 'error');
       if (!this.organizationId || !state?.sessionUser) return this.toast('Sign in and select a company first.', 'warning');
       this.showProgressDialog();
-      this.updateProgress('validating', 'Saving and validating the RoomFlow draft');
+      this.updateProgress('validating', 'Checking for an existing Townsquare synchronization');
       try {
+        const existingEstimateId = this.integration?.currentEstimateId || '';
+        if (existingEstimateId) {
+          const activeRun = await this.activeSyncForEstimate(existingEstimateId);
+          if (activeRun) {
+            await this.loadStationStatus().catch(() => {});
+            const stationRun = Boolean(activeRun.station_id) || (activeRun.status === 'queued' && this.stationStatus.configured);
+            const queueTarget = stationRun ? 'station' : 'desktop';
+            this.currentSync = { runId: activeRun.id, estimateId: existingEstimateId, queueTarget };
+            if (activeRun.status === 'queued') {
+              this.updateProgress('queued', stationRun
+                ? (this.stationStatus.online ? 'This draft is already queued for the online Sync Station' : 'This draft is already queued until the Sync Station reconnects')
+                : 'This draft is already queued for a desktop browser');
+              this.showQueued({ queue_target: queueTarget, station_online: this.stationStatus.online, run: activeRun });
+            } else {
+              this.updateProgress(activeRun.status, stationRun
+                ? 'The Sync Station already claimed this draft and is working in Townsquare'
+                : 'This Townsquare synchronization is already in progress');
+              const output = document.getElementById('townsquare-progress-result');
+              if (output) output.innerHTML = '<div class="townsquare-result-card"><strong>Synchronization already in progress</strong><p>RoomFlow reconnected to the existing run. No duplicate draft was queued.</p></div>';
+              const close = document.querySelector('.townsquare-dialog-close');
+              if (close) close.disabled = false;
+              this.resetActionButton();
+            }
+            this.monitorQueuedSync(existingEstimateId, activeRun.id).catch(error => this.failSync(error));
+            return;
+          }
+        }
+        this.updateProgress('validating', 'Saving and validating the RoomFlow draft');
         const estimate = await this.integration.saveDraftEstimate({ throwOnError: true });
         if (!estimate?.id) throw new Error('RoomFlow did not return a saved estimate ID. Save Draft and retry.');
         await this.loadStationStatus().catch(() => {});
@@ -531,7 +566,9 @@
         const run = sync.runs?.find(item => item.id === runId);
         if (!run) continue;
         if (run.status === 'queued') {
-          if (attempt >= 5) {
+          if (this.currentSync?.queueTarget !== 'station') {
+            this.updateProgress('queued', 'Queued for a desktop browser to continue');
+          } else if (attempt >= 5) {
             await this.loadStationStatus().catch(() => {});
             this.updateProgress('queued', this.stationStatus.online
               ? 'Queued; the online Sync Station has not claimed this draft yet'
@@ -540,7 +577,9 @@
           continue;
         }
         if (run.status === 'opening_townsquare') {
-          this.updateProgress('opening_townsquare', 'The Sync Station claimed this draft and is opening Townsquare');
+          this.updateProgress('opening_townsquare', this.currentSync?.queueTarget === 'station'
+            ? 'The Sync Station claimed this draft and is opening Townsquare'
+            : 'The desktop Browser Bridge is opening Townsquare');
           continue;
         }
         if (run.status === 'completed') {

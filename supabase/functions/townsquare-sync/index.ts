@@ -706,7 +706,7 @@ async function getEstimateSync(organizationId: string, estimateId: string) {
   const [{ data: mapping }, { data: runs, error: runError }] = await Promise.all([
     service.from('external_entity_mappings').select('provider_entity_id,provider_status,provider_url,last_roomflow_revision,last_provider_revision,last_synced_at')
       .eq('organization_id', organizationId).eq('provider', 'townsquare').eq('entity_type', 'estimate').eq('roomflow_entity_id', estimateId).maybeSingle(),
-    service.from('external_sync_runs').select('id,status,adapter_mode,provider_estimate_id,provider_estimate_url,roomflow_total_minor,provider_total_minor,error_code,error_message,review_reason,created_at,completed_at')
+    service.from('external_sync_runs').select('id,status,adapter_mode,station_id,provider_estimate_id,provider_estimate_url,roomflow_total_minor,provider_total_minor,error_code,error_message,review_reason,created_at,completed_at')
       .eq('organization_id', organizationId).eq('estimate_id', estimateId).order('created_at', { ascending: false }).limit(10)
   ]);
   if (runError) throwHttp('Synchronization history could not be loaded.', 'SYNC_HISTORY_READ_FAILED', 500);
