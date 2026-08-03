@@ -25,7 +25,7 @@
     const rows = {
       jobs: [{
         id: jobId, organization_id: state.currentOrganization.id, customer_id: 'c1', name: 'Shared Smith Job',
-        status: 'Estimate Draft', current_version_number: 1, property_address: '10 Main St', estimate_status: 'draft',
+        status: 'Estimate Draft', current_version_number: 1, property_address: '10 Main St', city: 'Ada', state: 'MI', postal_code: '49301', estimate_status: 'draft',
         updated_at: now, created_at: now,
         customers: { id: 'c1', name: 'Alex Smith', phone: '555-0100', email: 'alex@example.test', address: '10 Main St' }
       }],
@@ -86,6 +86,7 @@
           [job?.costing?.settings?.targetGrossMargin === 42, 'protected costing restored'],
           [draft?.estimateId === estimateId && draft?.lines?.[0]?.roomflow_line_id === 'rf-line-1', 'estimate lines restored'],
           [draft?.header === 'Basement Drainage', 'estimate header restored'],
+          [job?.costing?.serviceCity === 'Ada' && job?.costing?.serviceState === 'MI' && job?.costing?.servicePostalCode === '49301', 'structured service address restored'],
           [mergedAgain?.rooms?.[0]?.id === 'local-room' && mergedAgain.syncState === 'pending', 'newer unsynced local edits retained'],
           [rendered === 2, 'jobs dashboard refreshed']
         ];

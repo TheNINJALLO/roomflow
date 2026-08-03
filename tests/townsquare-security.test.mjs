@@ -81,8 +81,8 @@ test('web and Android entrypoints load the integration layers in dependency orde
   for (const path of ['index.html', 'app/src/main/assets/index.html']) {
     const entrypoint = await read(path);
     const appIndex = entrypoint.indexOf('src="app.js?v=69"');
-    const supabaseIndex = entrypoint.indexOf('src="supabase-service.js?v=62"');
-    const integrationsIndex = entrypoint.indexOf('src="roomflow-integrations.js?v=8"');
+    const supabaseIndex = entrypoint.indexOf('src="supabase-service.js?v=63"');
+    const integrationsIndex = entrypoint.indexOf('src="roomflow-integrations.js?v=9"');
     const townsquareIndex = entrypoint.indexOf('src="townsquare-integration.js?v=3"');
     assert.ok(appIndex >= 0, `${path} must load the current application state`);
     assert.ok(supabaseIndex > appIndex, `${path} must load the Supabase service after application state`);

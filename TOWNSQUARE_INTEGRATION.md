@@ -134,7 +134,7 @@ Automatic control discovery prefers labels, `aria-label`, roles, `name`, placeho
 
 ## Create or update a draft
 
-1. Complete the RoomFlow customer and service address. In **Inline Customer Estimate**, enter an **Estimate Header** and add at least one item.
+1. Complete the RoomFlow customer. In **Inline Customer Estimate**, enter an **Estimate Header**, confirm Service Street Address, City, State, and Postal Code, and add at least one item.
 2. Add at least one selected line item and verify quantity, price, discount, and tax.
 3. Save the RoomFlow draft.
 4. Press **Create Townsquare Draft** in the inline estimate builder.

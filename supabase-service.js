@@ -793,6 +793,10 @@ window.RoomFlowSync = {
                 const defaultCosting = {
                     customerName: customer?.name || job.name || storageName,
                     customerAddress: job.property_address || customer?.address || '',
+                    serviceStreet: job.property_address || customer?.address || '',
+                    serviceCity: job.city || customer?.city || '',
+                    serviceState: job.state || customer?.state || '',
+                    servicePostalCode: job.postal_code || customer?.postal_code || '',
                     customerPhone: customer?.phone || '',
                     customerEmail: customer?.email || '',
                     notes: customer?.notes || job.issue_description || '',
@@ -812,6 +816,10 @@ window.RoomFlowSync = {
                 merged.costing = cloneRoomFlowValue(costingRow?.costing_state || merged.costing || existing?.costing || defaultCosting, defaultCosting);
                 merged.costing.customerName = customer?.name || merged.costing.customerName || job.name;
                 merged.costing.customerAddress = job.property_address || customer?.address || merged.costing.customerAddress || '';
+                merged.costing.serviceStreet = job.property_address || customer?.address || merged.costing.serviceStreet || '';
+                merged.costing.serviceCity = job.city || customer?.city || merged.costing.serviceCity || '';
+                merged.costing.serviceState = job.state || customer?.state || merged.costing.serviceState || '';
+                merged.costing.servicePostalCode = job.postal_code || customer?.postal_code || merged.costing.servicePostalCode || '';
                 merged.costing.customerPhone = customer?.phone || merged.costing.customerPhone || '';
                 merged.costing.customerEmail = customer?.email || merged.costing.customerEmail || '';
                 merged.customerName = merged.costing.customerName;
