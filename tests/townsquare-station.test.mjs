@@ -124,6 +124,10 @@ test('RoomFlow dispatches to paired stations while preserving an explicit user a
   assert.match(frontend, /await this\.loadStationStatus\(\)/);
   assert.match(frontend, /\['queued', 'Queue for Sync Station'\]/);
   assert.match(frontend, /monitorQueuedSync\(estimate\.id, result\.run\.id\)/);
+  assert.match(frontend, /activeSyncForEstimate\(existingEstimateId\)/);
+  assert.match(frontend, /\['validating', 'queued', 'opening_townsquare'\]\.includes\(run\.status\)/);
+  assert.ok(frontend.indexOf('const activeRun = await this.activeSyncForEstimate') < frontend.indexOf('const estimate = await this.integration.saveDraftEstimate'), 'an active run must be resumed before the estimate is saved again');
+  assert.match(frontend, /No duplicate draft was queued/);
   assert.match(frontend, /run\.status === 'opening_townsquare'/);
   assert.match(frontend, /run\.status === 'completed'/);
   assert.doesNotMatch(frontend, /if \(result\.queued\)[\s\S]{0,500}updateProgress\('completed'/);
@@ -135,4 +139,5 @@ test('RoomFlow dispatches to paired stations while preserving an explicit user a
   assert.match(edge, /queue_target: queueTarget/);
   assert.match(edge, /await syncStationStatus\(organizationId\)/);
   assert.match(edge, /queueTarget === 'station'/);
+  assert.match(edge, /select\('id,status,adapter_mode,station_id,/);
 });
