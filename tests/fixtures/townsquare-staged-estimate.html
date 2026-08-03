@@ -28,16 +28,12 @@
     <label>Description <textarea data-testid="estimate-description"></textarea></label>
 
     <button data-testid="add-line">Add Item</button>
-    <div id="item-picker" hidden>
-      <label>Search items <input data-testid="line-search"></label>
-      <div id="item-options"></div>
-    </div>
     <div id="new-item-form" hidden>
       <label>Item name <input data-testid="line-name"></label>
       <label>Description <input data-testid="line-description"></label>
+      <label>Unit price <input data-testid="line-price"></label>
       <label>Quantity <input data-testid="line-quantity"></label>
       <label>Unit <input data-testid="line-unit"></label>
-      <label>Unit price <input data-testid="line-price"></label>
       <label>Taxable <input type="checkbox" data-testid="line-taxable"></label>
       <button data-testid="line-save">Save Item</button>
     </div>
@@ -56,11 +52,8 @@
     const chooser = document.getElementById('property-chooser');
     const propertyForm = document.getElementById('property-form');
     const editor = document.getElementById('estimate-editor');
-    const picker = document.getElementById('item-picker');
-    const options = document.getElementById('item-options');
     const newItemForm = document.getElementById('new-item-form');
     const rows = document.getElementById('line-items');
-    const catalog = new Set(['wall system']);
 
     document.querySelector('[data-testid="property-search"]').addEventListener('input', event => {
       document.body.dataset.propertyQuery = event.target.value;
@@ -94,43 +87,18 @@
     }
 
     document.querySelector('[data-testid="add-line"]').addEventListener('click', () => {
-      picker.hidden = false;
-      options.replaceChildren();
-      const search = document.querySelector('[data-testid="line-search"]');
-      search.value = '';
-    });
-    document.querySelector('[data-testid="line-search"]').addEventListener('input', event => {
-      const value = event.target.value.trim();
-      options.replaceChildren();
-      if (!value) return;
-      const option = document.createElement('button');
-      option.setAttribute('role', 'option');
-      option.className = 'item-option';
-      if (catalog.has(value.toLowerCase())) {
-        option.textContent = value;
-        option.addEventListener('click', () => {
-          appendRow({ 'line-name': value });
-          picker.hidden = true;
-          document.body.dataset.selectedItems = String(Number(document.body.dataset.selectedItems || 0) + 1);
-        });
-      } else {
-        option.textContent = `Add "${value}" as a new item`;
-        option.dataset.createItem = 'true';
-        option.addEventListener('click', () => {
-          picker.hidden = true;
-          newItemForm.hidden = false;
-          newItemForm.querySelector('[data-testid="line-name"]').value = value;
-        });
+      for (const input of newItemForm.querySelectorAll('input')) {
+        if (input.type === 'checkbox') input.checked = false;
+        else input.value = '';
       }
-      options.appendChild(option);
+      newItemForm.hidden = false;
     });
     document.querySelector('[data-testid="line-save"]').addEventListener('click', () => {
       const values = {};
       for (const key of ['line-name', 'line-description', 'line-quantity', 'line-unit', 'line-price']) values[key] = newItemForm.querySelector(`[data-testid="${key}"]`).value;
       appendRow(values);
-      catalog.add(values['line-name'].toLowerCase());
       newItemForm.hidden = true;
-      document.body.dataset.createdItems = String(Number(document.body.dataset.createdItems || 0) + 1);
+      document.body.dataset.savedItems = String(Number(document.body.dataset.savedItems || 0) + 1);
     });
     document.querySelector('[data-testid="save-draft"]').addEventListener('click', () => {
       document.getElementById('draft-confirmation').hidden = false;

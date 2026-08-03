@@ -40,7 +40,7 @@
     'quickActionsButton', 'createEstimateButton', 'propertySearch', 'propertyResult', 'createPropertyButton',
     'propertyContactName', 'customerFirstName', 'customerLastName', 'propertyAddress', 'propertyEmail', 'propertyPhone', 'propertySaveButton',
     'addEstimateHeaderButton', 'estimateHeaderText', 'estimateHeaderSaveButton',
-    'addLineItemButton', 'lineItemSearch', 'lineItemOption', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnitPrice', 'lineItemSaveButton',
+    'addLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemUnitPrice', 'lineItemQuantity', 'lineItemSaveButton',
     'lineItemRows', 'deleteLineItemButton', 'estimateNumber', 'estimateDescription',
     'taxSetting', 'discount', 'customerNotes', 'internalNotes', 'terms', 'deposit', 'expirationDate', 'grandTotal', 'estimateStatus', 'saveDraftButton', 'estimateDetail'
   ]);
@@ -58,10 +58,14 @@
     propertySaveButton: 'Choose Map + use before clicking Save so the estimate editor opens.',
     addEstimateHeaderButton: 'Choose Map + use and click the Add Header button.',
     estimateHeaderSaveButton: 'Choose Map + use before saving the header so the item editor remains visible.',
-    addLineItemButton: 'Choose Map + use and click the estimate item dropdown or Add Item control.',
-    lineItemSearch: 'Choose Map + use, click the item search box, then type a made-up item name so the Add/Create choice appears.',
-    lineItemOption: 'Choose Map + use and click the Add/Create dropdown choice. Its shared role/class will also match existing catalog choices.',
-    lineItemSaveButton: 'Map the Save/Add control inside the new-item form; skip it if selecting an item immediately adds the row.',
+    addLineItemButton: 'Choose Map + use and click Add Item so the four item text boxes open.',
+    lineItemName: 'Choose Map + use, click the Name text box, and enter a sample item name.',
+    lineItemDescription: 'Choose Map + use, click the Description text box, and enter a sample description.',
+    lineItemUnitPrice: 'Choose Map + use, click the Price text box, and enter a valid sample price such as 10.00.',
+    lineItemQuantity: 'Choose Map + use, click the Quantity text box, and enter a valid sample quantity such as 1.',
+    lineItemSaveButton: 'Choose Map + use and click Save so Townsquare adds the sample item to the estimate.',
+    lineItemRows: 'Click the complete saved item row normally. RoomFlow will map it without activating a control.',
+    deleteLineItemButton: 'Click the item Remove/Delete control normally. RoomFlow will map it without deleting the sample item.',
     saveDraftButton: 'Map only the control explicitly labeled Save Draft. Send, issue, email, approve, charge, and payment actions stay blocked.'
   });
   const MAPPING_LABELS = Object.freeze({
@@ -70,8 +74,8 @@
     propertyContactName: 'single New Property Name field (skip when First/Last are separate)', customerFirstName: 'New Property First name', customerLastName: 'New Property Last name',
     propertyAddress: 'New Property address', propertyEmail: 'New Property email', propertyPhone: 'New Property phone number', propertySaveButton: 'Save Property',
     addEstimateHeaderButton: 'Add Header', estimateHeaderText: 'header text box', estimateHeaderSaveButton: 'Save Header',
-    addLineItemButton: 'Add Item or item dropdown', lineItemSearch: 'item search box', lineItemOption: 'item dropdown Add/Create choice',
-    lineItemName: 'item name', lineItemDescription: 'item description', lineItemQuantity: 'item quantity', lineItemUnitPrice: 'item price', lineItemSaveButton: 'Save/Add Item',
+    addLineItemButton: 'Add Item', lineItemSearch: 'item search box', lineItemOption: 'item dropdown Add/Create choice',
+    lineItemName: 'item Name text box', lineItemDescription: 'item Description text box', lineItemUnitPrice: 'item Price text box', lineItemQuantity: 'item Quantity text box', lineItemSaveButton: 'item Save button',
     lineItemRows: 'complete estimate item row', deleteLineItemButton: 'Remove Item', estimateNumber: 'estimate number', estimateDescription: 'estimate description',
     taxSetting: 'tax setting', discount: 'discount', customerNotes: 'customer notes', internalNotes: 'internal notes', terms: 'terms', deposit: 'deposit', expirationDate: 'expiration date',
     grandTotal: 'grand total', estimateStatus: 'Draft status', saveDraftButton: 'Save Draft', estimateDetail: 'saved estimate detail/review link'
@@ -287,6 +291,17 @@
       return element;
     }
 
+    fillNewLineItemControl(key, value, controlsBeforeOpen, required = true) {
+      const controls = this.locator.all(key);
+      const previous = controlsBeforeOpen?.[key] || new Set();
+      const element = controls.find(control => !previous.has(control)) || controls.at(-1) || null;
+      if (!element && required) {
+        throw Object.assign(new Error(`Required Townsquare new-item control not found: ${key}.`), { code: 'CONTROL_NOT_FOUND', control: key });
+      }
+      if (element) dispatchValue(element, value);
+      return element;
+    }
+
     lineControlCount() {
       return Math.max(...['lineItemRows', 'lineItemName', 'lineItemQuantity', 'lineItemUnitPrice'].map(key => this.locator.all(key).length), 0);
     }
@@ -305,7 +320,10 @@
     async openLineItemPicker(line) {
       await this.safeClick('addLineItemButton');
       const search = this.locator.find('lineItemSearch', { required: false });
-      if (!search) return { pickerUsed: false, created: false };
+      // Some Townsquare accounts open the new-item text form directly instead
+      // of presenting a searchable catalog. Treat that form as a new item so
+      // its fields are filled and its Save control is activated below.
+      if (!search) return { pickerUsed: false, created: true };
 
       await this.activateAndFill(search, line.name);
       const itemName = normalized(line.name);
@@ -569,28 +587,35 @@
 
       let priorLineControlCount = this.lineControlCount();
       for (const line of estimate.lines) {
+        const controlsBeforeOpen = Object.fromEntries(
+          ['lineItemName', 'lineItemDescription', 'lineItemUnitPrice', 'lineItemQuantity', 'lineItemUnit', 'lineItemTaxable']
+            .map(key => [key, new Set(this.locator.all(key))])
+        );
         const picker = await this.openLineItemPicker(line);
         if (picker.created) {
-          const formIndex = Math.max(0, this.lineControlCount() - 1);
-          this.fillLineItem('lineItemName', line.name, formIndex);
-          this.fillLineItem('lineItemDescription', line.description, formIndex, false);
-          this.fillLineItem('lineItemQuantity', line.quantity, formIndex, false);
-          this.fillLineItem('lineItemUnit', line.unit, formIndex, false);
-          this.fillLineItem('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), formIndex, false);
-          this.fillLineItem('lineItemTaxable', line.taxable, formIndex, false);
+          this.fillNewLineItemControl('lineItemName', line.name, controlsBeforeOpen);
+          this.fillNewLineItemControl('lineItemDescription', line.description, controlsBeforeOpen);
+          this.fillNewLineItemControl('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), controlsBeforeOpen);
+          this.fillNewLineItemControl('lineItemQuantity', line.quantity, controlsBeforeOpen);
+          this.fillNewLineItemControl('lineItemUnit', line.unit, controlsBeforeOpen, false);
+          this.fillNewLineItemControl('lineItemTaxable', line.taxable, controlsBeforeOpen, false);
+          // Direct forms use Save; older inline-row layouts commit immediately
+          // and therefore legitimately have no separate item Save control.
           await this.safeClick('lineItemSaveButton', false);
+          await this.wait();
         }
         const currentLineControlCount = this.lineControlCount();
         if (currentLineControlCount <= priorLineControlCount) {
           throw Object.assign(new Error('Townsquare did not create another line-item row. Sync stopped before saving an incomplete draft.'), { code: 'LINE_ITEM_ROW_NOT_CREATED' });
         }
-        const rowIndex = Math.max(0, currentLineControlCount - 1);
-        this.fillLineItem('lineItemName', line.name, rowIndex, !picker.pickerUsed || picker.created);
-        this.fillLineItem('lineItemDescription', line.description, rowIndex, false);
-        this.fillLineItem('lineItemQuantity', line.quantity, rowIndex);
-        this.fillLineItem('lineItemUnit', line.unit, rowIndex, false);
-        this.fillLineItem('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), rowIndex);
-        this.fillLineItem('lineItemTaxable', line.taxable, rowIndex, false);
+        if (!picker.created) {
+          const rowIndex = Math.max(0, currentLineControlCount - 1);
+          this.fillLineItem('lineItemDescription', line.description, rowIndex, false);
+          this.fillLineItem('lineItemUnitPrice', moneyFromMinor(line.unitPriceMinor), rowIndex);
+          this.fillLineItem('lineItemQuantity', line.quantity, rowIndex);
+          this.fillLineItem('lineItemUnit', line.unit, rowIndex, false);
+          this.fillLineItem('lineItemTaxable', line.taxable, rowIndex, false);
+        }
         priorLineControlCount = currentLineControlCount;
       }
       await this.wait();

@@ -128,7 +128,7 @@ Codex cannot see a private authenticated Townsquare account, so the bridge first
 5. Finish the list. Only selectors are saved.
 6. Use **Test / Reset Mapping** after Townsquare changes its interface.
 
-Mappings follow the Townsquare screen order: Quick Actions, New estimate, name-based property search, the New Property first-name/last-name/address/email/phone form (with an optional combined-name fallback), the Add Header dialog, the searchable item dropdown (including its Add/Create choice), repeated line items, totals, status, Save Draft, and estimate detail/review confirmation.
+Mappings follow the Townsquare screen order: Quick Actions, New estimate, name-based property search, the New Property first-name/last-name/address/email/phone form (with an optional combined-name fallback), the Add Header dialog, and the direct Add Item form. For each item, map and enter sample values in Name, Description, Price, and Quantity, then map and use Save. Repeated line items, totals, status, Save Draft, and estimate detail/review confirmation follow. Accounts that expose a searchable catalog remain supported through automatic detection or existing saved mappings.
 
 Automatic control discovery prefers labels, `aria-label`, roles, `name`, placeholder, stable `data-*` attributes, and visible headings. It does not rely only on generated class names.
 
