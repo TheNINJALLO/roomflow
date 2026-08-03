@@ -657,8 +657,31 @@
     }
 
     removeCapture() {
-      if (this.capture) this.document.removeEventListener('click', this.capture, true);
+      if (this.capture) {
+        this.document.removeEventListener('pointerdown', this.capture, true);
+        this.document.removeEventListener('click', this.capture, true);
+      }
       this.capture = null;
+    }
+
+    suppressFollowupClick(target) {
+      const documentRef = target?.ownerDocument || this.document;
+      let timeoutId;
+      const cleanup = () => {
+        documentRef.removeEventListener('click', blocker, true);
+        if (timeoutId) clearTimeout(timeoutId);
+      };
+      const blocker = event => {
+        if (!event.isTrusted) return;
+        const path = event.composedPath?.() || [];
+        if (path.includes(target) || target === event.target || target?.contains?.(event.target)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+        cleanup();
+      };
+      documentRef.addEventListener('click', blocker, true);
+      timeoutId = setTimeout(cleanup, 350);
     }
 
     persistProgress() {
@@ -700,6 +723,7 @@
       this.overlay = overlay;
       this.capture = event => {
         if (overlay.contains(event.target)) return;
+        if (event.type === 'pointerdown' && event.button !== 0) return;
         const target = event.target?.closest?.('button,a,input,textarea,select,[role="button"],[role="row"],[role="option"],[data-testid],[data-test]') || event.target;
         const allowActivation = this.allowNextActivation;
         if (this.allowNextActivation) {
@@ -717,9 +741,10 @@
             return;
           }
         }
-        // Always consume the intercepted click. For Map + use, replay it only after
-        // removing this capture listener and completing the original event dispatch.
-        // Browsers suppress a recursive .click() while that same click is in flight.
+        // Townsquare controls may activate on pointerdown and never expose a normal
+        // bubbling click. Capture the earliest event, then suppress its follow-up
+        // trusted click so mapping never performs the action twice.
+        if (event.type === 'pointerdown') this.suppressFollowupClick(target);
         event.preventDefault();
         event.stopImmediatePropagation();
         const selector = buildStableSelector(target, key);
@@ -738,6 +763,7 @@
         this.persistProgress().catch(() => {});
         setTimeout(() => this.render(), allowActivation ? 500 : 0);
       };
+      this.document.addEventListener('pointerdown', this.capture, true);
       this.document.addEventListener('click', this.capture, true);
     }
 
