@@ -1,0 +1,29 @@
+<!doctype html><html><body>
+  <main>
+    <label>Customer search <input data-testid="customer-search"></label><button data-testid="customer-search-submit">Search</button>
+    <div class="customer-result"></div><button data-testid="create-customer">Create Customer</button>
+    <label>First name <input data-testid="customer-first"></label><label>Last name <input data-testid="customer-last"></label>
+    <label>Company name <input data-testid="customer-company"></label><label>Email <input data-testid="customer-email"></label>
+    <label>Phone <input data-testid="customer-phone"></label><label>Billing address <input data-testid="customer-address"></label>
+    <button data-testid="save-customer" data-id="customer-created-123">Save Customer</button>
+    <label>Property search <input data-testid="property-search"></label><button data-testid="property-search-submit">Search properties</button>
+    <div class="property-result"></div><button data-testid="create-property">Create Property</button>
+    <label>Property name <input data-testid="property-name"></label><label>Service address <input data-testid="property-street"></label>
+    <label>City <input data-testid="property-city"></label><label>State <input data-testid="property-state"></label>
+    <label>Postal code <input data-testid="property-postal"></label><label>Access notes <textarea data-testid="property-notes"></textarea></label>
+    <button data-testid="save-property" data-id="property-created-123">Save Property</button>
+    <button data-testid="create-estimate">Create Estimate</button>
+    <label>Estimate title <input data-testid="estimate-title"></label><label>Estimate number <input data-testid="estimate-number"></label>
+    <label>Job number <input data-testid="job-number"></label><label>Scope of work <textarea data-testid="estimate-description"></textarea></label>
+    <button data-testid="add-line">Add Line Item</button><label>Item name <input data-testid="line-name"></label>
+    <label>Item description <input data-testid="line-description"></label><label>Quantity <input data-testid="line-quantity"></label>
+    <label>Unit <input data-testid="line-unit"></label><label>Unit price <input data-testid="line-price"></label><label>Taxable <input type="checkbox" data-testid="line-taxable"></label>
+    <label>Tax rate <input data-testid="tax-rate"></label><label>Discount <input data-testid="discount"></label>
+    <label>Customer notes <textarea data-testid="customer-notes"></textarea></label><label>Internal notes <textarea data-testid="internal-notes"></textarea></label>
+    <label>Terms <textarea data-testid="terms"></textarea></label><label>Deposit <input data-testid="deposit"></label><label>Due date <input data-testid="due-date"></label>
+    <strong data-testid="grand-total">$262.00</strong><button data-testid="save-draft" data-id="estimate-draft-123">Save Draft</button>
+    <span data-testid="estimate-status">DRAFT</span><a data-testid="estimate-detail" data-id="estimate-draft-123">Estimate detail</a>
+    <div data-testid="validation-error" hidden></div><button data-testid="send-estimate">Send Estimate</button>
+    <script>document.querySelector('[data-testid="add-line"]').addEventListener('click',()=>{for(const key of ['line-name','line-description','line-quantity','line-unit','line-price','line-taxable']){const controls=document.querySelectorAll(`[data-testid="${key}"]`);const source=controls[controls.length-1];source.parentNode.insertBefore(source.cloneNode(true),source.nextSibling)}});</script>
+  </main>
+</body></html>
