@@ -40,6 +40,7 @@ test('guided mapping can use nested Townsquare controls and resume safely', asyn
   assert.match(adapter, /Map \+ use next control/);
   assert.match(adapter, /if \(actionable\) Core\.assertDraftSafeElement\(target\)/);
   assert.match(adapter, /event\.stopImmediatePropagation\(\)/);
+  assert.match(adapter, /this\.removeCapture\(\);[\s\S]{0,250}target\.click\(\)/);
   assert.match(adapter, /selectorMappingSession/);
   assert.match(adapter, /persistProgress\(\)/);
   assert.match(content, /resumeGuidedMapping/);
