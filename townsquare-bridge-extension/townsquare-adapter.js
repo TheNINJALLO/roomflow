@@ -116,6 +116,31 @@
       .filter(Boolean).join(' ');
   }
 
+  function actionableElement(element) {
+    if (!element) return null;
+    const selector = 'button,a[href],input[type="button"],input[type="submit"],input[type="reset"],label,[role="button"],[role="link"],[role="option"],[role="menuitem"],[onclick]';
+    if (element.matches?.(selector)) return element;
+    const ancestor = element.closest?.(selector);
+    if (ancestor) return ancestor;
+    return element.querySelector?.(selector) || element;
+  }
+
+  function invokeElementClick(element) {
+    const target = actionableElement(element);
+    if (!target) throw Object.assign(new Error('The mapped Townsquare control is no longer available.'), { code: 'CONTROL_NOT_FOUND' });
+    Core.assertDraftSafeElement(target);
+    if (typeof target.click === 'function') {
+      target.click();
+      return target;
+    }
+    const view = target.ownerDocument?.defaultView || root;
+    if (typeof target.dispatchEvent !== 'function' || typeof view.MouseEvent !== 'function') {
+      throw Object.assign(new Error('The mapped Townsquare control cannot be clicked. Map the complete button or control and retry.'), { code: 'CONTROL_NOT_CLICKABLE' });
+    }
+    target.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }));
+    return target;
+  }
+
   function cssEscape(value) {
     if (root.CSS?.escape) return root.CSS.escape(value);
     return String(value).replace(/[^a-zA-Z0-9_-]/g, char => `\\${char}`);
@@ -299,23 +324,21 @@
     async safeClick(key, required = true) {
       const element = await this.waitForControl(key, required);
       if (!element) return null;
-      await this.clickElement(element);
-      return element;
+      return this.clickElement(element);
     }
 
     async clickElement(element, delayMs = Number(this.settings.actionDelayMs || 800)) {
-      Core.assertDraftSafeElement(element);
-      element.click();
+      const clicked = invokeElementClick(element);
       await this.wait(delayMs);
       const error = this.validationError();
       if (error) throw Object.assign(new Error(`Townsquare validation error: ${error}`), { code: 'TOWNSQUARE_VALIDATION_ERROR' });
-      return element;
+      return clicked;
     }
 
     async activateAndFill(element, value) {
       Core.assertDraftSafeElement(element);
       try { element.focus?.({ preventScroll: true }); } catch (_) { element.focus?.(); }
-      element.click();
+      invokeElementClick(element);
       await this.wait(Number(this.settings.inputActivationDelayMs || 200));
       dispatchValue(element, value);
       await this.wait(Number(this.settings.searchDelayMs || 900));
@@ -558,8 +581,7 @@
       }
       const selected = await this.chooseCandidate('customer', match.matches);
       if (selected) {
-        selected.click();
-        await this.wait();
+        await this.clickElement(selected);
         const id = extractEntityId(selected) || extractEntityId();
         if (!id) throw Object.assign(new Error('The matched Townsquare customer ID could not be confirmed. Sync stopped before creating a property or estimate.'), { code: 'CUSTOMER_ID_NOT_CONFIRMED' });
         progress('customer_matched', 'Existing Townsquare customer selected');
@@ -591,8 +613,7 @@
       }
       const selected = await this.chooseCandidate('property', match.matches);
       if (selected) {
-        selected.click();
-        await this.wait();
+        await this.clickElement(selected);
         const id = extractEntityId(selected) || extractEntityId();
         if (!id) throw Object.assign(new Error('The matched Townsquare property ID could not be confirmed. Sync stopped before creating an estimate.'), { code: 'PROPERTY_ID_NOT_CONFIRMED' });
         progress('property_matched', 'Existing Townsquare property selected');
@@ -694,15 +715,14 @@
         await this.wait();
         const result = this.locator.all('estimateResult').find(element => this.candidateMatches(element, [externalMappings.estimateId]));
         if (!result) throw Object.assign(new Error('The mapped Townsquare draft could not be found. Sync stopped to prevent a duplicate.'), { code: 'MAPPED_ESTIMATE_NOT_FOUND' });
-        result.click();
-        await this.wait();
+        await this.clickElement(result);
         const status = normalized(this.locator.find('estimateStatus')?.textContent);
         if (status !== 'draft' && !status.includes('draft')) throw Object.assign(new Error(`The mapped estimate is ${status || 'not confirmed as draft'} and will not be overwritten.`), { code: 'FINALIZED_ESTIMATE_BLOCKED' });
         const rows = this.locator.all('lineItemRows');
         if (!rows.length) throw Object.assign(new Error('Existing Townsquare line rows are not mapped. Sync stopped to prevent duplicate items.'), { code: 'LINE_ITEM_ROWS_REQUIRED' });
         const deleteButtons = this.locator.all('deleteLineItemButton');
         if (deleteButtons.length < rows.length) throw Object.assign(new Error('Existing line items cannot be safely cleared. Map the remove-line control before updating this draft.'), { code: 'LINE_RESET_REQUIRED' });
-        for (const button of deleteButtons) { Core.assertDraftSafeElement(button); button.click(); await this.wait(100); }
+        for (const button of deleteButtons) await this.clickElement(button, 100);
         action = 'updated';
         progress('updating_estimate', 'Updating the mapped Townsquare draft');
       } else if (!editorAlreadyOpen) {
