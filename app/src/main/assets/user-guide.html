@@ -225,7 +225,7 @@
     </div>
     <div class="search-wrap">
       <label for="guide-search" style="position:absolute;left:-9999px">Search this guide</label>
-      <input id="guide-search" type="search" placeholder="Search: angled room, invoice, delete job, Zapier…" autocomplete="off">
+      <input id="guide-search" type="search" placeholder="Search: angled room, invoice, delete job, Zapier, Townsquare…" autocomplete="off">
       <p id="search-status" aria-live="polite">Search all instructions.</p>
     </div>
   </header>
@@ -247,8 +247,9 @@
       <a href="#tracker">12. Tracker</a>
       <a href="#zapier">13. Zapier email intake</a>
       <a href="#mobile">14. Phone and tablet</a>
-      <a href="#troubleshooting">15. Troubleshooting</a>
-      <a href="#closeout">16. Final checklist</a>
+      <a href="#townsquare">15. Townsquare drafts</a>
+      <a href="#troubleshooting">16. Troubleshooting</a>
+      <a href="#closeout">17. Final checklist</a>
     </nav>
 
     <main id="guide-content">
@@ -312,7 +313,7 @@
         </ul>
       </section>
 
-      <section class="guide-section searchable" id="jobs" data-search="new estimate continue job inbound email lead open roomflow search delete trash">
+      <section class="guide-section searchable" id="jobs" data-search="new estimate continue job inbound email lead open roomflow search delete trash refresh shared cloud another pc mobile">
         <h2>4. Start or open a job</h2>
         <h3>Start a new estimate</h3>
         <ol class="steps">
@@ -322,15 +323,19 @@
         </ol>
         <h3>Continue an existing job</h3>
         <ol class="steps">
-          <li>Open <strong>Jobs</strong> and search by customer, address, or job name.</li>
+          <li>Sign in, select the same company used on the other device, and open <strong>Jobs</strong>.</li>
+          <li>Choose <strong>Refresh Shared</strong> to upload pending edits from this device and download the newest company jobs and saved estimates.</li>
+          <li>Search by customer, address, or job name. A <strong>Cloud Shared</strong> badge identifies records available to other signed-in company devices.</li>
           <li>Choose <strong>Continue Estimate</strong> on the correct card.</li>
           <li>Confirm the customer name and latest room count before editing.</li>
         </ol>
+        <div class="note"><strong>Cross-device rule:</strong> users do not need the Townsquare browser extension just to share RoomFlow jobs. They do need a RoomFlow sign-in, the same active company, internet access, and permission to view the job. Only estimate drafts saved to the cloud are available on another device.</div>
         <h3>Open a lead</h3>
         <ol class="steps">
           <li>In the <strong>Leads</strong> panel, tap <strong>Refresh</strong> if the newest inquiry is not visible.</li>
           <li>Review every available field: name, phone, email, complete service address, appointment, estimator, source, email details, and issue.</li>
           <li>Tap <strong>Open in RoomFlow</strong>. The parsed contact and issue fields become the starting job information.</li>
+          <li>For a fake or spam inquiry, tap <strong>Remove Lead</strong> and type <strong>REMOVE</strong>. This requires the <code>delete_jobs</code> permission and permanently removes the shared lead job.</li>
           <li>Correct any field that the email did not state clearly, then continue through the guide.</li>
         </ol>
         <div class="note">Email intake should assist data entry, not replace review. Confirm phone, service address, appointment, and issue with the caller.</div>
@@ -544,7 +549,8 @@
         <h2>11. Save, export, recover, or remove a job</h2>
         <h3>Normal saving</h3>
         <ul>
-          <li>RoomFlow autosaves working data locally and syncs cloud jobs when you are signed in and connected.</li>
+          <li>RoomFlow autosaves working data locally and syncs cloud jobs when you are signed in and connected. Wait for <strong>Cloud Online</strong> before closing the source device.</li>
+          <li>On another PC or mobile device, sign in to the same company and choose <strong>Jobs â†’ Refresh Shared</strong>. Cloud jobs restore the layout; permitted financial users also receive protected costing, and saved estimate drafts restore their lines.</li>
           <li><strong>Save Project</strong> downloads a <code>roomflow_project.json</code> backup.</li>
           <li><strong>Load Project</strong> imports a previously exported RoomFlow JSON file.</li>
           <li>Before closing a device in weak service, export a JSON backup and confirm the job card exists.</li>
@@ -651,6 +657,7 @@
         </table>
         <ul class="checklist">
           <li>Use landscape orientation for CAD and odd-shaped rooms.</li>
+          <li>The top controls collapse on phones and wrap into a second row on narrower desktops; use the bottom navigation for the full guided workflow.</li>
           <li>Close the phone keyboard after entering dimensions so the canvas has more space.</li>
           <li>Zoom in before selecting a short wall or small opening.</li>
           <li>Wait for save/sync confirmation before changing networks or closing the browser.</li>
@@ -659,8 +666,44 @@
         </ul>
       </section>
 
+      <section class="guide-section searchable" id="townsquare" data-search="townsquare draft estimate create update browser bridge extension chrome edge api mapping customer property manual send android queue">
+        <h2>15. Create or update a Townsquare draft</h2>
+        <div class="warning"><strong>Draft only:</strong> RoomFlow never sends, issues, approves, emails, accepts, or charges a Townsquare estimate. Review and send it manually inside Townsquare.</div>
+        <h3>One-time company setup</h3>
+        <ol class="steps">
+          <li>An integration manager opens <strong>More → Townsquare Interactive</strong>.</li>
+          <li>Turn on the integration and choose <strong>Auto</strong> or <strong>Browser Bridge</strong>. Current official API documentation does not include a separate service-property endpoint, so Auto uses Browser Bridge for the complete workflow.</li>
+          <li>Enter the HTTPS Townsquare business-management destination and save.</li>
+          <li>On desktop Chrome or Edge, install the unpacked extension from <code>townsquare-bridge-extension</code>.</li>
+          <li>Open the extension popup, save the same Townsquare URL, and grant access to that site.</li>
+          <li>Sign in to Townsquare normally. The extension does not read your password or export cookies.</li>
+          <li>Choose <strong>Start Guided Mapping</strong>. Click each requested Townsquare control, then finish the mapping.</li>
+        </ol>
+        <h3>Create the first draft</h3>
+        <ol class="steps">
+          <li>Finish the RoomFlow customer and complete service address.</li>
+          <li>Add at least one estimate item. Verify quantity, unit price, discount, tax, and total.</li>
+          <li>Save the RoomFlow draft.</li>
+          <li>Press <strong>Create Townsquare Draft</strong>.</li>
+          <li>Watch the progress dialog. If several customers or properties match, select the correct record; RoomFlow never merges them automatically.</li>
+          <li>Townsquare opens in the authenticated desktop browser. Do not close the tab while the bridge is working.</li>
+          <li>RoomFlow shows <strong>Draft Created</strong> only after Townsquare confirms a draft ID, DRAFT status, and the same total.</li>
+          <li>Choose <strong>Review in Townsquare</strong>. Make the final review and send manually when ready.</li>
+        </ol>
+        <h3>Update an existing draft</h3>
+        <ol class="steps">
+          <li>Change and save the RoomFlow estimate.</li>
+          <li>Press <strong>Update Townsquare Draft</strong>.</li>
+          <li>RoomFlow uses the saved Townsquare estimate ID. If the mapped draft cannot be found, the workflow stops instead of creating a duplicate.</li>
+          <li>If Townsquare says the estimate is issued, accepted, rejected, paid, cancelled, expired, or otherwise finalized, RoomFlow will not overwrite it.</li>
+        </ol>
+        <h3>Android</h3>
+        <p>Desktop extensions do not run inside Android apps or normal Android WebViews. On Android, press <strong>Queue Townsquare Sync for Desktop</strong>, then open the same estimate in desktop RoomFlow with Chrome or Edge and run the draft action.</p>
+        <div class="note">If Townsquare changes its page, open RoomFlow Settings and choose <strong>Test / Reset Mapping</strong>. Only selector settings are saved; customer and estimate payloads remain temporary.</div>
+      </section>
+
       <section class="guide-section searchable" id="troubleshooting" data-search="troubleshooting missing job item not appear proposal invoice work order cannot delete room centered sync offline camera lidar login blank stale cache">
-        <h2>15. Troubleshooting</h2>
+        <h2>16. Troubleshooting</h2>
         <details open>
           <summary>I added an item, but it is missing from a proposal, invoice, or work order.</summary>
           <ol>
@@ -700,10 +743,23 @@
         <details>
           <summary>A job is missing or seems out of date.</summary>
           <ol>
-            <li>Confirm account and active company.</li>
-            <li>Refresh the Jobs view and remove search filters.</li>
+            <li>Confirm that both devices use a RoomFlow sign-in and the exact same active company.</li>
+            <li>On the source device, reconnect and wait for <strong>Cloud Online</strong>.</li>
+            <li>On the receiving device, open Jobs, choose <strong>Refresh Shared</strong>, and remove search filters.</li>
+            <li>Look for the <strong>Cloud Shared</strong> badge. A <strong>Local</strong> badge means that copy has not completed cloud sync.</li>
             <li>Check <strong>More → Trash & Recovery</strong>.</li>
             <li>If offline, reconnect and allow sync to finish. Use Load Project if you exported a JSON backup.</li>
+          </ol>
+        </details>
+        <details>
+          <summary>A Townsquare draft did not complete.</summary>
+          <ol>
+            <li>Confirm the desktop extension is installed and its popup shows the correct Townsquare destination.</li>
+            <li>Sign in to Townsquare normally, then retry from RoomFlow.</li>
+            <li>If a required control is missing, run <strong>Test / Reset Mapping</strong> and map the named control.</li>
+            <li>If totals differ, compare tax, discount, quantities, and prices in both systems. RoomFlow stops before claiming success.</li>
+            <li>If the existing estimate is finalized, review it in Townsquare; RoomFlow will not overwrite it.</li>
+            <li>An integration manager can open <strong>View Diagnostics</strong>. Logs are sanitized and do not contain credentials or cookies.</li>
           </ol>
         </details>
         <details>
@@ -717,7 +773,7 @@
       </section>
 
       <section class="guide-section searchable" id="closeout" data-search="final checklist finish quality control customer crew office">
-        <h2>16. Final quality-control checklist</h2>
+        <h2>17. Final quality-control checklist</h2>
         <ul class="checklist">
           <li>Correct customer, address, phone, email, estimator, and company.</li>
           <li>Every work level and room is present with verified dimensions.</li>
@@ -727,6 +783,7 @@
           <li>Materials, labor, rentals, custom items, margin/markup, and tax are reviewed.</li>
           <li>The shared Documents scope has correct quantities, prices, and inclusion checkboxes.</li>
           <li>Proposal and invoice customer scope/pricing agree.</li>
+          <li>If Townsquare is used, the draft status and total are confirmed and the final send remains manual.</li>
           <li>Work order contains crew, rooms, dimensions, wall work, equipment, and access notes.</li>
           <li>Job is saved, cloud sync is confirmed, and an export/PDF backup exists when required.</li>
         </ul>

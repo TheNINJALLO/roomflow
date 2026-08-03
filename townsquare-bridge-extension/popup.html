@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoomFlow Townsquare Bridge</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <header><span class="mark">RF</span><div><h1>Townsquare Bridge</h1><p>Draft-only browser connection</p></div></header>
+    <div id="status" class="status">Checking connection…</div>
+    <label for="destination">Townsquare destination URL</label>
+    <input id="destination" type="url" placeholder="https://your-townsquare-site.example/..." autocomplete="off">
+    <button id="save" class="primary">Save URL & grant access</button>
+    <section>
+      <h2>Page mapping</h2>
+      <p>Open your authenticated Townsquare page before starting guided mapping.</p>
+      <div class="buttons"><button id="map">Start / continue mapping</button><button id="reset">Test & reset mapping</button></div>
+    </section>
+    <section>
+      <h2>Safety</h2>
+      <p>The extension uses your existing login. It never reads passwords or exports cookies, and it blocks Send, Issue, Email, Approve, and payment actions.</p>
+    </section>
+    <details><summary>Redacted diagnostics</summary><pre id="diagnostics">No diagnostics loaded.</pre><button id="refresh-logs">Refresh diagnostics</button></details>
+    <p class="foot">Start estimate synchronization from RoomFlow. Customer delivery always remains manual in Townsquare.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

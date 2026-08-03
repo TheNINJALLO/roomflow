@@ -9,6 +9,7 @@
         client: null,
         leadChannel: null,
         leadChannelOrgId: null,
+        sharedRefreshTimer: null,
         jobIdMapKey: 'roomflow_cloud_job_ids_v1',
         estimateDraftKey: 'roomflow_estimate_drafts_v1',
         catalogCache: [],
@@ -65,13 +66,15 @@
         },
 
         currentJobId() {
-            if (state?.jobId) return state.jobId;
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if (uuidPattern.test(String(state?.jobId || ''))) return state.jobId;
             const map = JSON.parse(localStorage.getItem(this.jobIdMapKey) || '{}');
-            return state?.currentJobName ? map[state.currentJobName] || null : null;
+            const mapped = state?.currentJobName ? map[state.currentJobName] || null : null;
+            return uuidPattern.test(String(mapped || '')) ? mapped : null;
         },
 
         setJobMapping(jobName, jobId) {
-            if (!jobName || !jobId) return;
+            if (!jobName || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(jobId || ''))) return;
             const map = JSON.parse(localStorage.getItem(this.jobIdMapKey) || '{}');
             map[jobName] = jobId;
             localStorage.setItem(this.jobIdMapKey, JSON.stringify(map));
@@ -105,7 +108,12 @@
             this.injectSettingsCards();
             this.injectLeadPanel();
             await this.waitForSession();
-            await Promise.allSettled([this.refreshInboundLeads(), this.refreshIntegrationDiagnostics(), this.loadCatalog()]);
+            await Promise.allSettled([
+                this.refreshInboundLeads(),
+                this.refreshIntegrationDiagnostics(),
+                this.loadCatalog(),
+                window.RoomFlowSync?.refreshSharedJobs?.()
+            ]);
             this.subscribeRealtime();
         },
 
@@ -250,7 +258,7 @@
                     <div><h3 style="margin:0;color:#fff;">Leads</h3><p style="margin:.25rem 0 0;color:#94a3b8;font-size:.8rem;">New inquiries from Zapier and RoomFlow appear here with every available lead field.</p></div>
                     <button id="roomflow-refresh-leads" class="btn-secondary">Refresh</button>
                 </div>
-                <div id="roomflow-inbound-leads-list" style="display:grid;gap:.65rem;"><div style="color:#64748b;">Sign in and select a company to load leads.</div></div>`;
+                <div id="roomflow-inbound-leads-list" class="roomflow-inbound-leads-list" tabindex="0" role="region" aria-label="Leads list"><div style="color:#64748b;">Sign in and select a company to load leads.</div></div>`;
             const listSection = host.querySelector('.jobs-list-section');
             host.insertBefore(card, listSection || host.lastChild);
             document.getElementById('roomflow-refresh-leads')?.addEventListener('click', () => this.refreshInboundLeads());
@@ -328,7 +336,13 @@
                     ${field('Issue / request', lead.issue, true)}
                 </div>
                 ${lead.warnings.length ? `<div class="roomflow-lead-warning"><strong>Intake notes:</strong> ${this.escape(lead.warnings.join(' '))}</div>` : ''}
-                <div class="roomflow-lead-card-actions"><span>${this.escape(lead.importStatus ? `Intake ${lead.importStatus}` : 'RoomFlow lead')}</span><button class="btn-primary roomflow-open-lead" data-job-id="${this.escape(lead.id)}">Open in RoomFlow</button></div>
+                <div class="roomflow-lead-card-actions">
+                    <span>${this.escape(lead.importStatus ? `Intake ${lead.importStatus}` : 'RoomFlow lead')}</span>
+                    <div class="roomflow-lead-action-buttons">
+                        <button class="btn-secondary roomflow-remove-lead" data-job-id="${this.escape(lead.id)}" data-lead-name="${this.escape(lead.name)}">Remove Lead</button>
+                        <button class="btn-primary roomflow-open-lead" data-job-id="${this.escape(lead.id)}">Open in RoomFlow</button>
+                    </div>
+                </div>
             </article>`;
         },
 
@@ -374,6 +388,78 @@
             list.querySelectorAll('.roomflow-open-lead').forEach(button => {
                 button.addEventListener('click', () => this.openInboundLead(button.dataset.jobId));
             });
+            list.querySelectorAll('.roomflow-remove-lead').forEach(button => {
+                button.addEventListener('click', () => this.removeInboundLead(button.dataset.jobId, button.dataset.leadName, button));
+            });
+        },
+
+        async removeInboundLead(jobId, leadName = 'this lead', button = null) {
+            const client = this.getClient();
+            const orgId = this.currentOrgId();
+            if (!client || !orgId || !jobId) return;
+            const confirmation = window.prompt(
+                `Remove "${leadName}" from Leads?\n\nThis permanently deletes the shared lead job and its job-linked layouts, estimates, work orders, and timeline. The intake record remains for audit.\n\nType REMOVE to confirm.`,
+                ''
+            );
+            if (confirmation === null) return;
+            if (String(confirmation).trim().toUpperCase() !== 'REMOVE') {
+                this.toast('Lead was not removed. Type REMOVE to confirm.', 'warning');
+                return;
+            }
+
+            const originalText = button?.textContent || 'Remove Lead';
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Removing…';
+            }
+            try {
+                const deploymentResult = await client
+                    .from('equipment_deployments')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('organization_id', orgId)
+                    .eq('job_id', jobId)
+                    .eq('status', 'active');
+                if (deploymentResult.error) throw new Error(`Could not verify equipment: ${deploymentResult.error.message}`);
+                if (deploymentResult.count) {
+                    this.toast('Pick up active equipment before removing this lead.', 'error');
+                    return;
+                }
+
+                const result = await client
+                    .from('jobs')
+                    .delete()
+                    .eq('organization_id', orgId)
+                    .eq('id', jobId)
+                    .select('id')
+                    .maybeSingle();
+                if (result.error) {
+                    const permissionDenied = /permission|policy|row-level|rls/i.test(result.error.message || '');
+                    throw new Error(permissionDenied
+                        ? 'Your role needs the delete_jobs permission before it can remove leads.'
+                        : result.error.message);
+                }
+                if (!result.data) throw new Error('The lead was not removed. Your role may need the delete_jobs permission.');
+
+                this.removeDeletedCloudJobMapping(jobId);
+                const card = Array.from(document.querySelectorAll('[data-lead-card]')).find(item => item.dataset.leadCard === jobId);
+                if (card) card.remove();
+                const auditResult = await client.from('audit_logs').insert({
+                    organization_id: orgId,
+                    user_id: state.sessionUser?.id || null,
+                    action: 'lead.removed_from_roomflow',
+                    details: { job_id: jobId, lead_name: leadName, removed_at: new Date().toISOString() }
+                });
+                if (auditResult.error) console.warn('Lead removal audit failed', auditResult.error);
+                this.toast('Lead permanently removed.', 'success');
+                await this.refreshInboundLeads();
+            } catch (error) {
+                this.toast(error.message || String(error), 'error');
+            } finally {
+                if (button?.isConnected) {
+                    button.disabled = false;
+                    button.textContent = originalText;
+                }
+            }
         },
 
         async openInboundLead(jobId) {
@@ -453,7 +539,7 @@
             if (!document.getElementById('roomflow-email-integration-card')) {
                 const card = document.createElement('section');
                 card.id = 'roomflow-email-integration-card';
-                card.className = 'checklist-room-card';
+                card.className = 'checklist-room-card roomflow-more-card';
                 card.style.padding = '1.25rem';
                 card.innerHTML = `
                     <h3 style="color:#fff;margin:0 0 .35rem;">Lead Intake / Zapier</h3>
@@ -461,6 +547,7 @@
                     <div style="display:flex;gap:.5rem;flex-wrap:wrap;"><input id="roomflow-endpoint-name" value="Lead Intake" style="flex:1;min-width:220px;background:#1f2937;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;color:#fff;"><button id="roomflow-create-endpoint" class="btn-primary">Create Endpoint</button><button id="roomflow-refresh-endpoints" class="btn-secondary">Refresh Activity</button></div>
                     <pre id="roomflow-endpoint-output" style="display:none;white-space:pre-wrap;margin-top:.8rem;padding:.8rem;border-radius:8px;background:#020617;color:#cbd5e1;font-size:.72rem;overflow:auto;"></pre>
                     <div id="roomflow-endpoint-diagnostics" style="display:grid;gap:.65rem;margin-top:.8rem;"><div style="color:#64748b;font-size:.78rem;">Sign in and select a company to view webhook activity.</div></div>`;
+                card.querySelector('#roomflow-endpoint-name')?.parentElement?.classList.add('roomflow-more-toolbar');
                 host.appendChild(card);
                 card.querySelector('#roomflow-create-endpoint')?.addEventListener('click', () => this.createIntegrationEndpoint());
                 card.querySelector('#roomflow-refresh-endpoints')?.addEventListener('click', () => this.refreshIntegrationDiagnostics());
@@ -468,13 +555,15 @@
             if (!document.getElementById('roomflow-catalog-import-card')) {
                 const card = document.createElement('section');
                 card.id = 'roomflow-catalog-import-card';
-                card.className = 'checklist-room-card';
+                card.className = 'checklist-room-card roomflow-more-card';
                 card.style.padding = '1.25rem';
                 card.innerHTML = `
                     <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;"><div><h3 style="color:#fff;margin:0;">Estimate Product Catalog</h3><p style="color:#94a3b8;font-size:.8rem;margin:.25rem 0;">Import the copied product list, then edit prices, units, tax settings, and descriptions.</p></div><button id="roomflow-import-seed" class="btn-primary">Import 229 Products</button></div>
                     <div style="display:flex;gap:.5rem;margin:.7rem 0;"><input id="roomflow-catalog-search" placeholder="Search products…" style="flex:1;background:#1f2937;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;color:#fff;"><button id="roomflow-refresh-catalog" class="btn-secondary">Refresh</button></div>
                     <div id="roomflow-catalog-summary" style="font-size:.75rem;color:#94a3b8;margin-bottom:.5rem;"></div>
                     <div id="roomflow-catalog-list" style="max-height:420px;overflow:auto;display:grid;gap:.45rem;"></div>`;
+                card.querySelector('#roomflow-import-seed')?.parentElement?.classList.add('roomflow-catalog-heading');
+                card.querySelector('#roomflow-catalog-search')?.parentElement?.classList.add('roomflow-more-toolbar');
                 host.appendChild(card);
                 card.querySelector('#roomflow-import-seed')?.addEventListener('click', () => this.importSeedCatalog());
                 card.querySelector('#roomflow-refresh-catalog')?.addEventListener('click', () => this.loadCatalog(true));
@@ -607,8 +696,8 @@
             const query = (document.getElementById('roomflow-catalog-search')?.value || '').toLowerCase();
             const items = this.catalogCache.filter(item => !query || `${item.name} ${item.category} ${item.description || ''}`.toLowerCase().includes(query));
             if (summary) summary.textContent = `${this.catalogCache.length} products · ${this.catalogCache.filter(i => i.review_required).length} require review · ${this.catalogCache.filter(i => Number(i.unit_price) === 0).length} have a $0.00 price`;
-            list.innerHTML = items.slice(0, 250).map(item => `<div style="display:grid;grid-template-columns:minmax(180px,1fr) 120px 105px 85px;gap:.5rem;align-items:center;padding:.55rem;border:1px solid rgba(255,255,255,.07);border-radius:8px;background:rgba(15,23,42,.3);">
-                <div><strong style="color:#fff;font-size:.8rem;">${this.escape(item.name)}</strong><div style="font-size:.68rem;color:${item.review_required ? '#fbbf24' : '#64748b'};">${this.escape(item.category)}${item.review_required ? ' · Review required' : ''}</div></div>
+            list.innerHTML = items.slice(0, 250).map(item => `<div class="roomflow-catalog-row" style="display:grid;grid-template-columns:minmax(180px,1fr) 120px 105px 85px;gap:.5rem;align-items:center;padding:.55rem;border:1px solid rgba(255,255,255,.07);border-radius:8px;background:rgba(15,23,42,.3);">
+                <div class="roomflow-catalog-name"><strong style="color:#fff;font-size:.8rem;">${this.escape(item.name)}</strong><div style="font-size:.68rem;color:${item.review_required ? '#fbbf24' : '#64748b'};">${this.escape(item.category)}${item.review_required ? ' · Review required' : ''}</div></div>
                 <select data-catalog-field="pricing_method" data-id="${item.id}" style="background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:.4rem;font-size:.72rem;">
                     ${['fixed','per_square_foot','per_linear_foot','per_hour','per_day','manual','discount','deposit'].map(value => `<option ${item.pricing_method === value ? 'selected' : ''}>${value}</option>`).join('')}
                 </select>
@@ -841,7 +930,25 @@
                     estimate = result.data;
                     this.currentEstimateId = estimate.id;
                 }
-                const rows = this.currentLines.map((line, index) => ({ ...line, estimate_id: estimate.id, sort_order: index }));
+                const rows = this.currentLines.map((line, index) => ({
+                    estimate_id: estimate.id,
+                    catalog_item_id: line.catalog_item_id || null,
+                    room_id: line.room_id || null,
+                    section_name: line.section_name || null,
+                    roomflow_line_id: line.roomflow_line_id || this.lineId(),
+                    category: line.category || 'other',
+                    name: line.name,
+                    description: line.description || '',
+                    pricing_method: line.pricing_method || 'fixed',
+                    quantity: Number(line.quantity) || 0,
+                    unit: line.unit || 'each',
+                    unit_price: Number(line.unit_price) || 0,
+                    taxable: Boolean(line.taxable),
+                    optional: Boolean(line.optional),
+                    selected: line.selected !== false,
+                    sort_order: index,
+                    calculation_metadata: { ...(line.calculation_metadata || {}), category: line.category || 'other' }
+                }));
                 const linesResult = await client.from('estimate_lines').insert(rows);
                 if (linesResult.error) throw linesResult.error;
                 await client.from('jobs').update({ status: 'Estimate Draft', estimate_status: 'draft', tracking_color: 'purple' }).eq('id', jobId);
@@ -932,23 +1039,34 @@
 
         removeDeletedCloudJobMapping(jobId) {
             if (!jobId) return;
-            const map = JSON.parse(localStorage.getItem(this.jobIdMapKey) || '{}');
-            const linkedNames = [];
-            let changed = false;
-            Object.keys(map).forEach(name => {
-                if (map[name] === jobId) { linkedNames.push(name); delete map[name]; changed = true; }
-            });
-            if (changed) localStorage.setItem(this.jobIdMapKey, JSON.stringify(map));
-            const jobs = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}');
-            let jobsChanged = false;
-            Object.keys(jobs).forEach(name => {
-                if (jobs[name]?.jobId === jobId || linkedNames.includes(name)) {
-                    delete jobs[name];
-                    jobsChanged = true;
-                }
-            });
-            if (jobsChanged) localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
-            if (state.jobId === jobId) state.jobId = null;
+            try {
+                const map = JSON.parse(localStorage.getItem(this.jobIdMapKey) || '{}');
+                const linkedNames = [];
+                let changed = false;
+                Object.keys(map).forEach(name => {
+                    if (map[name] === jobId) { linkedNames.push(name); delete map[name]; changed = true; }
+                });
+                if (changed) localStorage.setItem(this.jobIdMapKey, JSON.stringify(map));
+                const jobs = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}');
+                let jobsChanged = false;
+                Object.keys(jobs).forEach(name => {
+                    if (jobs[name]?.jobId === jobId || linkedNames.includes(name)) {
+                        delete jobs[name];
+                        jobsChanged = true;
+                    }
+                });
+                if (jobsChanged) localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+                if (state.jobId === jobId) state.jobId = null;
+            } catch (error) {
+                console.warn('Local RoomFlow lead cleanup failed', error);
+            }
+        },
+
+        scheduleSharedJobsRefresh() {
+            clearTimeout(this.sharedRefreshTimer);
+            this.sharedRefreshTimer = setTimeout(() => {
+                window.RoomFlowSync?.refreshSharedJobs?.().catch(error => console.warn('Realtime shared job refresh failed', error));
+            }, 350);
         },
 
         subscribeRealtime() {
@@ -962,6 +1080,7 @@
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'jobs', filter: `organization_id=eq.${orgId}` }, payload => {
                     if (payload.eventType === 'DELETE') this.removeDeletedCloudJobMapping(payload.old?.id);
                     this.refreshInboundLeads();
+                    this.scheduleSharedJobsRefresh();
                 })
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'lead_imports', filter: `organization_id=eq.${orgId}` }, payload => {
                     if (payload.eventType === 'INSERT') this.toast(`New lead imported${payload.new?.source_subject ? `: ${payload.new.source_subject}` : ''}.`, 'success');

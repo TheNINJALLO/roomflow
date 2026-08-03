@@ -6504,8 +6504,12 @@ function loadJobData(data) {
     state.interiorPipes = data.interiorPipes;
     state.stanchions = data.stanchions;
     state.mainBeams = data.mainBeams;
+    state.levels = data.levels;
     state.currentLevelId = data.currentLevelId || 'basement';
     state.capturedMeasurements = data.capturedMeasurements;
+    state.jobId = data.jobId || null;
+    state.currentStep = Number(data.currentStep || state.currentStep || 1);
+    state.guidedStep3Mode = data.guidedStep3Mode || 'choose';
     
     // New logical building properties
     state.walls = data.walls || [];
@@ -6993,6 +6997,9 @@ window.switchTab = function(tabName) {
     if (tabName === 'jobs') {
         switchView('jobs');
         renderJobsList();
+        if (window.RoomFlowSync?.refreshSharedJobs) {
+            window.RoomFlowSync.refreshSharedJobs().catch(error => console.warn('Could not refresh shared jobs:', error));
+        }
     } else if (tabName === 'project') {
         if (state.currentJobName) {
             switchView('guided');
@@ -7310,11 +7317,29 @@ function getStoredJobs() {
 
 window.autosaveJob = function() {
     if (!state.currentJobName) return;
-    
+
+    const now = Date.now();
+    state.updatedTimestamp = now;
+    state.revisionNumber = Number(state.revisionNumber || 0) + 1;
+    state.syncState = 'pending';
     const projectData = {
+        schemaVersion: '2.0.0',
+        jobId: state.jobId || null,
+        organizationId: state.currentOrganization?.id || localStorage.getItem('roomflow_active_org_id') || '',
+        currentJobName: state.currentJobName,
+        currentStep: state.currentStep || 1,
+        guidedStep3Mode: state.guidedStep3Mode || 'choose',
         customerName: state.costing ? state.costing.customerName : '',
         customerAddress: state.costing ? state.costing.customerAddress : '',
+        levels: state.levels || [],
         rooms: state.rooms,
+        walls: state.walls || [],
+        roomConnections: state.roomConnections || [],
+        doors: state.doors || [],
+        windows: state.windows || [],
+        openings: state.openings || [],
+        stairs: state.stairs || [],
+        utilities: state.utilities || [],
         sumpPumps: state.sumpPumps,
         dehumidifiers: state.dehumidifiers || [],
         dischargeLines: state.dischargeLines,
@@ -7325,7 +7350,12 @@ window.autosaveJob = function() {
         currentLevelId: state.currentLevelId,
         capturedMeasurements: state.capturedMeasurements || [],
         costing: state.costing,
-        lastModified: Date.now()
+        leadIntake: state.leadIntake || null,
+        createdTimestamp: state.createdTimestamp || now,
+        updatedTimestamp: now,
+        revisionNumber: state.revisionNumber,
+        syncState: 'pending',
+        lastModified: now
     };
     
     const jobs = getStoredJobs();
@@ -7346,12 +7376,21 @@ window.autosaveJob = function() {
 function renderJobsList() {
     const list = document.getElementById('recent-jobs-list');
     if (!list) return;
-    
+
+    const escapeJobsHtml = value => String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
     const jobs = getStoredJobs();
     const query = (document.getElementById('jobs-search-input')?.value || '').trim().toLowerCase();
     const filter = document.getElementById('jobs-filter-status')?.value || 'all';
     
-    const jobKeys = Object.keys(jobs).sort((a,b) => (jobs[b].lastModified || 0) - (jobs[a].lastModified || 0));
+    const activeOrganizationId = state.currentOrganization?.id || localStorage.getItem('roomflow_active_org_id') || '';
+    const jobKeys = Object.keys(jobs)
+        .filter(name => !activeOrganizationId || !jobs[name]?.organizationId || jobs[name].organizationId === activeOrganizationId)
+        .sort((a,b) => (jobs[b].lastModified || 0) - (jobs[a].lastModified || 0));
     
     let html = '';
     let matchCount = 0;
@@ -7372,12 +7411,16 @@ function renderJobsList() {
         matchCount++;
         const dateStr = new Date(j.lastModified || Date.now()).toLocaleDateString();
         const progress = isComplete ? 100 : Math.round(((j.rooms?.length ? 1 : 0) + (j.costing?.customerName ? 1 : 0)) * 50);
+        const cloudBadge = j.sharedFromCloud
+            ? '<span style="display:inline-flex;align-items:center;padding:.18rem .45rem;border-radius:999px;background:rgba(59,130,246,.14);color:#93c5fd;font-size:.68rem;font-weight:700;margin-left:.4rem;">Cloud Shared</span>'
+            : '<span style="display:inline-flex;align-items:center;padding:.18rem .45rem;border-radius:999px;background:rgba(245,158,11,.12);color:#fbbf24;font-size:.68rem;font-weight:700;margin-left:.4rem;">Local</span>';
+        const displayStatus = escapeJobsHtml(j.cloudStatus || (isComplete ? 'Complete' : 'In Progress'));
         
         html += `
             <div class="job-row-card">
                 <div class="job-info-cell">
-                    <h4>${k}</h4>
-                    <p>${j.customerAddress || 'No Address Specified'} | Edited: ${dateStr}</p>
+                    <h4>${escapeJobsHtml(k)} ${cloudBadge}</h4>
+                    <p>${escapeJobsHtml(j.customerAddress || 'No Address Specified')} | Edited: ${escapeJobsHtml(dateStr)}</p>
                 </div>
                 <div class="job-progress-cell">
                     <span style="font-size:0.75rem; font-weight:600; color:#cbd5e1;">Progress: ${progress}%</span>
@@ -7386,12 +7429,12 @@ function renderJobsList() {
                     </div>
                 </div>
                 <div style="font-size: 0.8rem; color: #94a3b8;">
-                    ${isComplete ? '<span style="color:#10b981; font-weight:600;">Complete</span>' : '<span style="color:#f59e0b; font-weight:600;">In Progress</span>'}
+                    <span style="color:${isComplete ? '#10b981' : '#f59e0b'}; font-weight:600;">${displayStatus}</span>
                 </div>
                 <div class="job-actions-cell">
-                    <button onclick="window.loadJobByName('${k}')" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="arrow-right" style="width:12px; height:12px;"></i> Open</button>
-                    <button onclick="window.duplicateJob('${k}')" class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="copy" style="width:12px; height:12px;"></i> Duplicate</button>
-                    <button onclick="window.deleteJobWithTrash('${k}')" class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem; color:#ef4444;"><i data-lucide="trash-2" style="width:12px; height:12px;"></i> Delete</button>
+                    <button data-job-action="open" data-job-name="${escapeJobsHtml(k)}" class="btn-primary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="arrow-right" style="width:12px; height:12px;"></i> Open</button>
+                    <button data-job-action="duplicate" data-job-name="${escapeJobsHtml(k)}" class="btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;"><i data-lucide="copy" style="width:12px; height:12px;"></i> Duplicate</button>
+                    <button data-job-action="delete" data-job-name="${escapeJobsHtml(k)}" class="btn-secondary" title="${j.sharedFromCloud ? 'Removes this device copy; Refresh Shared can restore it.' : 'Move this local job to Trash.'}" style="padding:0.4rem 0.8rem; font-size:0.75rem; color:#ef4444;"><i data-lucide="trash-2" style="width:12px; height:12px;"></i> ${j.sharedFromCloud ? 'Remove Local' : 'Delete'}</button>
                 </div>
             </div>
         `;
@@ -7406,8 +7449,18 @@ function renderJobsList() {
     }
     
     list.innerHTML = html;
+    list.querySelectorAll('[data-job-action]').forEach(button => {
+        button.addEventListener('click', () => {
+            const jobName = button.dataset.jobName;
+            if (button.dataset.jobAction === 'open') window.loadJobByName(jobName);
+            else if (button.dataset.jobAction === 'duplicate') window.duplicateJob(jobName);
+            else if (button.dataset.jobAction === 'delete') window.deleteJobWithTrash(jobName);
+        });
+    });
     if (window.lucide) window.lucide.createIcons();
 }
+
+window.renderRoomFlowJobsList = renderJobsList;
 
 // Duplicate estimate
 window.duplicateJob = function(jobName) {
@@ -7418,6 +7471,12 @@ window.duplicateJob = function(jobName) {
     const copyName = jobName + " (Copy)";
     const copyData = JSON.parse(JSON.stringify(orig));
     copyData.lastModified = Date.now();
+    copyData.currentJobName = copyName;
+    copyData.jobId = null;
+    copyData.sharedFromCloud = false;
+    copyData.syncState = 'pending';
+    delete copyData.cloudUpdatedAt;
+    delete copyData.cloudStatus;
     
     jobs[copyName] = copyData;
     localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
@@ -7534,8 +7593,8 @@ function renderTrashList() {
     let html = '';
     keys.forEach(k => {
         html += `
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0.5rem; background:rgba(255,255,255,0.03); border-radius:6px; font-size:0.8rem; border:1px solid rgba(255,255,255,0.05);">
-                <span style="font-weight:600; color:white;">${k}</span>
+            <div class="trash-job-row" style="display:flex; justify-content:space-between; align-items:center; padding:0.35rem 0.5rem; background:rgba(255,255,255,0.03); border-radius:6px; font-size:0.8rem; border:1px solid rgba(255,255,255,0.05);">
+                <span class="trash-job-name" style="font-weight:600; color:white;">${k}</span>
                 <button onclick="window.restoreJob('${k}')" class="btn-primary" style="padding:0.25rem 0.5rem; font-size:0.75rem;"><i data-lucide="refresh-cw" style="width:10px; height:10px; display:inline-block; vertical-align:middle; margin-right:2px;"></i> Restore</button>
             </div>
         `;

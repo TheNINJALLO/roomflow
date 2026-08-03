@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>RoomFlow Leads panel smoke test</title>
-  <link rel="stylesheet" href="../styles.css?v=67">
+  <link rel="stylesheet" href="../styles.css?v=70">
   <style>body{display:grid;grid-template-columns:minmax(300px,.75fr) minmax(0,1.25fr);gap:16px;padding:16px}pre{white-space:pre-wrap}@media(max-width:620px){body{display:block;padding:10px}#test-result{display:none}}</style>
 </head>
 <body style="background:#07101d;color:#fff">
@@ -18,7 +18,7 @@
     window.autosaveJob = function () {};
     window.switchTab = function () {};
   </script>
-  <script src="../roomflow-integrations.js?v=4"></script>
+  <script src="../roomflow-integrations.js?v=5"></script>
   <script>
     (async function () {
       'use strict';
@@ -54,6 +54,9 @@
         check('Card shows ' + label, cardText.includes(label));
       });
       check('Card shows original email values', cardText.includes('forms@example.com') && cardText.includes('New waterproofing inquiry') && cardText.includes('gmail-message-123'));
+      check('Card provides a remove action', cardHost.querySelector('.roomflow-remove-lead')?.dataset.jobId === 'lead-1');
+      var leadListStyle = getComputedStyle(cardHost);
+      check('Lead list has its own vertical scroll region', ['auto', 'scroll'].includes(leadListStyle.overflowY) && leadListStyle.maxHeight !== 'none', `${leadListStyle.overflowY} / ${leadListStyle.maxHeight}`);
 
       var captured = null;
       window.loadJobData = function (data) { captured = data; };
@@ -82,6 +85,42 @@
       check('Opening lead keeps estimator', captured?.costing?.estimator === 'Jordan', captured?.costing?.estimator);
       check('Opening lead keeps intake metadata', captured?.leadIntake?.subject === 'New waterproofing inquiry' && captured?.leadIntake?.sourceMessageId === 'gmail-message-123');
       check('Opening lead keeps locality fields', captured?.leadIntake?.city === 'Grand Rapids' && captured?.leadIntake?.state === 'MI' && captured?.leadIntake?.postalCode === '49503');
+
+      var deletedLeadId = null;
+      var originalPrompt = window.prompt;
+      window.prompt = function () { return 'REMOVE'; };
+      localStorage.setItem('roomflow_cloud_job_ids_v1', JSON.stringify({ 'Taylor Lead': 'lead-1' }));
+      localStorage.setItem('roomflow_jobs', JSON.stringify({ 'Taylor Lead': { jobId: 'lead-1' } }));
+      integration.getClient = function () {
+        return {
+          from: function (table) {
+            var action = 'select';
+            var filters = {};
+            var query = {
+              select: function () { return query; },
+              eq: function (key, value) { filters[key] = value; return query; },
+              delete: function () { action = 'delete'; return query; },
+              insert: async function () { return { error: null }; },
+              maybeSingle: async function () {
+                if (table === 'jobs' && action === 'delete') {
+                  deletedLeadId = filters.id;
+                  return { data: { id: filters.id }, error: null };
+                }
+                return { data: null, error: null };
+              },
+              then: function (resolve) {
+                if (table === 'equipment_deployments') resolve({ count: 0, data: null, error: null });
+                else resolve({ data: null, error: null });
+              }
+            };
+            return query;
+          }
+        };
+      };
+      await integration.removeInboundLead('lead-1', 'Taylor Lead');
+      window.prompt = originalPrompt;
+      check('Confirmed lead removal deletes the shared cloud job', deletedLeadId === 'lead-1', deletedLeadId);
+      check('Lead removal clears the local cloud mapping', !JSON.parse(localStorage.getItem('roomflow_cloud_job_ids_v1') || '{}')['Taylor Lead']);
 
       var result = { passed: checks.every(function (item) { return item.passed; }), checks: checks };
       document.getElementById('test-result').textContent = JSON.stringify(result, null, 2);

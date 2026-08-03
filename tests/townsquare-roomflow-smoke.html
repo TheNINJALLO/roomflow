@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RoomFlow Townsquare UI smoke test</title><link rel="stylesheet" href="../styles.css"><style>body{background:#08111f;color:#fff;padding:20px}#result{white-space:pre-wrap;font:13px ui-monospace,monospace}.checklist-room-card{background:#111827;border:1px solid #334155;border-radius:12px;margin:10px 0}</style></head>
+<body><pre id="result">Running…</pre><section id="more-viewport"></section><section id="roomflow-inline-estimate-builder" class="checklist-room-card"></section>
+<script>
+window.state={sessionUser:{id:'user-1'},currentOrganization:{id:'11111111-1111-4111-8111-111111111111',name:'Test Company'},currentJobName:'Fixture Job'};
+window.hasCapability=name=>['manage_integrations','generate_proposals'].includes(name);
+const calls=[];
+const client={functions:{invoke:async(_name,{body})=>{calls.push(body);if(body.action==='get_configuration')return{data:{ok:true,configuration:{configured:true,enabled:true,connection_mode:'auto',api_base_url:'https://api.vcita.biz',browser_destination_url:'https://app.vcita.com/',currency:'USD',estimate_expiration_days:30,attachment_mode:'selected',provider_business_uid:'',provider_tax_uid:'',has_api_token:true,credential_updated_at:'2026-08-02T20:00:00Z',provider_capabilities:{serviceProperties:false},last_successful_sync_at:null,last_failed_sync_at:null}},error:null};if(body.action==='get_sync_station_status')return{data:{ok:true,station_status:{configured:true,online:true,stations:[{id:'55555555-5555-4555-8555-555555555555',name:'Primary Sync Station',online:true,last_seen_at:'2026-08-02T20:00:00Z'}]}},error:null};if(body.action==='list_sync_stations')return{data:{ok:true,stations:[{id:'55555555-5555-4555-8555-555555555555',name:'Primary Sync Station',enabled:true,online:true,last_seen_at:'2026-08-02T20:00:00Z',created_at:'2026-08-02T19:00:00Z'}]},error:null};if(body.action==='get_estimate_sync')return{data:{ok:true,sync:{mapping:{provider_entity_id:'estimate-remote-1',provider_status:'DRAFT',provider_url:'https://app.vcita.com/estimates/estimate-remote-1'},runs:[{status:'completed',created_at:'2026-08-02T20:00:00Z'}]}},error:null};return{data:{ok:true},error:null};}}};
+window.RoomFlowIntegrations={getClient:()=>client,escape:value=>String(value),toast:()=>{},currentEstimateId:'44444444-4444-4444-8444-444444444444',saveDraftEstimate:async()=>({id:'44444444-4444-4444-8444-444444444444'})};
+</script>
+<script src="../townsquare-integration.js"></script>
+<script>
+window.addEventListener('load',async()=>{await new Promise(r=>setTimeout(r,1500));const checks=[];const add=(name,passed,detail='')=>checks.push({name,passed:Boolean(passed),detail:String(detail||'')});
+add('Settings card is injected',Boolean(document.getElementById('roomflow-townsquare-settings-card')));
+add('Draft action is injected',Boolean(document.querySelector('.townsquare-sync-button')));
+add('Mapped estimate routes through Sync Station',/Update via Sync Station/.test(document.querySelector('.townsquare-sync-button')?.textContent||''),document.querySelector('.townsquare-sync-button')?.textContent);
+add('Paired Sync Station is shown online',/Primary Sync Station/.test(document.getElementById('townsquare-station-list')?.textContent||'')&&document.getElementById('townsquare-station-summary')?.textContent==='Online');
+add('API base URL is configurable and server-allowlisted',document.getElementById('townsquare-api-base')?.value==='https://api.vcita.biz');
+add('API token field is password-only and blank',document.getElementById('townsquare-api-token')?.type==='password'&&!document.getElementById('townsquare-api-token')?.value);
+add('Manual-send safety is visible',/never sends, issues, approves, emails, or charges/i.test(document.getElementById('roomflow-townsquare-settings-card')?.textContent||''));
+add('Official property limitation is visible',/no separate service-property/i.test(document.getElementById('roomflow-townsquare-settings-card')?.textContent||''));
+RoomFlowTownsquare.showProgressDialog();add('Progress dialog includes customer, property, and draft stages',/Match or create customer/.test(document.getElementById('townsquare-progress-dialog')?.textContent||'')&&/Confirm Townsquare draft/.test(document.getElementById('townsquare-progress-dialog')?.textContent||''));
+RoomFlowTownsquare.showSuccess({completed_at:'2026-08-02T20:15:00Z',draft:{id:'estimate-1',url:'https://app.vcita.com/estimates/estimate-1',total_minor:26200},summary:{customer:'matched',property:'created',estimate:'created'}});add('Success state says nothing was sent',/Nothing was sent to the customer/.test(document.getElementById('townsquare-progress-result')?.textContent||''));add('Success state includes sync time',/Sync time/.test(document.getElementById('townsquare-progress-result')?.textContent||''));
+add('Configuration is loaded only through Edge Function',calls.some(call=>call.action==='get_configuration')&&calls.some(call=>call.action==='get_estimate_sync'));
+document.getElementById('townsquare-progress-dialog')?.remove();
+const report={passed:checks.every(c=>c.passed),checks};document.getElementById('result').textContent=JSON.stringify(report,null,2);document.body.dataset.passed=String(report.passed);});
+</script></body></html>

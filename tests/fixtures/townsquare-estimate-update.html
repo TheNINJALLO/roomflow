@@ -1,0 +1,14 @@
+<!doctype html><html><body>
+  <label>Estimate search <input data-testid="estimate-search"></label>
+  <button class="estimate-result" data-id="estimate-existing-789">estimate-existing-789 · RF-2026-1001</button>
+  <button data-testid="create-estimate">Create Estimate</button>
+  <label>Estimate title <input data-testid="estimate-title"></label><label>Estimate number <input data-testid="estimate-number"></label>
+  <label>Scope of work <textarea data-testid="estimate-description"></textarea></label><button data-testid="add-line">Add Line Item</button>
+  <div id="line-items"><div data-testid="line-row"><input data-testid="line-name"><input data-testid="line-description"><input data-testid="line-quantity"><input data-testid="line-unit"><input data-testid="line-price"><input type="checkbox" data-testid="line-taxable"><button data-testid="remove-line">Remove item</button></div></div>
+  <template id="line-template"><div data-testid="line-row"><input data-testid="line-name"><input data-testid="line-description"><input data-testid="line-quantity"><input data-testid="line-unit"><input data-testid="line-price"><input type="checkbox" data-testid="line-taxable"><button data-testid="remove-line">Remove item</button></div></template>
+  <input data-testid="tax-rate"><input data-testid="discount"><textarea data-testid="customer-notes"></textarea>
+  <textarea data-testid="internal-notes"></textarea><textarea data-testid="terms"></textarea><input data-testid="deposit"><input data-testid="due-date">
+  <strong data-testid="grand-total">$262.00</strong><button data-testid="save-draft" data-id="estimate-existing-789">Save Draft</button>
+  <span data-testid="estimate-status">DRAFT</span><a data-testid="estimate-detail" data-id="estimate-existing-789">Review estimate</a><div data-testid="validation-error" hidden></div>
+  <script>const rows=document.getElementById('line-items');const wire=row=>row.querySelector('[data-testid="remove-line"]').addEventListener('click',()=>row.remove());wire(rows.firstElementChild);document.querySelector('[data-testid="add-line"]').addEventListener('click',()=>{const row=document.getElementById('line-template').content.firstElementChild.cloneNode(true);wire(row);rows.appendChild(row)});</script>
+</body></html>

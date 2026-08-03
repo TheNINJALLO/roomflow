@@ -1,0 +1,11 @@
+<!doctype html><html><body>
+  <button data-testid="create-estimate">Create Estimate</button>
+  <label>Estimate title <input data-testid="estimate-title"></label><label>Estimate number <input data-testid="estimate-number"></label>
+  <label>Scope of work <textarea data-testid="estimate-description"></textarea></label><button data-testid="add-line">Add Line Item</button>
+  <input data-testid="line-name"><input data-testid="line-description"><input data-testid="line-quantity"><input data-testid="line-unit"><input data-testid="line-price">
+  <input type="checkbox" data-testid="line-taxable"><input data-testid="tax-rate"><input data-testid="discount"><textarea data-testid="customer-notes"></textarea>
+  <textarea data-testid="internal-notes"></textarea><textarea data-testid="terms"></textarea><input data-testid="deposit"><input data-testid="due-date">
+  <strong data-testid="grand-total">$262.00</strong><button data-testid="save-draft" data-id="estimate-created-456">Save Draft</button>
+  <span data-testid="estimate-status">DRAFT</span><a data-testid="estimate-detail" data-id="estimate-created-456">Review estimate</a><div data-testid="validation-error" hidden></div>
+  <script>document.querySelector('[data-testid="add-line"]').addEventListener('click',()=>{for(const key of ['line-name','line-description','line-quantity','line-unit','line-price','line-taxable']){const controls=document.querySelectorAll(`[data-testid="${key}"]`);const source=controls[controls.length-1];source.parentNode.insertBefore(source.cloneNode(true),source.nextSibling)}});</script>
+</body></html>

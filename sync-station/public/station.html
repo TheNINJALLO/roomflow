@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoomFlow Sync Station</title>
+  <link rel="stylesheet" href="/station.css">
+</head>
+<body>
+  <main>
+    <header>
+      <span class="mark">RF</span>
+      <div><p class="eyebrow">Townsquare draft bridge</p><h1>RoomFlow Sync Station</h1></div>
+      <span id="overall-state" class="pill">Starting</span>
+    </header>
+    <section class="grid" aria-label="Station status">
+      <article><span>RoomFlow edge</span><strong id="edge-state">Connecting</strong></article>
+      <article><span>Browser extension</span><strong id="extension-state">Checking</strong></article>
+      <article><span>Current work</span><strong id="work-state">Idle</strong></article>
+      <article><span>Last completed</span><strong id="completed-state">Never</strong></article>
+    </section>
+    <section class="activity">
+      <div><p class="eyebrow">Live activity</p><h2 id="phase">Starting browser bridge</h2></div>
+      <p id="detail">Waiting for the extension and RoomFlow service.</p>
+      <div class="meter"><span id="meter"></span></div>
+    </section>
+    <section class="notice">
+      <strong>Draft-only safety remains active.</strong>
+      <p>This station may create or update a Townsquare draft. It cannot send, issue, approve, charge, or email a customer.</p>
+    </section>
+    <section id="error-card" class="error" hidden><strong>Station needs attention</strong><p id="error-detail"></p></section>
+  </main>
+  <script src="/station.js"></script>
+</body>
+</html>

@@ -6,6 +6,8 @@ node_modules/
 .vscode/
 *.log
 *.json
+!townsquare-bridge-extension/manifest.json
+!sync-station/pterodactyl/egg-roomflow-sync-station.json
 ROOMFLOW_CRON_SECRET.txt
 .env
 .env.*
