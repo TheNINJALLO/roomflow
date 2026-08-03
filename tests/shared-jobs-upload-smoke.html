@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shared jobs upload smoke test</title></head>
+<body>
+  <div id="result">RUNNING</div>
+  <script>
+    const state = {};
+    window.RoomFlowConfig = { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'test-key' };
+  </script>
+  <script src="../supabase-service.js"></script>
+  <script>
+    const orgId = '11111111-1111-4111-8111-111111111111';
+    const userId = '22222222-2222-4222-8222-222222222222';
+    const cloudJobId = '33333333-3333-4333-8333-333333333333';
+    state.currentOrganization = { id: orgId };
+    state.sessionUser = { id: userId };
+    state.userCapabilities = [
+      'create_jobs', 'view_company_jobs', 'edit_job_information', 'edit_floor_plans',
+      'edit_internal_costs', 'edit_customer_prices', 'edit_margin',
+      'view_internal_costs', 'view_customer_prices', 'view_margin'
+    ];
+
+    const writes = [];
+    class Query {
+      constructor(table) { this.table = table; this.operation = 'select'; this.payload = null; this.ordered = false; }
+      select() { return this; }
+      eq() { return this; }
+      in() { return this; }
+      order() { this.ordered = true; return this; }
+      limit() { return this; }
+      insert(payload) { this.operation = 'insert'; this.payload = payload; writes.push({ table: this.table, operation: this.operation, payload }); return this; }
+      update(payload) { this.operation = 'update'; this.payload = payload; writes.push({ table: this.table, operation: this.operation, payload }); return this; }
+      upsert(payload) { this.operation = 'upsert'; this.payload = payload; writes.push({ table: this.table, operation: this.operation, payload }); return this; }
+      single() {
+        if (this.table === 'customers' && this.operation === 'insert') return Promise.resolve({ data: { id: 'customer-1' }, error: null });
+        if (this.table === 'jobs' && this.operation === 'insert') return Promise.resolve({ data: { id: cloudJobId }, error: null });
+        return Promise.resolve({ data: null, error: null });
+      }
+      then(resolve) {
+        if (this.operation !== 'select') return resolve({ data: null, error: null });
+        if (this.table === 'customers' || (this.table === 'jobs' && !this.ordered)) return resolve({ data: [], error: null });
+        return resolve({ data: [], error: null });
+      }
+    }
+    const fakeClient = {
+      from(table) { return new Query(table); },
+      auth: { getSession: async () => ({ data: { session: null } }) }
+    };
+    supabaseClient = fakeClient;
+    const queuedItems = new Map();
+    openIndexedDB = async () => ({
+      transaction(storeName, mode) {
+        const transaction = {
+          objectStore() {
+            return {
+              put(item) {
+                const request = {};
+                queuedItems.set(item.id, item);
+                setTimeout(() => request.onsuccess?.(), 0);
+                return request;
+              },
+              getAll() {
+                const request = {};
+                setTimeout(() => { request.result = Array.from(queuedItems.values()); request.onsuccess?.(); }, 0);
+                return request;
+              },
+              delete(id) {
+                queuedItems.delete(id);
+                setTimeout(() => transaction.oncomplete?.(), 0);
+              }
+            };
+          }
+        };
+        return transaction;
+      }
+    });
+
+    (async () => {
+      try {
+        localStorage.clear();
+        const payload = {
+          schemaVersion: '2.0.0', organizationId: orgId, currentJobName: 'Upload Test',
+          customerName: 'Jamie Test', customerAddress: '20 Main St',
+          rooms: [{ id: 'room-1' }], walls: [{ id: 'wall-1' }], doors: [{ id: 'door-1' }], windows: [],
+          openings: [], stairs: [], levels: [{ id: 'basement' }], currentLevelId: 'basement',
+          sumpPumps: [], dehumidifiers: [], dischargeLines: [], floorHatches: [], interiorPipes: [],
+          stanchions: [], mainBeams: [], capturedMeasurements: [], lastModified: Date.now(),
+          costing: { customerName: 'Jamie Test', customerAddress: '20 Main St', customerPhone: '555-0200', customerEmail: 'jamie@example.test', settings: { targetGrossMargin: 40, salesTaxRate: 6, overhead: 15 } }
+        };
+        localStorage.setItem('roomflow_jobs', JSON.stringify({ 'Upload Test': payload }));
+        await window.RoomFlowSync.enqueueOffline('Upload Test', payload);
+        const syncResult = await window.RoomFlowSync.processSyncQueue();
+        if (syncResult?.error) throw syncResult.error;
+
+        const layoutWrite = writes.find(write => write.table === 'job_layouts');
+        const projectWrite = writes.find(write => write.table === 'job_project_snapshots');
+        const costingWrite = writes.find(write => write.table === 'job_costing_snapshots');
+        const stored = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}')['Upload Test'];
+        const assertions = [
+          [layoutWrite?.payload?.layout_json?.walls?.[0]?.id === 'wall-1', 'full geometry uploaded to layout fallback'],
+          [projectWrite?.payload?.project_state?.doors?.[0]?.id === 'door-1', 'full project snapshot uploaded'],
+          [!Object.prototype.hasOwnProperty.call(projectWrite?.payload?.project_state || {}, 'costing'), 'costing excluded from project snapshot'],
+          [costingWrite?.payload?.costing_state?.customerEmail === 'jamie@example.test', 'costing uploaded only to protected snapshot'],
+          [stored?.jobId === cloudJobId && stored?.sharedFromCloud === true && stored?.syncState === 'synchronized', 'local job linked to cloud identity']
+        ];
+        const failure = assertions.find(([passed]) => !passed);
+        document.getElementById('result').textContent = failure ? `FAIL: ${failure[1]}` : 'PASS';
+      } catch (error) {
+        document.getElementById('result').textContent = `FAIL: ${error.message || error}`;
+      }
+    })();
+  </script>
+</body>
+</html>

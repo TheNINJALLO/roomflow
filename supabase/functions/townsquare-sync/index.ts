@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.8';
 import {
   BRIDGE_TTL_MS,
+  STATION_WORKER_ACTIONS,
   buildBridgePayload,
   chooseAdapter,
   cleanText,
@@ -22,6 +23,7 @@ const ALLOWED_ORIGINS = new Set((Deno.env.get('ROOMFLOW_ALLOWED_ORIGINS') ||
   .split(',').map(value => value.trim()).filter(Boolean));
 const API_HOSTS = new Set((Deno.env.get('TOWNSQUARE_ALLOWED_API_HOSTS') || 'api.vcita.biz')
   .split(',').map(value => value.trim().toLowerCase()).filter(Boolean));
+const STATION_ONLINE_WINDOW_MS = 90 * 1000;
 
 const service = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -32,7 +34,7 @@ function corsHeaders(req: Request) {
   const allowed = ALLOWED_ORIGINS.has(origin) || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
   return {
     'Access-Control-Allow-Origin': allowed ? origin : 'https://theninjallo.github.io',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-roomflow-station-id, x-roomflow-station-token',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Vary': 'Origin',
     'Content-Type': 'application/json; charset=utf-8',
@@ -56,6 +58,10 @@ function bytesToBase64(bytes: Uint8Array) {
   let binary = '';
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
+}
+
+function bytesToBase64Url(bytes: Uint8Array) {
+  return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 function base64ToBytes(value: string) {
@@ -147,6 +153,20 @@ async function authorizationContext(req: Request, organizationId: string, action
   return { userId, capabilities: [...capabilities] };
 }
 
+async function stationAuthorization(req: Request) {
+  const stationId = cleanText(req.headers.get('x-roomflow-station-id'), 80);
+  const stationToken = cleanText(req.headers.get('x-roomflow-station-token'), 500);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(stationId) || stationToken.length < 40) {
+    throwHttp('Sync Station authentication failed.', 'STATION_AUTHENTICATION_FAILED', 401);
+  }
+  const { data: station, error } = await service.from('external_sync_stations').select('*')
+    .eq('id', stationId).eq('enabled', true).is('revoked_at', null).maybeSingle();
+  if (error || !station || await sha256(stationToken) !== station.token_hash) {
+    throwHttp('Sync Station authentication failed.', 'STATION_AUTHENTICATION_FAILED', 401);
+  }
+  return station;
+}
+
 async function getIntegration(organizationId: string, required = true) {
   const { data, error } = await service
     .from('external_integrations')
@@ -196,6 +216,111 @@ function publicConfiguration(integration: Record<string, any> | null) {
     last_error_code: integration.last_error_code,
     updated_at: integration.updated_at
   };
+}
+
+function publicStation(station: Record<string, any>) {
+  const lastSeen = station.last_seen_at ? new Date(station.last_seen_at).getTime() : 0;
+  const browserReady = Boolean(
+    station.last_status?.browserReady &&
+    station.last_status?.extensionInstalled &&
+    station.last_status?.extensionConfigured
+  );
+  return {
+    id: station.id,
+    name: station.name,
+    enabled: Boolean(station.enabled && !station.revoked_at),
+    online: Boolean(station.enabled && !station.revoked_at && browserReady && lastSeen > Date.now() - STATION_ONLINE_WINDOW_MS),
+    last_seen_at: station.last_seen_at,
+    last_claimed_at: station.last_claimed_at,
+    last_completed_at: station.last_completed_at,
+    last_error_code: station.last_error_code,
+    status: station.last_status || {},
+    created_at: station.created_at,
+    revoked_at: station.revoked_at
+  };
+}
+
+async function listSyncStations(organizationId: string, includeRevoked = true) {
+  let query = service.from('external_sync_stations').select('*')
+    .eq('organization_id', organizationId).order('created_at', { ascending: false });
+  if (!includeRevoked) query = query.eq('enabled', true).is('revoked_at', null);
+  const { data, error } = await query;
+  if (error) throwHttp('Sync Station status could not be loaded.', 'STATION_STATUS_READ_FAILED', 500);
+  return (data || []).map(publicStation);
+}
+
+async function syncStationStatus(organizationId: string) {
+  const stations = await listSyncStations(organizationId, false);
+  return {
+    configured: stations.length > 0,
+    online: stations.some(station => station.online),
+    stations: stations.map(station => ({
+      id: station.id,
+      name: station.name,
+      online: station.online,
+      last_seen_at: station.last_seen_at,
+      last_error_code: station.last_error_code
+    }))
+  };
+}
+
+async function createSyncStation(organizationId: string, userId: string, body: Record<string, any>) {
+  const integration = await getIntegration(organizationId);
+  if (!integration.browser_destination_url) {
+    throwHttp('Save the Townsquare browser destination before pairing a Sync Station.', 'BROWSER_DESTINATION_REQUIRED', 409);
+  }
+  const name = cleanText(body.station_name, 80);
+  if (name.length < 3) throwHttp('Sync Station name must be at least three characters.', 'INVALID_STATION_NAME', 422);
+  const stationToken = `rfs_${bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)))}`;
+  const { data, error } = await service.from('external_sync_stations').insert({
+    organization_id: organizationId,
+    integration_id: integration.id,
+    name,
+    token_hash: await sha256(stationToken),
+    created_by: userId
+  }).select('*').single();
+  if (error?.code === '23505') throwHttp('A Sync Station with that name already exists.', 'STATION_NAME_IN_USE', 409);
+  if (error || !data) throwHttp('The Sync Station credential could not be created.', 'STATION_CREATE_FAILED', 500);
+  return {
+    station: publicStation(data),
+    credentials: {
+      function_url: `${SUPABASE_URL.replace(/\/+$/, '')}/functions/v1/townsquare-sync`,
+      station_id: data.id,
+      station_token: stationToken
+    }
+  };
+}
+
+async function revokeSyncStation(organizationId: string, userId: string, stationId: unknown) {
+  const id = cleanText(stationId, 80);
+  const now = new Date().toISOString();
+  const { data, error } = await service.from('external_sync_stations').update({
+    enabled: false,
+    revoked_at: now,
+    revoked_by: userId,
+    last_status: {},
+    last_error_code: 'STATION_REVOKED'
+  }).eq('id', id).eq('organization_id', organizationId).select('*').maybeSingle();
+  if (error) throwHttp('The Sync Station could not be revoked.', 'STATION_REVOKE_FAILED', 500);
+  if (!data) throwHttp('The Sync Station was not found.', 'STATION_NOT_FOUND', 404);
+  const { data: activeRuns, error: activeRunError } = await service.from('external_sync_runs').select('*')
+    .eq('station_id', id).eq('status', 'opening_townsquare');
+  if (activeRunError) throwHttp('The revoked station leases could not be closed.', 'STATION_REVOKE_LEASE_FAILED', 500);
+  for (const run of activeRuns || []) {
+    await markRunFailed(
+      run,
+      'STATION_REVOKED_REVIEW_REQUIRED',
+      'The Sync Station was revoked while processing this run. Review Townsquare before retrying to prevent a duplicate.'
+    );
+  }
+  return publicStation(data);
+}
+
+async function hasEnabledSyncStation(integrationId: string) {
+  const { count, error } = await service.from('external_sync_stations').select('id', { count: 'exact', head: true })
+    .eq('integration_id', integrationId).eq('enabled', true).is('revoked_at', null);
+  if (error) throwHttp('Sync Station availability could not be checked.', 'STATION_STATUS_READ_FAILED', 500);
+  return Number(count || 0) > 0;
 }
 
 function safeHttpsUrl(value: unknown, kind: 'api' | 'browser') {
@@ -371,29 +496,44 @@ async function createOrReuseRun(integration: Record<string, any>, bundle: Record
   return { run: existing, payload: bridgePayload, reused: true };
 }
 
-async function prepareBridge(integration: Record<string, any>, bundle: Record<string, any>, userId: string, queuedOnly = false) {
-  if (!integration.enabled) throwHttp('Enable the Townsquare integration before syncing.', 'INTEGRATION_DISABLED', 409);
-  if (!integration.browser_destination_url) throwHttp('Set the Townsquare browser destination URL in Settings.', 'BROWSER_DESTINATION_REQUIRED', 409);
-  const created = await createOrReuseRun(integration, bundle, 'browser_bridge', userId);
-  const { data: savedMappings, error: mappingError } = await service.from('external_entity_mappings')
+async function addExternalMappings(integration: Record<string, any>, bundle: Record<string, any>, payload: Record<string, any>) {
+  const { data: savedMappings, error } = await service.from('external_entity_mappings')
     .select('entity_type,roomflow_entity_id,provider_entity_id,provider_status,provider_url')
     .eq('organization_id', integration.organization_id)
     .eq('provider', 'townsquare')
     .in('roomflow_entity_id', [bundle.customer.id, bundle.job.id, bundle.estimate.id]);
-  if (mappingError) throwHttp('Saved Townsquare mappings could not be loaded.', 'MAPPING_READ_FAILED', 500);
+  if (error) throwHttp('Saved Townsquare mappings could not be loaded.', 'MAPPING_READ_FAILED', 500);
   const mappingByType = new Map((savedMappings || []).map(item => [item.entity_type, item]));
-  created.payload.externalMappings = {
+  payload.externalMappings = {
     customerId: mappingByType.get('customer')?.provider_entity_id || '',
     propertyId: mappingByType.get('property')?.provider_entity_id || '',
     estimateId: mappingByType.get('estimate')?.provider_entity_id || '',
     estimateStatus: mappingByType.get('estimate')?.provider_status || '',
     estimateUrl: mappingByType.get('estimate')?.provider_url || ''
   };
+  return payload;
+}
+
+async function prepareBridge(integration: Record<string, any>, bundle: Record<string, any>, userId: string, queuedOnly = false) {
+  if (!integration.enabled) throwHttp('Enable the Townsquare integration before syncing.', 'INTEGRATION_DISABLED', 409);
+  if (!integration.browser_destination_url) throwHttp('Set the Townsquare browser destination URL in Settings.', 'BROWSER_DESTINATION_REQUIRED', 409);
+  const created = await createOrReuseRun(integration, bundle, 'browser_bridge', userId);
+  await addExternalMappings(integration, bundle, created.payload);
   if (created.run.status === 'completed') {
     return { completed: true, run: created.run, payload: null };
   }
   if (queuedOnly) {
-    const { error } = await service.from('external_sync_runs').update({ status: 'queued', bridge_token_hash: null, bridge_expires_at: null }).eq('id', created.run.id);
+    const { error } = await service.from('external_sync_runs').update({
+      status: 'queued',
+      station_id: null,
+      station_claim_attempts: 0,
+      bridge_token_hash: null,
+      bridge_expires_at: null,
+      error_code: null,
+      error_message: null,
+      review_reason: null,
+      completed_at: null
+    }).eq('id', created.run.id);
     if (error) throwHttp('The desktop synchronization could not be queued.', 'SYNC_QUEUE_UPDATE_FAILED', 500);
     await addEvent(created.run, 'queued', 'Synchronization queued for an authenticated desktop browser.');
     return { queued: true, run: { ...created.run, status: 'queued' }, payload: null };
@@ -403,6 +543,7 @@ async function prepareBridge(integration: Record<string, any>, bundle: Record<st
   const expiresAt = new Date(Date.now() + BRIDGE_TTL_MS).toISOString();
   const { data: run, error } = await service.from('external_sync_runs').update({
     status: 'opening_townsquare',
+    station_id: null,
     bridge_token_hash: bridgeTokenHash,
     bridge_expires_at: expiresAt,
     error_code: null,
@@ -417,6 +558,139 @@ async function prepareBridge(integration: Record<string, any>, bundle: Record<st
     destination_url: integration.browser_destination_url,
     payload: created.payload
   };
+}
+
+function sanitizedStationHeartbeat(body: Record<string, any>) {
+  const currentRunId = cleanText(body.current_run_id, 80);
+  return {
+    version: cleanText(body.version, 40),
+    browserReady: Boolean(body.browser_ready),
+    extensionInstalled: Boolean(body.extension_installed),
+    extensionConfigured: Boolean(body.extension_configured),
+    phase: cleanText(body.phase, 60),
+    currentRunId: /^[0-9a-f-]{36}$/i.test(currentRunId) ? currentRunId : null
+  };
+}
+
+async function stationHeartbeat(station: Record<string, any>, body: Record<string, any>) {
+  const status = sanitizedStationHeartbeat(body);
+  const { data, error } = await service.from('external_sync_stations').update({
+    last_seen_at: new Date().toISOString(),
+    last_status: status,
+    last_error_code: cleanText(body.last_error_code, 100) || null
+  }).eq('id', station.id).select('*').single();
+  if (error) throwHttp('Sync Station heartbeat could not be recorded.', 'STATION_HEARTBEAT_FAILED', 500);
+  return publicStation(data);
+}
+
+async function failExpiredStationRuns(station: Record<string, any>) {
+  const { data: expired, error } = await service.from('external_sync_runs').select('*')
+    .eq('station_id', station.id)
+    .eq('status', 'opening_townsquare')
+    .lt('bridge_expires_at', new Date().toISOString());
+  if (error) throwHttp('Expired Sync Station leases could not be checked.', 'STATION_LEASE_CHECK_FAILED', 500);
+  for (const run of expired || []) {
+    await markRunFailed(
+      run,
+      'STATION_LEASE_EXPIRED',
+      'The Sync Station lease expired before RoomFlow received a confirmed result. Review Townsquare before retrying to prevent a duplicate.'
+    );
+  }
+}
+
+async function stationClaim(station: Record<string, any>) {
+  await failExpiredStationRuns(station);
+  for (let skipped = 0; skipped < 5; skipped += 1) {
+    const bridgeToken = bytesToBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+    const expiresAt = new Date(Date.now() + BRIDGE_TTL_MS).toISOString();
+    const { data, error } = await service.rpc('roomflow_claim_townsquare_sync', {
+      p_station_id: station.id,
+      p_bridge_token_hash: await sha256(bridgeToken),
+      p_bridge_expires_at: expiresAt
+    });
+    if (error) throwHttp('The next queued synchronization could not be claimed.', 'STATION_CLAIM_FAILED', 500);
+    const run = data?.[0];
+    if (!run) return { work: null };
+
+    const { data: integration, error: integrationError } = await service.from('external_integrations').select('*')
+      .eq('id', run.integration_id).eq('organization_id', station.organization_id).single();
+    if (integrationError || !integration || !integration.enabled || !integration.browser_destination_url) {
+      await markRunFailed(run, 'INTEGRATION_NOT_AVAILABLE', 'The Townsquare integration is unavailable for this queued run.');
+      continue;
+    }
+
+    let bundle: Record<string, any>;
+    try {
+      const attachmentMode = ['selected', 'all_estimate'].includes(integration.attachment_mode)
+        ? integration.attachment_mode as 'selected' | 'all_estimate'
+        : 'none';
+      bundle = await loadEstimateBundle(station.organization_id, run.estimate_id, attachmentMode);
+    } catch (error) {
+      const safe = sanitizeProviderError(error);
+      await markRunFailed(run, safe.code, safe.message);
+      continue;
+    }
+    if (bundle.revision !== run.roomflow_revision) {
+      await markRunFailed(run, 'QUEUED_ESTIMATE_CHANGED', 'The RoomFlow estimate changed after it was queued. Queue the latest revision again.');
+      continue;
+    }
+
+    const payload = buildBridgePayload(bundle, integration) as Record<string, any>;
+    if (Number(payload.estimate.grandTotalMinor) !== Number(run.roomflow_total_minor)) {
+      await markRunFailed(run, 'QUEUED_TOTAL_CHANGED', 'The RoomFlow estimate total changed after it was queued. Queue the latest revision again.');
+      continue;
+    }
+    await addExternalMappings(integration, bundle, payload);
+    await addEvent(run, 'opening_townsquare', `Sync Station ${cleanText(station.name, 80)} claimed the queued draft.`, { stationId: station.id });
+    await service.from('external_sync_stations').update({
+      last_seen_at: new Date().toISOString(),
+      last_claimed_at: new Date().toISOString(),
+      last_error_code: null
+    }).eq('id', station.id);
+    return {
+      work: {
+        type: 'ROOMFLOW_TOWNSQUARE_SYNC_REQUEST',
+        protocolVersion: 1,
+        runId: run.id,
+        bridgeToken,
+        destinationUrl: integration.browser_destination_url,
+        expiresAt,
+        payload
+      }
+    };
+  }
+  return { work: null };
+}
+
+async function stationComplete(station: Record<string, any>, body: Record<string, any>) {
+  const runId = cleanText(body.run_id, 80);
+  const { data: existing, error } = await service.from('external_sync_runs').select('*')
+    .eq('id', runId).eq('organization_id', station.organization_id).eq('station_id', station.id).maybeSingle();
+  if (error || !existing) throwHttp('The Sync Station run was not found.', 'SYNC_RUN_NOT_FOUND', 404);
+  if (existing.status === 'completed') {
+    return {
+      status: 'completed',
+      completed_at: existing.completed_at,
+      draft: { id: existing.provider_estimate_id, url: existing.provider_estimate_url, total_minor: existing.provider_total_minor },
+      summary: existing.result_summary,
+      attachment_summary: existing.attachment_summary
+    };
+  }
+  if (['failed', 'cancelled', 'review_required'].includes(existing.status)) {
+    return { status: existing.status, error: { code: existing.error_code, message: existing.error_message }, review_reason: existing.review_reason };
+  }
+  const result: Record<string, any> = await completeBridge(station.organization_id, existing.created_by, {
+    run_id: runId,
+    bridge_token: body.bridge_token,
+    result: body.result
+  }, station.id);
+  const completed = result.status === 'completed';
+  await service.from('external_sync_stations').update({
+    last_seen_at: new Date().toISOString(),
+    last_completed_at: completed ? new Date().toISOString() : station.last_completed_at,
+    last_error_code: completed ? null : cleanText(result.error?.code || result.status, 100)
+  }).eq('id', station.id);
+  return result;
 }
 
 async function getEstimateSync(organizationId: string, estimateId: string) {
@@ -459,13 +733,16 @@ async function upsertMapping(run: Record<string, any>, entityType: string, roomf
   if (error) throwHttp(`The ${entityType} mapping could not be saved.`, 'MAPPING_SAVE_FAILED', 500);
 }
 
-async function completeBridge(organizationId: string, userId: string, body: Record<string, any>) {
+async function completeBridge(organizationId: string, userId: string, body: Record<string, any>, expectedStationId = '') {
   const runId = cleanText(body.run_id, 80);
   const bridgeToken = cleanText(body.bridge_token, 500);
   const result = body.result || {};
-  const { data: run, error } = await service.from('external_sync_runs').select('*')
-    .eq('id', runId).eq('organization_id', organizationId).eq('provider', 'townsquare').single();
+  let query = service.from('external_sync_runs').select('*')
+    .eq('id', runId).eq('organization_id', organizationId).eq('provider', 'townsquare');
+  if (expectedStationId) query = query.eq('station_id', expectedStationId);
+  const { data: run, error } = await query.single();
   if (error || !run) throwHttp('The browser bridge run was not found.', 'SYNC_RUN_NOT_FOUND', 404);
+  if (!expectedStationId && run.station_id) throwHttp('This run must be completed by its paired Sync Station.', 'STATION_COMPLETION_REQUIRED', 403);
   if (!run.bridge_token_hash || await sha256(bridgeToken) !== run.bridge_token_hash) throwHttp('The browser bridge token is invalid.', 'INVALID_BRIDGE_TOKEN', 403);
   if (!run.bridge_expires_at || new Date(run.bridge_expires_at).getTime() < Date.now()) throwHttp('The browser bridge operation expired. Retry from RoomFlow.', 'BRIDGE_OPERATION_EXPIRED', 410);
 
@@ -573,6 +850,20 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return json(req, 405, { ok: false, error: { code: 'METHOD_NOT_ALLOWED', message: 'Use POST.' } });
   let body: Record<string, any>;
   try { body = await req.json(); } catch { return json(req, 400, { ok: false, error: { code: 'INVALID_JSON', message: 'A valid JSON body is required.' } }); }
+  const requestedAction = cleanText(body.action, 80);
+  if (STATION_WORKER_ACTIONS.has(requestedAction)) {
+    try {
+      const station = await stationAuthorization(req);
+      if (requestedAction === 'station_heartbeat') return json(req, 200, { ok: true, station: await stationHeartbeat(station, body) });
+      if (requestedAction === 'station_claim') return json(req, 200, { ok: true, result: await stationClaim(station) });
+      if (requestedAction === 'station_complete') return json(req, 200, { ok: true, result: await stationComplete(station, body) });
+      throwHttp('Unsupported Sync Station action.', 'UNSUPPORTED_STATION_ACTION', 422);
+    } catch (error) {
+      const safe = sanitizeProviderError(error);
+      const requestError = error as { status?: number; code?: string; details?: unknown };
+      return json(req, Number(requestError?.status) || safe.status, { ok: false, error: { code: requestError?.code || safe.code, message: safe.message } });
+    }
+  }
   const validation = validateActionRequest(body);
   if (!validation.valid) return json(req, 422, { ok: false, error: { code: 'INVALID_REQUEST', message: validation.error } });
 
@@ -589,6 +880,9 @@ Deno.serve(async (req: Request) => {
     if (action === 'clear_api_token') {
       return json(req, 200, { ok: true, configuration: await clearToken(organizationId, auth.userId) });
     }
+    if (action === 'list_sync_stations') return json(req, 200, { ok: true, stations: await listSyncStations(organizationId) });
+    if (action === 'create_sync_station') return json(req, 200, { ok: true, result: await createSyncStation(organizationId, auth.userId, body) });
+    if (action === 'revoke_sync_station') return json(req, 200, { ok: true, station: await revokeSyncStation(organizationId, auth.userId, body.station_id) });
     if (action === 'test_connection') {
       const integration = await getIntegration(organizationId);
       const provider = await providerFor(integration);
@@ -596,6 +890,7 @@ Deno.serve(async (req: Request) => {
       return json(req, 200, { ok: true, connection: result, limitation: 'The official OpenAPI specifications do not publish a service-property resource; Auto mode uses Browser Bridge for the complete workflow.' });
     }
     if (action === 'get_diagnostics') return json(req, 200, { ok: true, diagnostics: await diagnostics(organizationId) });
+    if (action === 'get_sync_station_status') return json(req, 200, { ok: true, station_status: await syncStationStatus(organizationId) });
     if (action === 'get_estimate_sync') return json(req, 200, { ok: true, sync: await getEstimateSync(organizationId, body.estimate_id) });
     if (action === 'complete_bridge_sync') return json(req, 200, { ok: true, result: await completeBridge(organizationId, auth.userId, body) });
     if (action === 'cancel_bridge_sync') {
@@ -622,7 +917,8 @@ Deno.serve(async (req: Request) => {
         bridgeAvailable: true
       });
       if (decision.adapter === 'browser_bridge') {
-        return json(req, 200, { ok: true, result: await prepareBridge(integration, bundle, auth.userId, false) });
+        const sendToStation = Boolean(body.prefer_station) && await hasEnabledSyncStation(integration.id);
+        return json(req, 200, { ok: true, result: await prepareBridge(integration, bundle, auth.userId, sendToStation) });
       }
       if (decision.error === 'PROPERTY_API_UNAVAILABLE') {
         throwHttp('The verified official inTandem API does not publish a service-property endpoint. Select Auto or Browser Bridge mode.', 'PROPERTY_API_UNAVAILABLE', 422);

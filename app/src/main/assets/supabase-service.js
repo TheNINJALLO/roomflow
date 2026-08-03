@@ -219,6 +219,9 @@ window.RoomFlowAuth = {
         // Re-render costing screens with capability context
         if (typeof window.renderCostUI === 'function') window.renderCostUI();
         if (typeof window.renderGuidedStep === 'function') window.renderGuidedStep();
+        if (window.RoomFlowSync?.refreshSharedJobs) {
+            await window.RoomFlowSync.refreshSharedJobs().catch(error => console.warn('Shared jobs refresh failed after company switch:', error));
+        }
     },
 
     async createCompany(name) {
@@ -344,6 +347,68 @@ function translateAuthError(msg) {
 // 2. Offline Database Sync Service (IndexedDB)
 const DB_NAME = 'roomflow_offline_store';
 const STORE_NAME = 'sync_queue';
+const ROOMFLOW_PROJECT_SNAPSHOT_KEYS = [
+    'schemaVersion', 'currentStep', 'guidedStep3Mode', 'currentLevelId', 'levels',
+    'rooms', 'walls', 'roomConnections', 'doors', 'windows', 'openings', 'stairs',
+    'floorHatches', 'utilities', 'sumpPumps', 'dehumidifiers', 'dischargeLines',
+    'interiorPipes', 'stanchions', 'mainBeams', 'capturedMeasurements',
+    'createdTimestamp', 'updatedTimestamp', 'revisionNumber', 'leadIntake'
+];
+const ROOMFLOW_CLOUD_JOB_MAP_KEY = 'roomflow_cloud_job_ids_v1';
+const ROOMFLOW_ESTIMATE_DRAFT_KEY = 'roomflow_estimate_drafts_v1';
+
+function cloneRoomFlowValue(value, fallback = null) {
+    try {
+        return value === undefined ? fallback : JSON.parse(JSON.stringify(value));
+    } catch (error) {
+        return fallback;
+    }
+}
+
+function buildRoomFlowProjectSnapshot(payload) {
+    const snapshot = {};
+    ROOMFLOW_PROJECT_SNAPSHOT_KEYS.forEach(key => {
+        if (payload?.[key] !== undefined) snapshot[key] = cloneRoomFlowValue(payload[key], payload[key]);
+    });
+    return snapshot;
+}
+
+function buildRoomFlowCostingSnapshot(costing) {
+    const snapshot = cloneRoomFlowValue(costing, null);
+    if (!snapshot) return null;
+    // Photos are shared through the protected attachment bucket. Keeping base64 image
+    // bodies out of JSON prevents a field photo from blocking the rest of a job sync.
+    if (Array.isArray(snapshot.photos)) {
+        snapshot.photos = snapshot.photos.map(photo => {
+            if (!photo || typeof photo !== 'object') return photo;
+            const cleaned = { ...photo };
+            ['data', 'dataUrl', 'base64', 'preview'].forEach(key => {
+                if (typeof cleaned[key] === 'string' && cleaned[key].startsWith('data:')) delete cleaned[key];
+            });
+            return cleaned;
+        });
+    }
+    return snapshot;
+}
+
+function isMissingRoomFlowTable(error) {
+    return Boolean(error && (
+        ['42P01', 'PGRST204', 'PGRST205'].includes(error.code)
+        || /does not exist|schema cache|could not find the table/i.test(error.message || '')
+    ));
+}
+
+function isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+}
+
+function waitForIndexedDBTransaction(transaction) {
+    return new Promise((resolve, reject) => {
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error || new Error('IndexedDB transaction aborted'));
+    });
+}
 
 function openIndexedDB() {
     return new Promise((resolve, reject) => {
@@ -360,15 +425,20 @@ function openIndexedDB() {
 }
 
 window.RoomFlowSync = {
+    processingQueue: false,
+    refreshPromise: null,
+
     async enqueueOffline(jobName, payload) {
         try {
             const db = await openIndexedDB();
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
+            const organizationId = payload?.organizationId || state.currentOrganization?.id || 'local';
             
             await new Promise((resolve, reject) => {
                 const req = store.put({
-                    id: jobName,
+                    id: `${organizationId}:${jobName}`,
+                    jobName,
                     payload: payload,
                     timestamp: Date.now(),
                     status: 'pending'
@@ -377,7 +447,7 @@ window.RoomFlowSync = {
                 req.onerror = () => reject(req.error);
             });
             
-            state.syncStatus = 'offline';
+            state.syncStatus = navigator.onLine && state.sessionUser ? 'saved' : 'offline';
             this.updateSyncBadge();
         } catch (e) {
             console.error("IndexedDB Cache failed:", e);
@@ -385,13 +455,12 @@ window.RoomFlowSync = {
     },
 
     async processSyncQueue() {
-        if (!navigator.onLine || !state.sessionUser || !state.currentOrganization) {
-            return;
-        }
+        if (this.processingQueue || !navigator.onLine || !state.sessionUser || !state.currentOrganization) return;
 
         const client = supabaseClient || initSupabase();
         if (!client) return;
 
+        this.processingQueue = true;
         try {
             const db = await openIndexedDB();
             const tx = db.transaction(STORE_NAME, 'readonly');
@@ -403,34 +472,57 @@ window.RoomFlowSync = {
                 req.onerror = () => reject(req.error);
             });
 
-            if (queue.length === 0) return;
+            const currentOrgId = state.currentOrganization.id;
+            const currentQueue = queue.filter(item => {
+                const queuedOrgId = item.payload?.organizationId;
+                return !queuedOrgId || queuedOrgId === currentOrgId;
+            });
+
+            if (currentQueue.length === 0) {
+                return await this.refreshSharedJobs();
+            }
 
             state.syncStatus = 'uploading';
             this.updateSyncBadge();
 
-            for (const item of queue) {
-                const jobName = item.id;
+            for (const item of currentQueue) {
                 const p = item.payload;
+                const jobName = item.jobName || p.currentJobName || item.id;
+                const customerName = p.costing?.customerName || p.customerName || jobName;
+                const customerAddress = p.costing?.customerAddress || p.customerAddress || '';
 
                 // 1. Fetch or create Customer record
                 let customerId = null;
-                const { data: custs } = await client
+                const { data: custs, error: customerLookupError } = await client
                     .from('customers')
                     .select('id')
-                    .eq('organization_id', state.currentOrganization.id)
-                    .eq('name', p.customerName || jobName)
+                    .eq('organization_id', currentOrgId)
+                    .eq('name', customerName)
                     .limit(1);
+                if (customerLookupError) throw customerLookupError;
 
                 if (custs && custs.length > 0) {
                     customerId = custs[0].id;
+                    const customerUpdate = await client
+                        .from('customers')
+                        .update({
+                            name: customerName,
+                            phone: p.costing?.customerPhone || '',
+                            email: p.costing?.customerEmail || '',
+                            address: customerAddress,
+                            notes: p.costing?.notes || ''
+                        })
+                        .eq('id', customerId);
+                    if (customerUpdate.error) console.warn('Customer contact details were not updated during job sync:', customerUpdate.error.message || customerUpdate.error);
                 } else {
                     const { data: newCust, error: custErr } = await client
                         .from('customers')
                         .insert({
-                            organization_id: state.currentOrganization.id,
-                            name: p.customerName || jobName,
+                            organization_id: currentOrgId,
+                            name: customerName,
                             phone: p.costing?.customerPhone || '',
                             email: p.costing?.customerEmail || '',
+                            address: customerAddress,
                             notes: p.costing?.notes || ''
                         })
                         .select('id')
@@ -442,24 +534,34 @@ window.RoomFlowSync = {
                 // 2. Fetch or create Job record
                 let jobId = null;
                 let currentVersion = 1;
-                const { data: jobs } = await client
+                let map = {};
+                try { map = JSON.parse(localStorage.getItem(ROOMFLOW_CLOUD_JOB_MAP_KEY) || '{}'); } catch (error) { map = {}; }
+                const requestedJobId = isUuid(p.jobId) ? p.jobId : (isUuid(map[jobName]) ? map[jobName] : null);
+                let jobLookup = client
                     .from('jobs')
                     .select('id, current_version_number')
-                    .eq('organization_id', state.currentOrganization.id)
-                    .eq('name', jobName)
-                    .limit(1);
+                    .eq('organization_id', currentOrgId);
+                jobLookup = requestedJobId ? jobLookup.eq('id', requestedJobId) : jobLookup.eq('name', jobName);
+                const { data: jobs, error: jobLookupError } = await jobLookup.limit(1);
+                if (jobLookupError) throw jobLookupError;
 
                 if (jobs && jobs.length > 0) {
                     jobId = jobs[0].id;
                     currentVersion = jobs[0].current_version_number;
+                    const jobUpdate = await client
+                        .from('jobs')
+                        .update({ customer_id: customerId, name: jobName, property_address: customerAddress })
+                        .eq('id', jobId);
+                    if (jobUpdate.error && !isMissingRoomFlowTable(jobUpdate.error)) throw jobUpdate.error;
                 } else {
                     const { data: newJob, error: jobErr } = await client
                         .from('jobs')
                         .insert({
-                            organization_id: state.currentOrganization.id,
+                            organization_id: currentOrgId,
                             customer_id: customerId,
                             name: jobName,
                             status: 'Draft',
+                            property_address: customerAddress,
                             current_version_number: 1
                         })
                         .select('id')
@@ -469,28 +571,47 @@ window.RoomFlowSync = {
                 }
 
                 // 3. Upsert Layout (Footprints geometry)
+                const projectSnapshot = buildRoomFlowProjectSnapshot(p);
                 const { error: layoutErr } = await client
                     .from('job_layouts')
                     .upsert({
                         job_id: jobId,
                         version_number: currentVersion,
-                        layout_json: {
-                            rooms: p.rooms,
-                            sumpPumps: p.sumpPumps,
-                            dehumidifiers: p.dehumidifiers,
-                            dischargeLines: p.dischargeLines,
-                            floorHatches: p.floorHatches,
-                            interiorPipes: p.interiorPipes,
-                            stanchions: p.stanchions,
-                            mainBeams: p.mainBeams,
-                            capturedMeasurements: p.capturedMeasurements
-                        }
-                    });
+                        layout_json: projectSnapshot
+                    }, { onConflict: 'job_id,version_number' });
                 if (layoutErr) throw layoutErr;
 
-                // 4. Upsert protected Costing (only if capability is allowed)
+                // The complete project snapshot enables true cross-device restoration.
+                const projectResult = await client
+                    .from('job_project_snapshots')
+                    .upsert({
+                        job_id: jobId,
+                        organization_id: currentOrgId,
+                        project_state: projectSnapshot,
+                        client_updated_at: new Date(p.lastModified || Date.now()).toISOString(),
+                        updated_by: state.sessionUser?.id || null
+                    }, { onConflict: 'job_id' });
+                if (projectResult.error && !isMissingRoomFlowTable(projectResult.error)) throw projectResult.error;
+
+                // 4. Upsert protected costing only for users allowed to edit every
+                // sensitive portion of the snapshot. Customer estimate lines use
+                // their own permissioned estimates tables.
+                if (hasCapability('edit_internal_costs') && hasCapability('edit_customer_prices') && hasCapability('edit_margin') && p.costing) {
+                    const costingResult = await client
+                        .from('job_costing_snapshots')
+                        .upsert({
+                            job_id: jobId,
+                            organization_id: currentOrgId,
+                            costing_state: buildRoomFlowCostingSnapshot(p.costing),
+                            client_updated_at: new Date(p.lastModified || Date.now()).toISOString(),
+                            updated_by: state.sessionUser?.id || null
+                        }, { onConflict: 'job_id' });
+                    if (costingResult.error && !isMissingRoomFlowTable(costingResult.error)) throw costingResult.error;
+                }
+
+                // Maintain the legacy aggregate pricing row for older installations.
                 if (hasCapability('edit_margin') && p.costing) {
-                    await client
+                    const pricingResult = await client
                         .from('job_pricing')
                         .upsert({
                             job_id: jobId,
@@ -498,21 +619,250 @@ window.RoomFlowSync = {
                             sales_tax_rate: p.costing.settings?.salesTaxRate || 6.0,
                             additional_overhead_rate: p.costing.settings?.overhead || 15.0,
                             commission_rate: p.costing.commission || 0.0
-                        });
+                        }, { onConflict: 'job_id' });
+                    if (pricingResult.error) throw pricingResult.error;
+                }
+
+                map[jobName] = jobId;
+                localStorage.setItem(ROOMFLOW_CLOUD_JOB_MAP_KEY, JSON.stringify(map));
+                const localJobs = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}');
+                if (localJobs[jobName]) {
+                    localJobs[jobName].jobId = jobId;
+                    localJobs[jobName].organizationId = currentOrgId;
+                    localJobs[jobName].sharedFromCloud = true;
+                    localJobs[jobName].syncState = 'synchronized';
+                    localJobs[jobName].cloudUpdatedAt = Date.now();
+                    localStorage.setItem('roomflow_jobs', JSON.stringify(localJobs));
                 }
 
                 // Delete from sync queue
                 const delTx = db.transaction(STORE_NAME, 'readwrite');
-                delTx.objectStore(STORE_NAME).delete(jobName);
+                delTx.objectStore(STORE_NAME).delete(item.id);
+                await waitForIndexedDBTransaction(delTx);
             }
 
             state.syncStatus = 'synced';
             this.updateSyncBadge();
+            return await this.refreshSharedJobs();
         } catch (e) {
             console.error("Reconciliation failed:", e);
             state.syncStatus = 'offline';
             this.updateSyncBadge();
+            return { error: e, loadedJobs: 0, loadedEstimates: 0 };
+        } finally {
+            this.processingQueue = false;
         }
+    },
+
+    async refreshSharedJobs() {
+        if (this.refreshPromise) return this.refreshPromise;
+        if (!navigator.onLine || !state.sessionUser || !state.currentOrganization) {
+            return { loadedJobs: 0, loadedEstimates: 0, skipped: true };
+        }
+
+        const client = supabaseClient || initSupabase();
+        if (!client) return { loadedJobs: 0, loadedEstimates: 0, skipped: true };
+        const orgId = state.currentOrganization.id;
+
+        this.refreshPromise = (async () => {
+            const jobResult = await client
+                .from('jobs')
+                .select('id, organization_id, customer_id, name, status, current_version_number, property_address, city, state, postal_code, issue_description, appointment_start, estimate_status, updated_at, created_at, customers(id,name,phone,email,address,city,state,postal_code,notes)')
+                .eq('organization_id', orgId)
+                .order('updated_at', { ascending: false })
+                .limit(250);
+            if (jobResult.error) throw jobResult.error;
+
+            const cloudJobs = jobResult.data || [];
+            const jobIds = cloudJobs.map(job => job.id);
+            if (!jobIds.length) {
+                if (typeof window.renderRoomFlowJobsList === 'function') window.renderRoomFlowJobsList();
+                return { loadedJobs: 0, loadedEstimates: 0, requiresSnapshotMigration: false };
+            }
+
+            let requiresSnapshotMigration = false;
+            const projectByJob = new Map();
+            const projectResult = await client
+                .from('job_project_snapshots')
+                .select('job_id, project_state, client_updated_at, updated_at')
+                .in('job_id', jobIds);
+            if (projectResult.error) {
+                if (!isMissingRoomFlowTable(projectResult.error)) throw projectResult.error;
+                requiresSnapshotMigration = true;
+            } else {
+                (projectResult.data || []).forEach(row => projectByJob.set(row.job_id, row));
+            }
+
+            // job_layouts remains a backwards-compatible source for installations
+            // that have not applied the shared snapshot migration yet.
+            const layoutByJob = new Map();
+            const layoutResult = await client
+                .from('job_layouts')
+                .select('job_id, version_number, layout_json, created_at')
+                .in('job_id', jobIds)
+                .order('version_number', { ascending: false });
+            if (layoutResult.error) throw layoutResult.error;
+            (layoutResult.data || []).forEach(row => {
+                if (!layoutByJob.has(row.job_id)) layoutByJob.set(row.job_id, row);
+            });
+
+            const costingByJob = new Map();
+            if (hasCapability('view_internal_costs') && hasCapability('view_customer_prices') && hasCapability('view_margin')) {
+                const costingResult = await client
+                    .from('job_costing_snapshots')
+                    .select('job_id, costing_state, client_updated_at, updated_at')
+                    .in('job_id', jobIds);
+                if (costingResult.error) {
+                    if (!isMissingRoomFlowTable(costingResult.error)) throw costingResult.error;
+                    requiresSnapshotMigration = true;
+                } else {
+                    (costingResult.data || []).forEach(row => costingByJob.set(row.job_id, row));
+                }
+            }
+
+            const estimateByJob = new Map();
+            const estimateResult = await client
+                .from('estimates')
+                .select('id, job_id, status, estimate_number, version_number, updated_at, created_at')
+                .eq('organization_id', orgId)
+                .order('version_number', { ascending: false })
+                .order('updated_at', { ascending: false });
+            if (estimateResult.error && !isMissingRoomFlowTable(estimateResult.error)) throw estimateResult.error;
+            (estimateResult.data || []).forEach(row => {
+                if (!estimateByJob.has(row.job_id)) estimateByJob.set(row.job_id, row);
+            });
+
+            const linesByEstimate = new Map();
+            const estimateIds = Array.from(estimateByJob.values()).map(estimate => estimate.id);
+            if (estimateIds.length) {
+                let lineResult = await client
+                    .from('estimate_lines')
+                    .select('id, estimate_id, catalog_item_id, room_id, section_name, roomflow_line_id, category, name, description, pricing_method, quantity, unit, unit_price, taxable, optional, selected, sort_order, calculation_metadata, updated_at')
+                    .in('estimate_id', estimateIds)
+                    .order('sort_order', { ascending: true })
+                    .limit(5000);
+                if (lineResult.error && isMissingRoomFlowTable(lineResult.error)) {
+                    requiresSnapshotMigration = true;
+                    lineResult = await client
+                        .from('estimate_lines')
+                        .select('id, estimate_id, catalog_item_id, room_id, section_name, name, description, pricing_method, quantity, unit, unit_price, taxable, optional, selected, sort_order, calculation_metadata, updated_at')
+                        .in('estimate_id', estimateIds)
+                        .order('sort_order', { ascending: true })
+                        .limit(5000);
+                }
+                if (lineResult.error) throw lineResult.error;
+                (lineResult.data || []).forEach(line => {
+                    if (!linesByEstimate.has(line.estimate_id)) linesByEstimate.set(line.estimate_id, []);
+                    linesByEstimate.get(line.estimate_id).push({
+                        ...line,
+                        roomflow_line_id: line.roomflow_line_id || `cloud_${line.id}`,
+                        category: line.category || line.calculation_metadata?.category || 'other'
+                    });
+                });
+            }
+
+            let localJobs = {};
+            let jobMap = {};
+            let estimateDrafts = {};
+            try { localJobs = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}'); } catch (error) { localJobs = {}; }
+            try { jobMap = JSON.parse(localStorage.getItem(ROOMFLOW_CLOUD_JOB_MAP_KEY) || '{}'); } catch (error) { jobMap = {}; }
+            try { estimateDrafts = JSON.parse(localStorage.getItem(ROOMFLOW_ESTIMATE_DRAFT_KEY) || '{}'); } catch (error) { estimateDrafts = {}; }
+
+            let loadedJobs = 0;
+            let loadedEstimates = 0;
+            cloudJobs.forEach(job => {
+                const customer = Array.isArray(job.customers) ? job.customers[0] : job.customers;
+                const projectRow = projectByJob.get(job.id);
+                const layoutRow = layoutByJob.get(job.id);
+                const costingRow = costingByJob.get(job.id);
+                const remoteProject = cloneRoomFlowValue(projectRow?.project_state || layoutRow?.layout_json, null);
+                const linkedName = Object.keys(localJobs).find(name => localJobs[name]?.jobId === job.id || jobMap[name] === job.id);
+                let storageName = linkedName || job.name || customer?.name || `Job ${job.id.slice(0, 8)}`;
+                if (!linkedName && localJobs[storageName]?.jobId && localJobs[storageName].jobId !== job.id) {
+                    storageName = `${storageName} (${job.id.slice(0, 6)})`;
+                }
+
+                const existing = localJobs[storageName] || null;
+                const remoteTimestamp = Math.max(
+                    Date.parse(projectRow?.client_updated_at || projectRow?.updated_at || '') || 0,
+                    Date.parse(job.updated_at || job.created_at || '') || 0
+                );
+                const localTimestamp = Number(existing?.lastModified || existing?.updatedTimestamp || 0);
+                const localPending = existing && (existing.syncState === 'pending' || (!existing.sharedFromCloud && localTimestamp > remoteTimestamp));
+
+                const defaultCosting = {
+                    customerName: customer?.name || job.name || storageName,
+                    customerAddress: job.property_address || customer?.address || '',
+                    customerPhone: customer?.phone || '',
+                    customerEmail: customer?.email || '',
+                    notes: customer?.notes || job.issue_description || '',
+                    photos: [],
+                    settings: { targetGrossMargin: 40, salesTaxRate: 6, overhead: 15 }
+                };
+                let merged;
+                if (localPending || (!remoteProject && existing)) {
+                    merged = { ...existing };
+                } else {
+                    merged = remoteProject || {
+                        schemaVersion: '2.0.0', rooms: [], walls: [], roomConnections: [], doors: [], windows: [],
+                        openings: [], stairs: [], floorHatches: [], utilities: [], sumpPumps: [], dehumidifiers: [],
+                        dischargeLines: [], interiorPipes: [], stanchions: [], mainBeams: [], capturedMeasurements: []
+                    };
+                }
+                merged.costing = cloneRoomFlowValue(costingRow?.costing_state || merged.costing || existing?.costing || defaultCosting, defaultCosting);
+                merged.costing.customerName = customer?.name || merged.costing.customerName || job.name;
+                merged.costing.customerAddress = job.property_address || customer?.address || merged.costing.customerAddress || '';
+                merged.costing.customerPhone = customer?.phone || merged.costing.customerPhone || '';
+                merged.costing.customerEmail = customer?.email || merged.costing.customerEmail || '';
+                merged.customerName = merged.costing.customerName;
+                merged.customerAddress = merged.costing.customerAddress;
+                merged.jobId = job.id;
+                merged.organizationId = orgId;
+                merged.currentJobName = storageName;
+                merged.cloudStatus = job.status || 'Draft';
+                merged.estimateStatus = job.estimate_status || 'not_started';
+                merged.sharedFromCloud = true;
+                merged.cloudUpdatedAt = remoteTimestamp || Date.now();
+                merged.lastModified = localPending ? localTimestamp : (remoteTimestamp || Date.now());
+                merged.syncState = localPending ? (existing.syncState || 'pending') : 'synchronized';
+                localJobs[storageName] = merged;
+                jobMap[storageName] = job.id;
+                loadedJobs += 1;
+
+                const estimate = estimateByJob.get(job.id);
+                if (estimate) {
+                    const remoteEstimateTime = Date.parse(estimate.updated_at || estimate.created_at || '') || 0;
+                    const existingDraft = estimateDrafts[storageName];
+                    const existingIsLocalOnly = existingDraft?.lines?.length && !existingDraft.estimateId;
+                    if (!existingIsLocalOnly && (!existingDraft?.cloudUpdatedAt || remoteEstimateTime >= existingDraft.cloudUpdatedAt)) {
+                        estimateDrafts[storageName] = {
+                            lines: linesByEstimate.get(estimate.id) || [],
+                            estimateId: estimate.id,
+                            estimateNumber: estimate.estimate_number,
+                            status: estimate.status,
+                            cloudUpdatedAt: remoteEstimateTime
+                        };
+                    }
+                    loadedEstimates += 1;
+                }
+            });
+
+            localStorage.setItem('roomflow_jobs', JSON.stringify(localJobs));
+            localStorage.setItem(ROOMFLOW_CLOUD_JOB_MAP_KEY, JSON.stringify(jobMap));
+            localStorage.setItem(ROOMFLOW_ESTIMATE_DRAFT_KEY, JSON.stringify(estimateDrafts));
+            if (typeof window.renderRoomFlowJobsList === 'function') window.renderRoomFlowJobsList();
+            window.dispatchEvent(new CustomEvent('roomflow-shared-jobs-updated', {
+                detail: { organizationId: orgId, loadedJobs, loadedEstimates, requiresSnapshotMigration }
+            }));
+            return { loadedJobs, loadedEstimates, requiresSnapshotMigration };
+        })().catch(error => {
+            console.error('Shared jobs refresh failed:', error);
+            throw error;
+        }).finally(() => {
+            this.refreshPromise = null;
+        });
+
+        return this.refreshPromise;
     },
 
     async createCloudJobRecord(jobName, customerName, email, phone) {
@@ -772,11 +1122,42 @@ window.addEventListener('load', () => {
         });
     }
 
+    const refreshSharedJobsBtn = document.getElementById('btn-refresh-shared-jobs');
+    if (refreshSharedJobsBtn) {
+        refreshSharedJobsBtn.addEventListener('click', async () => {
+            if (!state.sessionUser) {
+                if (typeof showModal === 'function') showModal('auth-overlay');
+                return;
+            }
+            const originalHtml = refreshSharedJobsBtn.innerHTML;
+            refreshSharedJobsBtn.disabled = true;
+            refreshSharedJobsBtn.innerHTML = 'Refreshing...';
+            try {
+                const syncResult = await RoomFlowSync.processSyncQueue();
+                if (syncResult?.error) throw syncResult.error;
+                const result = syncResult?.loadedJobs !== undefined ? syncResult : await RoomFlowSync.refreshSharedJobs();
+                const message = `Shared jobs updated: ${result.loadedJobs || 0} jobs and ${result.loadedEstimates || 0} estimates.`;
+                if (window.RoomFlowIntegrations?.toast) {
+                    window.RoomFlowIntegrations.toast(
+                        result.requiresSnapshotMigration ? `${message} Apply the shared job snapshot migration for complete project and costing sync.` : message,
+                        result.requiresSnapshotMigration ? 'warning' : 'success'
+                    );
+                }
+            } catch (error) {
+                if (window.RoomFlowIntegrations?.toast) window.RoomFlowIntegrations.toast(error.message || String(error), 'error');
+            } finally {
+                refreshSharedJobsBtn.disabled = false;
+                refreshSharedJobsBtn.innerHTML = originalHtml;
+                if (window.lucide) window.lucide.createIcons();
+            }
+        });
+    }
+
     setTimeout(async () => {
         await RoomFlowAuth.loadSessionContext();
         checkAuthOverlay();
         populateCompanySwitcher();
-        RoomFlowSync.processSyncQueue();
+        await RoomFlowSync.processSyncQueue();
     }, 500);
 });
 

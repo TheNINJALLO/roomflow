@@ -313,7 +313,7 @@
         </ul>
       </section>
 
-      <section class="guide-section searchable" id="jobs" data-search="new estimate continue job inbound email lead open roomflow search delete trash">
+      <section class="guide-section searchable" id="jobs" data-search="new estimate continue job inbound email lead open roomflow search delete trash refresh shared cloud another pc mobile">
         <h2>4. Start or open a job</h2>
         <h3>Start a new estimate</h3>
         <ol class="steps">
@@ -323,15 +323,19 @@
         </ol>
         <h3>Continue an existing job</h3>
         <ol class="steps">
-          <li>Open <strong>Jobs</strong> and search by customer, address, or job name.</li>
+          <li>Sign in, select the same company used on the other device, and open <strong>Jobs</strong>.</li>
+          <li>Choose <strong>Refresh Shared</strong> to upload pending edits from this device and download the newest company jobs and saved estimates.</li>
+          <li>Search by customer, address, or job name. A <strong>Cloud Shared</strong> badge identifies records available to other signed-in company devices.</li>
           <li>Choose <strong>Continue Estimate</strong> on the correct card.</li>
           <li>Confirm the customer name and latest room count before editing.</li>
         </ol>
+        <div class="note"><strong>Cross-device rule:</strong> users do not need the Townsquare browser extension just to share RoomFlow jobs. They do need a RoomFlow sign-in, the same active company, internet access, and permission to view the job. Only estimate drafts saved to the cloud are available on another device.</div>
         <h3>Open a lead</h3>
         <ol class="steps">
           <li>In the <strong>Leads</strong> panel, tap <strong>Refresh</strong> if the newest inquiry is not visible.</li>
           <li>Review every available field: name, phone, email, complete service address, appointment, estimator, source, email details, and issue.</li>
           <li>Tap <strong>Open in RoomFlow</strong>. The parsed contact and issue fields become the starting job information.</li>
+          <li>For a fake or spam inquiry, tap <strong>Remove Lead</strong> and type <strong>REMOVE</strong>. This requires the <code>delete_jobs</code> permission and permanently removes the shared lead job.</li>
           <li>Correct any field that the email did not state clearly, then continue through the guide.</li>
         </ol>
         <div class="note">Email intake should assist data entry, not replace review. Confirm phone, service address, appointment, and issue with the caller.</div>
@@ -545,7 +549,8 @@
         <h2>11. Save, export, recover, or remove a job</h2>
         <h3>Normal saving</h3>
         <ul>
-          <li>RoomFlow autosaves working data locally and syncs cloud jobs when you are signed in and connected.</li>
+          <li>RoomFlow autosaves working data locally and syncs cloud jobs when you are signed in and connected. Wait for <strong>Cloud Online</strong> before closing the source device.</li>
+          <li>On another PC or mobile device, sign in to the same company and choose <strong>Jobs â†’ Refresh Shared</strong>. Cloud jobs restore the layout; permitted financial users also receive protected costing, and saved estimate drafts restore their lines.</li>
           <li><strong>Save Project</strong> downloads a <code>roomflow_project.json</code> backup.</li>
           <li><strong>Load Project</strong> imports a previously exported RoomFlow JSON file.</li>
           <li>Before closing a device in weak service, export a JSON backup and confirm the job card exists.</li>
@@ -738,8 +743,10 @@
         <details>
           <summary>A job is missing or seems out of date.</summary>
           <ol>
-            <li>Confirm account and active company.</li>
-            <li>Refresh the Jobs view and remove search filters.</li>
+            <li>Confirm that both devices use a RoomFlow sign-in and the exact same active company.</li>
+            <li>On the source device, reconnect and wait for <strong>Cloud Online</strong>.</li>
+            <li>On the receiving device, open Jobs, choose <strong>Refresh Shared</strong>, and remove search filters.</li>
+            <li>Look for the <strong>Cloud Shared</strong> badge. A <strong>Local</strong> badge means that copy has not completed cloud sync.</li>
             <li>Check <strong>More → Trash & Recovery</strong>.</li>
             <li>If offline, reconnect and allow sync to finish. Use Load Project if you exported a JSON backup.</li>
           </ol>

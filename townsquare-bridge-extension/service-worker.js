@@ -86,9 +86,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (message?.type === 'BRIDGE_STATUS') {
       const config = await configuration();
+      const stored = await chrome.storage.session.get(OPERATION_KEY);
+      const pending = Core.validateStoredOperation(stored[OPERATION_KEY]).valid ? stored[OPERATION_KEY] : null;
       let destinationOrigin = '';
       try { destinationOrigin = config.destinationUrl ? new URL(config.destinationUrl).origin : ''; } catch { /* invalid saved URL */ }
-      sendResponse({ connected: true, configured: Boolean(destinationOrigin), destinationOrigin });
+      const hasDestinationAccess = destinationOrigin
+        ? await chrome.permissions.contains({ origins: [`${destinationOrigin}/*`] })
+        : false;
+      sendResponse({ connected: true, configured: Boolean(destinationOrigin && hasDestinationAccess), destinationOrigin, pendingRunId: pending?.runId || '' });
       return;
     }
     if (message?.type === 'START_SYNC') {

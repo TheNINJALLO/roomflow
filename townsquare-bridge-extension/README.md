@@ -1,6 +1,6 @@
 # RoomFlow Townsquare Draft Bridge
 
-Manifest V3 extension for desktop Chrome and Microsoft Edge. It accepts a validated estimate only after an explicit RoomFlow button press, keeps it temporarily in `chrome.storage.session`, opens the configured Townsquare page, and uses the user's existing authenticated session to create or update a draft.
+Manifest V3 extension for desktop Chrome and Microsoft Edge. It accepts a validated estimate only after an explicit RoomFlow button press, either from the same browser or through a paired always-on Sync Station. It keeps the operation temporarily in `chrome.storage.session`, opens the configured Townsquare page, and uses the existing authenticated session to create or update a draft.
 
 The extension never reads passwords, exports cookies, automates login, or clicks controls indicating Send, Issue, Email, Approve, Accept, Charge, Pay, or Collect.
 

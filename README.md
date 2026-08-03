@@ -25,6 +25,12 @@ Then open `http://localhost:8080`.
 
 Changes made to the shared document scope are saved with the job. Custom estimate items and rentals flow into the proposal, invoice, and work order by default.
 
+## Shared jobs and estimates
+
+When users sign in to the same RoomFlow company, the main **Jobs** dashboard downloads the company's cloud jobs instead of relying only on that browser's local storage. **Refresh Shared** uploads pending offline edits first, then downloads project layouts, permitted costing data, and the latest saved estimate lines. Local unsynced work is retained when it is newer than the cloud copy.
+
+Apply `supabase/migrations/20260803020000_shared_job_snapshots.sql` before relying on complete cross-device restoration. The migration stores project geometry separately from protected costing JSON and enforces the existing job and financial capabilities with row-level security. Existing `job_layouts` data remains a backwards-compatible fallback.
+
 ## Validation
 
 Run JavaScript syntax checks with Node:
@@ -35,9 +41,11 @@ node --check cost-engine.js
 node --check cost-ui.js
 node --check work-order.js
 node --check document-workflow.js
+node --check supabase-service.js
+node --check roomflow-integrations.js
 ```
 
-For an end-to-end browser smoke test, serve the repository and open `tests/browser-smoke.html`. The page reports checks for per-wall quantities, document item synchronization, work-order dimensions, angled-room placement, and the mobile form layout. Open `tests/header-responsive-smoke.html` to verify that every visible header action stays within the viewport at representative desktop, tablet, and phone widths from 1920px down to 320px.
+For an end-to-end browser smoke test, serve the repository and open `tests/browser-smoke.html`. The page reports checks for per-wall quantities, document item synchronization, work-order dimensions, angled-room placement, and the mobile form layout. Open `tests/shared-jobs-smoke.html` and `tests/shared-jobs-upload-smoke.html` to verify protected upload, cross-device restoration, estimate-line download, and conflict-safe merging. Open `tests/header-responsive-smoke.html` and `tests/more-responsive-smoke.html` to verify header actions and complete Settings/More cards at representative desktop, tablet, and phone widths down to 320px.
 
 ## Native wrappers
 
@@ -78,10 +86,12 @@ RoomFlow includes a secure, draft-only Townsquare Interactive integration with a
 
 Read [TOWNSQUARE_INTEGRATION.md](TOWNSQUARE_INTEGRATION.md) for architecture, security, database/function deployment, extension installation, guided selector mapping, Android limitations, testing, and troubleshooting.
 
+For a single always-on browser worker that accepts queued drafts from desktop and mobile devices, see [sync-station/README.md](sync-station/README.md). It includes a secure Windows Task Scheduler installer as well as the Pterodactyl egg and Chromium/noVNC image, with one-time device pairing, health monitoring, and recovery safeguards.
+
 Additional validation:
 
 ```powershell
-node --test tests/townsquare-core.test.mjs tests/townsquare-security.test.mjs
+node --test tests/townsquare-core.test.mjs tests/townsquare-security.test.mjs tests/townsquare-station.test.mjs
 ```
 
 Serve the repository and open `tests/townsquare-extension-smoke.html` and `tests/townsquare-roomflow-smoke.html` for browser-level fixture checks.

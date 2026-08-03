@@ -7,6 +7,9 @@
     version: '1.0.0',
     configuration: null,
     extension: { installed: false, configured: false, destinationOrigin: '' },
+    stationStatus: { configured: false, online: false, stations: [] },
+    stations: [],
+    stationTimer: null,
     currentSync: null,
     syncCache: new Map(),
     observer: null,
@@ -69,7 +72,18 @@
         this.renderEstimateAction();
       });
       this.observer.observe(document.body, { childList: true, subtree: true });
-      await Promise.allSettled([this.detectExtension(), this.canManage ? this.loadConfiguration() : Promise.resolve()]);
+      await Promise.allSettled([
+        this.detectExtension(),
+        this.canManage ? this.loadConfiguration() : Promise.resolve(),
+        this.canSync ? this.loadStationStatus() : Promise.resolve(),
+        this.canManage ? this.loadStations() : Promise.resolve()
+      ]);
+      if (!this.stationTimer) {
+        this.stationTimer = setInterval(() => {
+          if (this.canSync) this.loadStationStatus().catch(() => {});
+          if (this.canManage) this.loadStations().catch(() => {});
+        }, 60000);
+      }
     },
 
     installMessageHandlers() {
@@ -141,6 +155,7 @@
           <div><strong>Last failed sync</strong><span id="townsquare-last-failure">Never</span></div>
         </div>
         <div class="townsquare-bridge-instructions"><strong>Desktop bridge setup</strong><ol><li>Install the unpacked extension from <code>townsquare-bridge-extension</code> in Chrome or Edge.</li><li>Open its popup, save the same Townsquare URL, and grant access.</li><li>Sign in to Townsquare normally; the extension never reads your password or exports cookies.</li><li>Use guided mapping below if automatic control detection needs help.</li></ol><div class="townsquare-settings-actions"><button id="townsquare-start-mapping" class="btn-secondary">Start Guided Mapping</button><button id="townsquare-reset-mapping" class="btn-secondary">Test / Reset Mapping</button><button id="townsquare-view-diagnostics" class="btn-secondary">View Diagnostics</button></div></div>
+        <div class="townsquare-station-management"><div class="townsquare-station-heading"><div><strong>Always-on Sync Station</strong><p>Pair a dedicated browser worker on an always-on Windows PC or Pterodactyl. Any authorized RoomFlow device can queue a draft for it.</p></div><span id="townsquare-station-summary" class="townsquare-status-pill">Not paired</span></div><div class="townsquare-station-create"><input id="townsquare-station-name" maxlength="80" value="Primary Sync Station" aria-label="Sync Station name"><button id="townsquare-create-station" class="btn-primary">Create Pairing Key</button><button id="townsquare-refresh-stations" class="btn-secondary">Refresh Stations</button></div><div id="townsquare-station-list" class="townsquare-station-list"><span>No Sync Station has been paired.</span></div></div>
         <div class="townsquare-api-limitation"><strong>Verified API limitation:</strong> current official inTandem OpenAPI specifications publish clients and draft estimates, but no separate service-property or estimate-attachment endpoint. Auto mode therefore uses the desktop bridge for the complete workflow.</div>`;
       host.appendChild(card);
       card.querySelector('#townsquare-save-config').addEventListener('click', () => this.saveConfiguration());
@@ -150,6 +165,12 @@
       card.querySelector('#townsquare-start-mapping').addEventListener('click', () => this.startMapping(false));
       card.querySelector('#townsquare-reset-mapping').addEventListener('click', () => this.startMapping(true));
       card.querySelector('#townsquare-view-diagnostics').addEventListener('click', () => this.viewDiagnostics());
+      card.querySelector('#townsquare-create-station').addEventListener('click', () => this.createStation());
+      card.querySelector('#townsquare-refresh-stations').addEventListener('click', () => Promise.allSettled([this.loadStations(), this.loadStationStatus()]));
+      card.querySelector('#townsquare-station-list').addEventListener('click', event => {
+        const button = event.target.closest('[data-revoke-station]');
+        if (button) this.revokeStation(button.dataset.revokeStation, button.dataset.stationName || 'Sync Station');
+      });
     },
 
     fillConfiguration(configuration) {
@@ -237,6 +258,91 @@
       } catch (error) { this.toast(error.message, 'error'); }
     },
 
+    async loadStationStatus() {
+      if (!this.canSync || !this.organizationId || !state?.sessionUser) return;
+      const previous = `${this.stationStatus.configured}:${this.stationStatus.online}`;
+      try {
+        const data = await this.invoke('get_sync_station_status');
+        this.stationStatus = data.station_status || { configured: false, online: false, stations: [] };
+        this.renderStationSummary();
+        const current = `${this.stationStatus.configured}:${this.stationStatus.online}`;
+        if (previous !== current) {
+          document.querySelector('.townsquare-estimate-action')?.remove();
+          this.renderEstimateAction();
+        }
+      } catch { /* synchronization can still fall back to a local desktop bridge */ }
+    },
+
+    async loadStations() {
+      if (!this.canManage || !this.organizationId || !state?.sessionUser) return;
+      try {
+        const data = await this.invoke('list_sync_stations');
+        this.stations = data.stations || [];
+        this.renderStations();
+      } catch (error) {
+        const list = document.getElementById('townsquare-station-list');
+        if (list) list.innerHTML = `<span>${this.escape(error.message)}</span>`;
+      }
+    },
+
+    renderStationSummary() {
+      const summary = document.getElementById('townsquare-station-summary');
+      if (!summary) return;
+      summary.textContent = this.stationStatus.online ? 'Online' : (this.stationStatus.configured ? 'Paired · offline' : 'Not paired');
+      summary.dataset.state = this.stationStatus.online ? 'success' : (this.stationStatus.configured ? 'error' : 'neutral');
+    },
+
+    renderStations() {
+      const list = document.getElementById('townsquare-station-list');
+      if (!list) return;
+      const active = this.stations.filter(station => station.enabled && !station.revoked_at);
+      if (!active.length) {
+        list.innerHTML = '<span>No active Sync Station has been paired.</span>';
+      } else {
+        list.innerHTML = active.map(station => {
+          const seen = station.last_seen_at ? new Date(station.last_seen_at).toLocaleString() : 'Never';
+          const state = station.online ? 'Online' : 'Offline';
+          return `<div class="townsquare-station-row"><div><strong>${this.escape(station.name)}</strong><span data-state="${station.online ? 'success' : 'warning'}">${state} · last seen ${this.escape(seen)}</span>${station.last_error_code ? `<small>${this.escape(station.last_error_code)}</small>` : ''}</div><button class="btn-secondary" data-revoke-station="${this.escape(station.id)}" data-station-name="${this.escape(station.name)}">Revoke</button></div>`;
+        }).join('');
+      }
+      this.stationStatus = {
+        configured: active.length > 0,
+        online: active.some(station => station.online),
+        stations: active
+      };
+      this.renderStationSummary();
+    },
+
+    async createStation() {
+      const name = document.getElementById('townsquare-station-name')?.value.trim() || 'Primary Sync Station';
+      try {
+        const data = await this.invoke('create_sync_station', { station_name: name });
+        const credentials = data.result.credentials;
+        const pairing = [
+          `ROOMFLOW_FUNCTION_URL=${credentials.function_url}`,
+          `ROOMFLOW_STATION_ID=${credentials.station_id}`,
+          `ROOMFLOW_STATION_TOKEN=${credentials.station_token}`
+        ].join('\n');
+        this.showInformationDialog('Sync Station pairing key', `<div class="townsquare-result-card"><strong>Copy this now</strong><p>The token is shown once. Use these values with the Windows installer or add them as Pterodactyl variables.</p></div><pre class="townsquare-diagnostics" id="townsquare-station-pairing">${this.escape(pairing)}</pre><button class="btn-primary" data-copy-station-pairing>Copy Pairing Variables</button>`);
+        document.querySelector('[data-copy-station-pairing]')?.addEventListener('click', async event => {
+          try {
+            await navigator.clipboard.writeText(pairing);
+            event.currentTarget.textContent = 'Copied';
+          } catch { this.toast('Select and copy the pairing variables manually.', 'warning'); }
+        });
+        await Promise.allSettled([this.loadStations(), this.loadStationStatus()]);
+      } catch (error) { this.toast(error.message, 'error'); }
+    },
+
+    async revokeStation(stationId, stationName) {
+      if (!confirm(`Revoke ${stationName}? Its station runner will no longer be able to claim queued drafts.`)) return;
+      try {
+        await this.invoke('revoke_sync_station', { station_id: stationId });
+        await Promise.allSettled([this.loadStations(), this.loadStationStatus()]);
+        this.toast('Sync Station access revoked.', 'success');
+      } catch (error) { this.toast(error.message, 'error'); }
+    },
+
     renderExtensionStatus() {
       const output = document.getElementById('townsquare-extension-status');
       if (!output) return;
@@ -268,9 +374,14 @@
       const cached = estimateId ? this.syncCache.get(estimateId) : null;
       const mapping = cached?.mapping;
       const update = Boolean(mapping?.provider_entity_id);
-      const label = this.isAndroid && !update ? 'Queue Townsquare Sync for Desktop' : `${update ? 'Update' : 'Create'} Townsquare Draft`;
+      const label = this.stationStatus.configured
+        ? `${update ? 'Update' : 'Create'} via Sync Station`
+        : (this.isAndroid && !update ? 'Queue Townsquare Sync for Desktop' : `${update ? 'Update' : 'Create'} Townsquare Draft`);
+      const description = this.stationStatus.configured
+        ? `The paired Sync Station will process this draft${this.stationStatus.online ? ' now' : ' when it comes online'}. Final sending remains manual in Townsquare.`
+        : (this.isAndroid ? 'Browser Bridge requires desktop Chrome or Edge. Queue this estimate and finish from the desktop RoomFlow page.' : 'RoomFlow validates and transfers this estimate only after you press the button. Final sending remains manual in Townsquare.');
       area.innerHTML = `
-        <div><span class="townsquare-eyebrow">Final external draft</span><h4>${update ? 'Townsquare draft connected' : 'Create a Townsquare draft'}</h4><p>${this.isAndroid ? 'Browser Bridge requires desktop Chrome or Edge. Queue this estimate and finish from the desktop RoomFlow page.' : 'RoomFlow validates and transfers this estimate only after you press the button. Final sending remains manual in Townsquare.'}</p></div>
+        <div><span class="townsquare-eyebrow">Final external draft</span><h4>${update ? 'Townsquare draft connected' : 'Create a Townsquare draft'}</h4><p>${this.escape(description)}</p></div>
         <div class="townsquare-estimate-buttons"><button class="btn-primary townsquare-sync-button" ${this.canSync ? '' : 'disabled'}>${this.escape(label)}</button>${mapping?.provider_url ? `<a class="btn-secondary" href="${this.escape(mapping.provider_url)}" target="_blank" rel="noopener">Review in Townsquare</a>` : ''}</div>
         <div class="townsquare-sync-mini-history">${this.renderMiniHistory(cached?.runs || [])}</div>`;
       panel.appendChild(area);
@@ -333,10 +444,16 @@
       try {
         const estimate = await this.integration.saveDraftEstimate();
         if (!estimate?.id) throw new Error('Save the RoomFlow estimate draft before creating the Townsquare draft.');
-        const response = await this.invoke('sync_estimate', { estimate_id: estimate.id });
+        const response = await this.invoke('sync_estimate', { estimate_id: estimate.id, prefer_station: true });
         const result = response.result;
         if (result.completed) {
           this.showSuccess(result.run);
+          return;
+        }
+        if (result.queued) {
+          this.updateProgress('completed', this.stationStatus.online ? 'Queued for the online Sync Station' : 'Queued until the Sync Station comes online');
+          this.showQueued(result);
+          await this.loadEstimateSync(estimate.id);
           return;
         }
         if (!result.bridge_required) throw new Error('Townsquare did not return a supported synchronization route.');
@@ -386,7 +503,10 @@
 
     showQueued(result) {
       const output = document.getElementById('townsquare-progress-result');
-      if (output) output.innerHTML = `<div class="townsquare-result-card"><strong>Queued for desktop</strong><p>Open this estimate in the desktop RoomFlow site with Chrome or Edge, then press Create Townsquare Draft. Browser extensions cannot run inside the Android application.</p></div>`;
+      const stationQueued = this.stationStatus.configured;
+      if (output) output.innerHTML = stationQueued
+        ? `<div class="townsquare-result-card"><strong>Queued for Sync Station</strong><p>${this.stationStatus.online ? 'The station is online and will claim this draft automatically.' : 'The station is offline. The draft will remain queued and will be claimed after it reconnects.'} Nothing will be sent to the customer.</p></div>`
+        : `<div class="townsquare-result-card"><strong>Queued for desktop</strong><p>Open this estimate in the desktop RoomFlow site with Chrome or Edge, then press Create Townsquare Draft. Browser extensions cannot run inside the Android application.</p></div>`;
       const close = document.querySelector('.townsquare-dialog-close');
       if (close) close.disabled = false;
       this.resetActionButton();
@@ -426,7 +546,9 @@
       const estimateId = this.integration?.currentEstimateId || '';
       const update = Boolean(estimateId && this.syncCache.get(estimateId)?.mapping?.provider_entity_id);
       button.disabled = !this.canSync;
-      button.textContent = this.isAndroid ? 'Queue Townsquare Sync for Desktop' : `${update ? 'Update' : 'Create'} Townsquare Draft`;
+      button.textContent = this.stationStatus.configured
+        ? `${update ? 'Update' : 'Create'} via Sync Station`
+        : (this.isAndroid ? 'Queue Townsquare Sync for Desktop' : `${update ? 'Update' : 'Create'} Townsquare Draft`);
     },
 
     showInformationDialog(title, html) {

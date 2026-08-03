@@ -3542,6 +3542,243 @@ html, body {
     touch-action: auto !important;
 }
 
+/* More / Settings is a fixed-height flex viewport. Its children must retain
+   their natural height; allowing flex-shrink while cards hide overflow clips
+   every card to a fraction of its content once integrations are injected. */
+#more-viewport {
+    min-width: 0;
+    min-height: 0;
+    align-items: stretch;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+}
+
+#more-viewport > * {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+#more-viewport .checklist-room-card {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    height: auto;
+    min-height: max-content;
+    overflow: visible;
+}
+
+#more-viewport .checklist-room-card > *,
+#more-viewport .checklist-room-card label,
+#more-viewport .checklist-room-card input,
+#more-viewport .checklist-room-card select,
+#more-viewport .checklist-room-card textarea,
+#more-viewport .checklist-room-card pre {
+    min-width: 0;
+    max-width: 100%;
+}
+
+#more-viewport h2,
+#more-viewport h3,
+#more-viewport p,
+#more-viewport label,
+#more-viewport strong,
+#more-viewport span,
+#more-viewport a,
+#more-viewport code,
+#more-viewport pre {
+    overflow-wrap: anywhere;
+}
+
+#more-viewport pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+#more-viewport button,
+#more-viewport a[class*="btn-"] {
+    max-width: 100%;
+    min-height: 40px;
+    height: auto;
+    white-space: normal;
+    line-height: 1.25;
+}
+
+.more-company-create-row,
+.roomflow-more-toolbar,
+.roomflow-catalog-heading,
+#roomflow-endpoint-diagnostics div[style*="display:flex"][style*="justify-content:space-between"] {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+
+.roomflow-more-toolbar {
+    flex-wrap: wrap;
+}
+
+.roomflow-more-toolbar input {
+    flex: 1 1 220px;
+}
+
+.roomflow-catalog-heading {
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.roomflow-catalog-heading > div {
+    min-width: 0;
+}
+
+#roomflow-catalog-list,
+#trash-jobs-list {
+    max-width: 100%;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+}
+
+.roomflow-catalog-row {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.roomflow-catalog-row > *,
+.roomflow-catalog-row input,
+.roomflow-catalog-row select,
+.roomflow-catalog-row button {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+}
+
+.roomflow-catalog-name {
+    overflow-wrap: anywhere;
+}
+
+.trash-job-row {
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.trash-job-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+    #more-viewport {
+        gap: 0.85rem !important;
+        padding: 0.85rem !important;
+        padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)) !important;
+    }
+
+    #more-viewport .jobs-dashboard-header {
+        margin-bottom: 0;
+    }
+
+    #more-viewport .checklist-room-card {
+        padding: 0.9rem !important;
+        border-radius: 12px;
+    }
+
+    .more-company-create-row,
+    .roomflow-more-toolbar,
+    .roomflow-catalog-heading,
+    #roomflow-endpoint-diagnostics div[style*="display:flex"][style*="justify-content:space-between"] {
+        align-items: stretch !important;
+        flex-direction: column !important;
+    }
+
+    .more-company-create-row > *,
+    .roomflow-more-toolbar > *,
+    .roomflow-catalog-heading > button {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    #more-viewport .checklist-pill-group {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+
+    #more-viewport .checklist-pill {
+        width: 100%;
+        border-radius: 10px;
+        text-align: center;
+    }
+
+    #roomflow-endpoint-diagnostics div[style*="grid-template-columns"] {
+        grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    #roomflow-endpoint-diagnostics div[style*="text-align:right"] {
+        text-align: left !important;
+    }
+
+    .roomflow-catalog-row {
+        grid-template-columns: minmax(0, 1fr) !important;
+        align-items: stretch !important;
+    }
+
+    .roomflow-catalog-row input,
+    .roomflow-catalog-row select,
+    .roomflow-catalog-row button {
+        min-height: 42px;
+    }
+
+    .trash-job-row {
+        align-items: stretch !important;
+        flex-direction: column;
+    }
+
+    .trash-job-row button {
+        width: 100%;
+    }
+
+    .townsquare-status-pill {
+        align-self: flex-start;
+        white-space: normal;
+    }
+}
+
+/* The dashboard is an inline flex column. Keep its cards at their natural
+   height so the viewport and the bounded Leads region can actually scroll. */
+#jobs-viewport > * {
+    flex: 0 0 auto;
+}
+
+#roomflow-inbound-leads-card {
+    min-height: 0;
+    flex: 0 0 auto;
+}
+
+.roomflow-inbound-leads-list {
+    display: grid;
+    gap: 0.65rem;
+    max-height: min(62vh, 720px);
+    max-height: min(62dvh, 720px);
+    padding: 0.1rem 0.4rem 0.1rem 0.05rem;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+}
+
+.roomflow-inbound-leads-list:focus-visible {
+    outline: 2px solid var(--accent-blue);
+    outline-offset: 3px;
+}
+
 /* Leads dashboard: show the complete normalized intake record without hiding fields. */
 .roomflow-leads-heading,
 .roomflow-lead-card-header,
@@ -3658,6 +3895,23 @@ html, body {
     font-size: 0.72rem;
 }
 
+.roomflow-lead-action-buttons {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.roomflow-remove-lead {
+    color: #fca5a5 !important;
+    border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+.roomflow-remove-lead:hover {
+    border-color: #ef4444 !important;
+    background: rgba(239, 68, 68, 0.14) !important;
+}
+
 @media (max-width: 620px) {
     .roomflow-leads-heading,
     .roomflow-lead-card-header,
@@ -3668,6 +3922,15 @@ html, body {
 
     .roomflow-leads-heading button,
     .roomflow-lead-card-actions button {
+        width: 100%;
+    }
+
+    .roomflow-inbound-leads-list {
+        max-height: 58vh;
+        max-height: 58dvh;
+    }
+
+    .roomflow-lead-action-buttons {
         width: 100%;
     }
 
@@ -3709,6 +3972,16 @@ html, body {
 .townsquare-connection-grid span[data-state="warning"] { color: #fcd34d; }
 .townsquare-bridge-instructions, .townsquare-api-limitation { margin-top: 1rem; padding: .85rem; border: 1px solid rgba(56,189,248,.22); border-radius: 10px; background: rgba(14,116,144,.09); color: #cbd5e1; font-size: .76rem; line-height: 1.55; }
 .townsquare-bridge-instructions ol { margin: .55rem 0 .3rem 1.1rem; padding: 0; }
+.townsquare-station-management { margin-top: 1rem; padding: .9rem; border: 1px solid rgba(16,185,129,.25); border-radius: 10px; background: rgba(5,150,105,.08); color: #cbd5e1; }
+.townsquare-station-heading, .townsquare-station-create, .townsquare-station-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.townsquare-station-heading p { margin: .25rem 0 0; color: #94a3b8; font-size: .75rem; line-height: 1.45; }
+.townsquare-station-create { justify-content: flex-start; flex-wrap: wrap; margin-top: .8rem; }
+.townsquare-station-create input { flex: 1 1 220px; min-height: 40px; padding: .6rem .7rem; border: 1px solid rgba(148,163,184,.25); border-radius: 8px; background: #111827; color: #f8fafc; }
+.townsquare-station-list { display: grid; gap: .5rem; margin-top: .8rem; color: #94a3b8; font-size: .74rem; }
+.townsquare-station-row { padding: .65rem; border: 1px solid rgba(148,163,184,.14); border-radius: 8px; background: rgba(2,6,23,.3); }
+.townsquare-station-row > div { display: grid; gap: .2rem; min-width: 0; }
+.townsquare-station-row span[data-state="success"] { color: #86efac; }
+.townsquare-station-row span[data-state="warning"], .townsquare-station-row small { color: #fcd34d; }
 .townsquare-api-limitation { border-color: rgba(245,158,11,.25); background: rgba(146,64,14,.1); color: #fde68a; }
 .townsquare-estimate-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center; margin-top: 1rem; padding: 1rem; border: 1px solid rgba(56,189,248,.28); border-radius: 12px; background: linear-gradient(135deg, rgba(14,116,144,.13), rgba(37,99,235,.08)); }
 .townsquare-estimate-buttons { justify-content: flex-end; margin: 0; }
@@ -3740,6 +4013,7 @@ html, body {
     .townsquare-estimate-action { grid-template-columns: 1fr; }
     .townsquare-estimate-buttons { justify-content: stretch; }
     .townsquare-estimate-buttons > * { width: 100%; justify-content: center; }
+    .townsquare-station-heading, .townsquare-station-row { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 480px) {

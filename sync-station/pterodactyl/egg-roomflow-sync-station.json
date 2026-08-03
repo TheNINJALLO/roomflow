@@ -1,0 +1,125 @@
+{
+  "_comment": "DO NOT EDIT: FILE GENERATED FOR PTERODACTYL PANEL - PTERODACTYL.IO",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-08-02T23:30:00-04:00",
+  "name": "RoomFlow Townsquare Sync Station",
+  "author": "noreply@roomflow.local",
+  "description": "Always-on RoomFlow browser worker. Runs Chromium, the draft-only Townsquare bridge extension, a local queue controller, and password-protected noVNC. Requires the RoomFlow Sync Station container image.",
+  "features": null,
+  "docker_images": {
+    "RoomFlow Sync Station": "ghcr.io/theninjallo/roomflow-sync-station:latest"
+  },
+  "file_denylist": [
+    "data/chromium",
+    "data/vnc.pass"
+  ],
+  "startup": "bash sync-station/pterodactyl/start.sh",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\":\"ROOMFLOW_SYNC_STATION_READY\"}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\nset -Eeuo pipefail\napt-get update\nDEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates git\nROOMFLOW_INSTALL_SOURCE=/tmp/roomflow-sync-station-install\nrm -rf \"$ROOMFLOW_INSTALL_SOURCE\"\ngit clone --depth 1 --branch \"${GIT_BRANCH}\" \"${GIT_ADDRESS}\" \"$ROOMFLOW_INSTALL_SOURCE\"\ntest -f \"$ROOMFLOW_INSTALL_SOURCE/sync-station/server.mjs\"\ntest -f \"$ROOMFLOW_INSTALL_SOURCE/townsquare-bridge-extension/manifest.json\"\nmkdir -p /mnt/server/sync-station /mnt/server/townsquare-bridge-extension\ncp -R \"$ROOMFLOW_INSTALL_SOURCE/sync-station/.\" /mnt/server/sync-station/\ncp -R \"$ROOMFLOW_INSTALL_SOURCE/townsquare-bridge-extension/.\" /mnt/server/townsquare-bridge-extension/\nchmod 0755 /mnt/server/sync-station/pterodactyl/start.sh\nrm -rf \"$ROOMFLOW_INSTALL_SOURCE\"\necho 'RoomFlow Sync Station files installed.'",
+      "container": "ghcr.io/pterodactyl/installers:debian",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    {
+      "name": "RoomFlow Function URL",
+      "description": "One-time pairing value shown in RoomFlow Settings as ROOMFLOW_FUNCTION_URL.",
+      "env_variable": "ROOMFLOW_FUNCTION_URL",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|string|max:2000",
+      "field_type": "text"
+    },
+    {
+      "name": "RoomFlow Station ID",
+      "description": "One-time pairing value shown in RoomFlow Settings as ROOMFLOW_STATION_ID.",
+      "env_variable": "ROOMFLOW_STATION_ID",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|uuid",
+      "field_type": "text"
+    },
+    {
+      "name": "RoomFlow Station Token",
+      "description": "Secret one-time pairing token. Pterodactyl administrators and anyone with server environment access can retrieve it.",
+      "env_variable": "ROOMFLOW_STATION_TOKEN",
+      "default_value": "",
+      "user_viewable": false,
+      "user_editable": false,
+      "rules": "required|string|min:40|max:500",
+      "field_type": "text"
+    },
+    {
+      "name": "noVNC Password",
+      "description": "Full-length bcrypt password for HTTP access to noVNC, also used by the inner VNC session. Username: roomflow. Use at least 16 random characters.",
+      "env_variable": "VNC_PASSWORD",
+      "default_value": "",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|string|min:16|max:64",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Repository",
+      "description": "Repository downloaded by the egg installer.",
+      "env_variable": "GIT_ADDRESS",
+      "default_value": "https://github.com/TheNINJALLO/roomflow.git",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|string|max:500",
+      "field_type": "text"
+    },
+    {
+      "name": "Git Branch",
+      "description": "RoomFlow branch downloaded by the egg installer.",
+      "env_variable": "GIT_BRANCH",
+      "default_value": "main",
+      "user_viewable": true,
+      "user_editable": false,
+      "rules": "required|string|max:100",
+      "field_type": "text"
+    },
+    {
+      "name": "Queue Poll Interval",
+      "description": "Milliseconds between queue checks. Minimum 2000.",
+      "env_variable": "STATION_POLL_INTERVAL_MS",
+      "default_value": "5000",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|integer|min:2000|max:60000",
+      "field_type": "text"
+    },
+    {
+      "name": "Display Width",
+      "description": "Virtual Chromium display width.",
+      "env_variable": "DISPLAY_WIDTH",
+      "default_value": "1440",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|integer|min:1024|max:2560",
+      "field_type": "text"
+    },
+    {
+      "name": "Display Height",
+      "description": "Virtual Chromium display height.",
+      "env_variable": "DISPLAY_HEIGHT",
+      "default_value": "900",
+      "user_viewable": true,
+      "user_editable": true,
+      "rules": "required|integer|min:720|max:1440",
+      "field_type": "text"
+    }
+  ]
+}

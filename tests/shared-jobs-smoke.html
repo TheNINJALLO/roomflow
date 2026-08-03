@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Shared jobs smoke test</title></head>
+<body>
+  <div id="result">RUNNING</div>
+  <script>
+    const state = {
+      userCapabilities: ['view_company_jobs', 'view_internal_costs', 'view_customer_prices', 'view_margin'],
+      userOrganizations: [],
+      currentOrganization: { id: '11111111-1111-4111-8111-111111111111' },
+      sessionUser: { id: '22222222-2222-4222-8222-222222222222' },
+      syncStatus: 'synced'
+    };
+    window.RoomFlowConfig = { supabaseUrl: 'https://example.supabase.co', supabaseAnonKey: 'test-key' };
+    window.hasCapability = capability => state.userCapabilities.includes(capability);
+  </script>
+  <script src="../supabase-service.js"></script>
+  <script>
+    state.userCapabilities = ['view_company_jobs', 'view_internal_costs', 'view_customer_prices', 'view_margin'];
+    state.currentOrganization = { id: '11111111-1111-4111-8111-111111111111' };
+    state.sessionUser = { id: '22222222-2222-4222-8222-222222222222' };
+    const jobId = '33333333-3333-4333-8333-333333333333';
+    const estimateId = '44444444-4444-4444-8444-444444444444';
+    const now = '2026-08-03T12:00:00.000Z';
+    const rows = {
+      jobs: [{
+        id: jobId, organization_id: state.currentOrganization.id, customer_id: 'c1', name: 'Shared Smith Job',
+        status: 'Estimate Draft', current_version_number: 1, property_address: '10 Main St', estimate_status: 'draft',
+        updated_at: now, created_at: now,
+        customers: { id: 'c1', name: 'Alex Smith', phone: '555-0100', email: 'alex@example.test', address: '10 Main St' }
+      }],
+      job_project_snapshots: [{
+        job_id: jobId, client_updated_at: now, updated_at: now,
+        project_state: { schemaVersion: '2.0.0', rooms: [{ id: 'room-1', name: 'Basement' }], walls: [{ id: 'wall-1' }], levels: [] }
+      }],
+      job_layouts: [],
+      job_costing_snapshots: [{
+        job_id: jobId, client_updated_at: now, updated_at: now,
+        costing_state: { customerName: 'Alex Smith', customerAddress: '10 Main St', customItems: [], settings: { targetGrossMargin: 42 } }
+      }],
+      estimates: [{ id: estimateId, job_id: jobId, status: 'draft', estimate_number: 'RF-2026-TEST', version_number: 1, updated_at: now, created_at: now }],
+      estimate_lines: [{
+        id: 'line-1', estimate_id: estimateId, catalog_item_id: null, roomflow_line_id: 'rf-line-1', category: 'material',
+        name: 'Drainage', description: '', pricing_method: 'fixed', quantity: 2, unit: 'each', unit_price: 125,
+        taxable: false, optional: false, selected: true, sort_order: 0, calculation_metadata: {}, updated_at: now
+      }]
+    };
+
+    class Query {
+      constructor(table) { this.table = table; }
+      select() { return this; }
+      eq() { return this; }
+      in() { return this; }
+      order() { return this; }
+      limit() { return this; }
+      then(resolve) { resolve({ data: rows[this.table] || [], error: null }); }
+    }
+    const fakeClient = {
+      from(table) { return new Query(table); },
+      auth: { getSession: async () => ({ data: { session: null } }) }
+    };
+    supabaseClient = fakeClient;
+    let rendered = 0;
+    window.renderRoomFlowJobsList = () => { rendered += 1; };
+
+    (async () => {
+      try {
+        localStorage.clear();
+        const result = await window.RoomFlowSync.refreshSharedJobs();
+        const jobs = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}');
+        const drafts = JSON.parse(localStorage.getItem('roomflow_estimate_drafts_v1') || '{}');
+        const job = jobs['Shared Smith Job'];
+        const draft = drafts['Shared Smith Job'];
+        const initialProjectOkay = job?.rooms?.[0]?.name === 'Basement' && job?.walls?.[0]?.id === 'wall-1';
+        jobs['Shared Smith Job'].rooms = [{ id: 'local-room', name: 'Unsynced Local Room' }];
+        jobs['Shared Smith Job'].syncState = 'pending';
+        jobs['Shared Smith Job'].lastModified = Date.now() + 60000;
+        localStorage.setItem('roomflow_jobs', JSON.stringify(jobs));
+        await window.RoomFlowSync.refreshSharedJobs();
+        const mergedAgain = JSON.parse(localStorage.getItem('roomflow_jobs') || '{}')['Shared Smith Job'];
+        const assertions = [
+          [result.loadedJobs === 1, 'one cloud job loaded'],
+          [result.loadedEstimates === 1, 'one estimate loaded'],
+          [job?.jobId === jobId && job.sharedFromCloud === true, 'cloud identity retained'],
+          [initialProjectOkay, 'complete project restored'],
+          [job?.costing?.settings?.targetGrossMargin === 42, 'protected costing restored'],
+          [draft?.estimateId === estimateId && draft?.lines?.[0]?.roomflow_line_id === 'rf-line-1', 'estimate lines restored'],
+          [mergedAgain?.rooms?.[0]?.id === 'local-room' && mergedAgain.syncState === 'pending', 'newer unsynced local edits retained'],
+          [rendered === 2, 'jobs dashboard refreshed']
+        ];
+        const failure = assertions.find(([passed]) => !passed);
+        document.getElementById('result').textContent = failure ? `FAIL: ${failure[1]}` : 'PASS';
+      } catch (error) {
+        document.getElementById('result').textContent = `FAIL: ${error.message || error}`;
+      }
+    })();
+  </script>
+</body>
+</html>

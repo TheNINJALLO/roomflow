@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "RoomFlow Townsquare Draft Bridge",
+  "version": "1.1.0",
+  "description": "Creates or updates Townsquare draft estimates from an explicit RoomFlow action or a paired RoomFlow Sync Station.",
+  "permissions": ["storage", "tabs", "scripting", "alarms"],
+  "optional_host_permissions": [
+    "https://*.townsquareinteractive.com/*",
+    "https://*.vcita.com/*",
+    "https://*.vcita.biz/*",
+    "https://*.intandem.tech/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "RoomFlow Townsquare Bridge",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://theninjallo.github.io/roomflow/*",
+        "http://localhost/*",
+        "http://127.0.0.1/*"
+      ],
+      "js": ["bridge-core.js", "roomflow-content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

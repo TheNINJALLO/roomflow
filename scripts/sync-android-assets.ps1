@@ -10,6 +10,7 @@ $webFiles = @(
     'document-workflow.js',
     'index.html',
     'roomflow-integrations.js',
+    'supabase-service.js',
     'styles.css',
     'townsquare-integration.js',
     'user-guide.html',

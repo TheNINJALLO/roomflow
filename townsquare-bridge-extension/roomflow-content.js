@@ -16,7 +16,7 @@
     if (event.source !== window || event.origin !== location.origin) return;
     if (event.data?.type === 'ROOMFLOW_TOWNSQUARE_BRIDGE_PING') {
       const response = await chrome.runtime.sendMessage({ type: 'BRIDGE_STATUS' }).catch(() => null);
-      sendStatus({ connected: Boolean(response?.connected), configured: Boolean(response?.configured), destinationOrigin: response?.destinationOrigin || '' });
+      sendStatus({ connected: Boolean(response?.connected), configured: Boolean(response?.configured), destinationOrigin: response?.destinationOrigin || '', pendingRunId: response?.pendingRunId || '' });
       return;
     }
     if (event.data?.type === 'ROOMFLOW_TOWNSQUARE_START_MAPPING') {

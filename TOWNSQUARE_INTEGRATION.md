@@ -183,7 +183,17 @@ The official API adapter reports attachments as skipped because the verified Ope
 
 Chrome/Edge desktop extensions cannot run inside Android apps or normal Android WebViews. RoomFlow detects Android and shows **Queue Townsquare Sync for Desktop**. Finish the estimate on Android, queue it, then open the same estimate in desktop RoomFlow and run the draft action there.
 
+When an always-on Sync Station is paired, Android and desktop users instead queue the draft directly to that station. No extension is required on their device. The station claims the job automatically and still saves only a Townsquare draft.
+
 An officially supported complete API workflow would remain server-side and Android-compatible. The current API lacks the documented service-property capability, so RoomFlow does not claim that partial API synchronization is complete.
+
+## Always-on Sync Station: Windows PC or Pterodactyl
+
+The dedicated Sync Station runs Chromium and this extension in either a persistent Windows browser profile or a Pterodactyl container. Pairing uses a one-time random device token; RoomFlow stores only its SHA-256 hash. Atomic database claims prevent two stations from processing the same queued run, and claimed payloads remain only in process memory and `chrome.storage.session`.
+
+Apply `supabase/migrations/20260803010000_townsquare_sync_station.sql`, deploy the updated function with `--no-verify-jwt`, and follow [sync-station/README.md](sync-station/README.md). For Windows, use the DPAPI-backed Task Scheduler installer in [sync-station/windows/README.md](sync-station/windows/README.md). For Pterodactyl, import `sync-station/pterodactyl/egg-roomflow-sync-station.json`.
+
+The Windows method requires an interactive Windows user to remain signed in, though the screen may be locked. The Pterodactyl allocation provides a password-protected noVNC console. Both methods expose sanitized health locally; keep any remote console behind HTTPS and access control because the persistent browser profile contains the authenticated Townsquare session. An expired claim is not replayed automatically; RoomFlow requires a Townsquare review before retrying to avoid duplicates.
 
 The root web files and `app/src/main/assets` copies must remain synchronized:
 

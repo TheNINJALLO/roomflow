@@ -11,10 +11,10 @@
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Styling -->
-    <link rel="stylesheet" href="styles.css?v=69">
+    <link rel="stylesheet" href="styles.css?v=71">
     <!-- Supabase integration -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="config.js?v=63"></script>
+    <script src="config.js?v=66"></script>
 </head>
 <body>
     <div id="app-container" class="interface-mode-simple">
@@ -321,6 +321,9 @@
                                 <option value="incomplete">In Progress</option>
                                 <option value="complete">Completed</option>
                             </select>
+                            <button id="btn-refresh-shared-jobs" class="btn-secondary" type="button" title="Download the latest jobs and estimates from your company cloud" style="white-space:nowrap;">
+                                <i data-lucide="refresh-cw"></i> Refresh Shared
+                            </button>
                         </div>
 
                         <div id="recent-jobs-list" class="recent-jobs-grid">
@@ -375,7 +378,7 @@
                             
                             <div style="border-top:1px solid rgba(255,255,255,0.05); padding-top:0.75rem; display:flex; flex-direction:column; gap:0.5rem;">
                                 <label style="font-size:0.75rem; font-weight:700; color:#cbd5e1;">Create New Company:</label>
-                                <div style="display:flex; gap:0.5rem;">
+                                <div class="more-company-create-row" style="display:flex; gap:0.5rem;">
                                     <input type="text" id="more-new-company-name" placeholder="Acme Contracting" style="background:#1f2937; border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:0.5rem; color:white; font-size:0.8rem; flex-grow:1; outline:none;">
                                     <button id="btn-more-create-company" class="btn-primary" style="padding:0.5rem 1rem; font-size:0.8rem; font-weight:700;">Create</button>
                                 </div>
@@ -1214,8 +1217,8 @@
     <script src="spatial-engine.js?v=59"></script>
     <script src="cost-catalog.js?v=59"></script>
     <script src="cost-engine.js?v=66"></script>
-    <script src="app.js?v=66"></script>
-    <script src="supabase-service.js?v=60"></script>
+    <script src="app.js?v=68"></script>
+    <script src="supabase-service.js?v=61"></script>
     <script src="renderer3d.js?v=60"></script>
     <script src="ar-estimator.js?v=59"></script>
     <script src="cost-ui.js?v=66"></script>

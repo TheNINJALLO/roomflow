@@ -7,4 +7,6 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.townsquare-sync]
-verify_jwt = true
+# User requests are still verified explicitly with auth.getUser(). This must be
+# false so a paired Sync Station can use its own hashed device credential.
+verify_jwt = false

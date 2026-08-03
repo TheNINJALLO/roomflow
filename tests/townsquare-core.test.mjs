@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  STATION_WORKER_ACTIONS,
   authorizeAction,
   buildBridgePayload,
   buildOfficialEstimateRequest,
@@ -157,6 +158,9 @@ test('Edge Function request validation rejects arbitrary organizations and actio
   assert.equal(validateActionRequest({ action: 'sync_estimate', organization_id: ids.org, estimate_id: ids.estimate }).valid, true);
   assert.equal(validateActionRequest({ action: 'delete_everything', organization_id: ids.org }).valid, false);
   assert.equal(validateActionRequest({ action: 'sync_estimate', organization_id: 'wrong', estimate_id: ids.estimate }).valid, false);
+  assert.equal(validateActionRequest({ action: 'get_sync_station_status', organization_id: ids.org }).valid, true);
+  assert.equal(STATION_WORKER_ACTIONS.has('station_claim'), true);
+  assert.equal(validateActionRequest({ action: 'station_claim', organization_id: ids.org }).valid, false);
 });
 
 test('bridge messages validate origin, protocol, run, and line items', () => {

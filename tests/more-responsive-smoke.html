@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RoomFlow More responsive smoke test</title>
+  <style>
+    body { margin:0; padding:20px; background:#07101d; color:#e2e8f0; font:14px ui-monospace,monospace; }
+    pre { white-space:pre-wrap; }
+    iframe { position:absolute; left:-10000px; top:0; border:0; }
+  </style>
+</head>
+<body>
+  <h1>RoomFlow More responsive smoke test</h1>
+  <pre id="result">RUNNING</pre>
+  <script>
+  (async () => {
+    const checks = [];
+    const add = (name, passed, detail = '') => checks.push({ name, passed: Boolean(passed), detail: String(detail) });
+    const source = await fetch('../index.html').then(response => response.text());
+    const sourceDocument = new DOMParser().parseFromString(source, 'text/html');
+    const moreMarkup = sourceDocument.getElementById('more-viewport').outerHTML;
+    const stylesheet = new URL('../styles.css?v=71', location.href).href;
+    const cases = [
+      { width:320, height:640 }, { width:360, height:720 }, { width:430, height:760 },
+      { width:620, height:760 }, { width:768, height:800 }, { width:1024, height:800 }, { width:1440, height:900 }
+    ];
+
+    const syntheticCards = `
+      <section class="checklist-room-card roomflow-more-card" id="fixture-intake-card">
+        <h3>Lead Intake / Zapier with a deliberately long heading that must wrap</h3>
+        <p>Every character of long endpoint information must remain visible instead of being cut off by the card.</p>
+        <div class="roomflow-more-toolbar"><input value="Long Intake Endpoint Name"><button class="btn-primary">Create Endpoint</button><button class="btn-secondary">Refresh Activity</button></div>
+        <pre>POST URL\nhttps://example.supabase.co/functions/v1/intake-lead?endpoint=roomflow-extraordinarily-long-endpoint-key-that-must-wrap-and-remain-readable\n\nHEADERS\nx-roomflow-webhook-secret: test-secret-value</pre>
+      </section>
+      <section class="checklist-room-card roomflow-more-card" id="fixture-catalog-card">
+        <div class="roomflow-catalog-heading"><div><h3>Estimate Product Catalog</h3><p>Import products, edit prices, and retain access to all controls.</p></div><button class="btn-primary">Import 229 Products</button></div>
+        <div class="roomflow-more-toolbar"><input value="Search products"><button class="btn-secondary">Refresh</button></div>
+        <div id="roomflow-catalog-list">
+          <div class="roomflow-catalog-row" style="display:grid;grid-template-columns:minmax(180px,1fr) 120px 105px 85px;gap:.5rem;align-items:center;padding:.55rem;">
+            <div class="roomflow-catalog-name"><strong>Extraordinarily Long Basement Waterproofing Product Name</strong><div>general-services · Review required</div></div>
+            <select><option>per_square_foot</option></select><input value="125.00"><button class="btn-secondary">Save</button>
+          </div>
+        </div>
+      </section>
+      <section class="checklist-room-card townsquare-settings-card" id="fixture-townsquare-card">
+        <div class="townsquare-card-heading"><div><span class="townsquare-eyebrow">External estimating</span><h3>Townsquare Interactive</h3><p>Settings and always-on Sync Station details must expand this card naturally.</p></div><span class="townsquare-status-pill">Managed by your company</span></div>
+        <div class="townsquare-settings-grid"><label class="townsquare-wide">Townsquare destination URL<input value="https://example.test/a/very/long/destination/path"></label><label>Connection mode<select><option>Automatic browser bridge</option></select></label><label>Currency<input value="USD"></label></div>
+        <div class="townsquare-settings-actions"><button class="btn-primary">Save Configuration</button><button class="btn-secondary">Test API</button><button class="btn-secondary">View Diagnostics</button></div>
+        <div class="townsquare-station-management"><div class="townsquare-station-heading"><div><strong>Always-on Sync Station</strong><p>Pair a dedicated browser worker on an always-on Windows PC or Pterodactyl.</p></div><span class="townsquare-status-pill">Paired · offline</span></div><div class="townsquare-station-create"><input value="Primary Sync Station"><button class="btn-primary">Create Pairing Key</button><button class="btn-secondary">Refresh Stations</button></div></div>
+      </section>`;
+
+    for (const testCase of cases) {
+      const frame = document.createElement('iframe');
+      frame.width = String(testCase.width);
+      frame.height = String(testCase.height);
+      frame.style.width = `${testCase.width}px`;
+      frame.style.height = `${testCase.height}px`;
+      const loaded = new Promise((resolve, reject) => { frame.onload = resolve; frame.onerror = reject; });
+      document.body.appendChild(frame);
+      frame.srcdoc = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="${stylesheet}"></head><body><div id="app-container" class="interface-mode-guided"><main class="app-body"><div class="viewport-container">${moreMarkup}</div></main></div></body></html>`;
+      await loaded;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const doc = frame.contentDocument;
+      const win = frame.contentWindow;
+      const more = doc.getElementById('more-viewport');
+      more.classList.add('active');
+      more.insertAdjacentHTML('beforeend', syntheticCards);
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const label = `${testCase.width}x${testCase.height}`;
+      const viewportRect = more.getBoundingClientRect();
+      const cards = [...more.querySelectorAll(':scope > .checklist-room-card')];
+      const clippedCards = cards.filter(card => card.scrollHeight > card.clientHeight + 2);
+      const outOfWidthCards = cards.filter(card => {
+        const rect = card.getBoundingClientRect();
+        return rect.left < viewportRect.left - 1 || rect.right > viewportRect.right + 1;
+      });
+      const controls = [...more.querySelectorAll('input,select,button,a')].filter(element => {
+        const style = win.getComputedStyle(element);
+        return style.display !== 'none' && style.visibility !== 'hidden';
+      });
+      const outOfCardControls = controls.filter(element => {
+        const card = element.closest('.checklist-room-card');
+        if (!card) return false;
+        const rect = element.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        return rect.left < cardRect.left - 1 || rect.right > cardRect.right + 1;
+      });
+
+      add(`${label}: More viewport has no horizontal overflow`, more.scrollWidth <= more.clientWidth + 1, `${more.scrollWidth}/${more.clientWidth}`);
+      add(`${label}: every card stays within the viewport width`, outOfWidthCards.length === 0, outOfWidthCards.map(card => card.id || card.textContent.slice(0, 30)).join(', '));
+      add(`${label}: cards expand to show their complete contents`, clippedCards.length === 0, clippedCards.map(card => `${card.id}:${card.clientHeight}/${card.scrollHeight}`).join(', '));
+      add(`${label}: form controls stay inside their cards`, outOfCardControls.length === 0, outOfCardControls.map(element => element.id || element.textContent.trim()).join(', '));
+      add(`${label}: page becomes vertically scrollable`, more.scrollHeight > more.clientHeight, `${more.scrollHeight}/${more.clientHeight}`);
+      more.scrollTop = more.scrollHeight;
+      await new Promise(resolve => setTimeout(resolve, 25));
+      const last = more.lastElementChild.getBoundingClientRect();
+      add(`${label}: final settings card is reachable by scrolling`, last.bottom <= viewportRect.bottom + 2 && last.top < viewportRect.bottom, `${last.top}/${last.bottom}/${viewportRect.bottom}`);
+      frame.remove();
+    }
+
+    const report = { passed: checks.every(check => check.passed), checks };
+    document.getElementById('result').textContent = JSON.stringify(report, null, 2);
+    document.body.dataset.passed = String(report.passed);
+    document.title = report.passed ? 'PASS - RoomFlow More responsive smoke test' : 'FAIL - RoomFlow More responsive smoke test';
+  })().catch(error => {
+    document.getElementById('result').textContent = JSON.stringify({ passed:false, error:error.message }, null, 2);
+    document.body.dataset.passed = 'false';
+    document.title = 'FAIL - RoomFlow More responsive smoke test';
+  });
+  </script>
+</body>
+</html>

@@ -12,12 +12,18 @@ export const SYNC_STATUSES = Object.freeze([
 
 export const MANAGEMENT_ACTIONS = new Set([
   'get_configuration', 'save_configuration', 'clear_api_token',
-  'test_connection', 'get_diagnostics'
+  'test_connection', 'get_diagnostics', 'list_sync_stations',
+  'create_sync_station', 'revoke_sync_station'
 ]);
 
 export const ESTIMATE_ACTIONS = new Set([
   'get_estimate_sync', 'sync_estimate', 'prepare_bridge_sync',
-  'queue_bridge_sync', 'complete_bridge_sync', 'cancel_bridge_sync'
+  'queue_bridge_sync', 'complete_bridge_sync', 'cancel_bridge_sync',
+  'get_sync_station_status'
+]);
+
+export const STATION_WORKER_ACTIONS = new Set([
+  'station_heartbeat', 'station_claim', 'station_complete'
 ]);
 
 const FINAL_PROVIDER_STATUSES = new Set([
@@ -393,7 +399,7 @@ export function validateActionRequest(body) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(organizationId)) {
     return { valid: false, error: 'A valid organization_id is required.' };
   }
-  if (ESTIMATE_ACTIONS.has(action) && !['complete_bridge_sync', 'cancel_bridge_sync'].includes(action)) {
+  if (ESTIMATE_ACTIONS.has(action) && !['complete_bridge_sync', 'cancel_bridge_sync', 'get_sync_station_status'].includes(action)) {
     const estimateId = cleanText(body.estimate_id, 80);
     if (!/^[0-9a-f-]{36}$/i.test(estimateId)) return { valid: false, error: 'A valid estimate_id is required.' };
   }
