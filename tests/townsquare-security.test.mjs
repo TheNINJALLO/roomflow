@@ -64,8 +64,12 @@ test('browser workflow opens Quick Actions before the combined estimate property
   assert.ok(adapter.indexOf("'customerFirstName', 'customerLastName'") > adapter.indexOf("'propertyContactName'"));
   assert.match(adapter, /this\.locator\.queryMapped\('propertyContactName'\)/);
   assert.match(adapter, /await this\.fillEstimateHeader\(estimate\)/);
-  assert.match(adapter, /await this\.openLineItemPicker\(line\)/);
+  assert.match(adapter, /await this\.openLineItemPicker\(line, controlsBeforeOpen\)/);
   assert.match(adapter, /LINE_ITEM_CREATE_CONTROL_REQUIRED/);
+  assert.match(adapter, /waitForAnyControl/);
+  assert.match(adapter, /INPUT_VALUE_NOT_RETAINED/);
+  assert.match(adapter, /LINE_ITEM_ROW_NOT_CREATED/);
+  assert.match(adapter, /Townsquare did not confirm a saved draft with an estimate ID/);
 });
 
 test('RoomFlow frontend never persists or displays the API token', async () => {
