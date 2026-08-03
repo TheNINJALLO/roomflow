@@ -228,6 +228,8 @@ export function buildBridgePayload(bundle, config = {}) {
     ? new Date(estimate.expires_at).toISOString().slice(0, 10)
     : new Date(Date.now() + expirationDays * 86400000).toISOString().slice(0, 10);
   const propertyName = cleanText(job.name || `${validation.customerName} Service Property`, 240);
+  const estimateHeader = cleanText(validation.lines.find(line => line.section_name)?.section_name, 240)
+    || cleanText(`${estimate.estimate_number || 'RoomFlow Estimate'} — ${job.name || validation.customerName}`, 240);
   return {
     protocolVersion: PROTOCOL_VERSION,
     provider: PROVIDER,
@@ -254,7 +256,7 @@ export function buildBridgePayload(bundle, config = {}) {
     estimate: {
       roomflowId: estimate.id,
       jobId: job.id,
-      title: cleanText(`${estimate.estimate_number || 'RoomFlow Estimate'} — ${job.name || validation.customerName}`, 240),
+      title: estimateHeader,
       estimateNumber: cleanText(estimate.estimate_number, 120),
       jobNumber: cleanText(job.external_key || job.id, 120),
       scopeOfWork: cleanText(job.issue_description || estimate.customer_message || '', 4000),

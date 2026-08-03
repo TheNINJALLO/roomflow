@@ -41,7 +41,7 @@
       estimates: [{ id: estimateId, job_id: jobId, status: 'draft', estimate_number: 'RF-2026-TEST', version_number: 1, updated_at: now, created_at: now }],
       estimate_lines: [{
         id: 'line-1', estimate_id: estimateId, catalog_item_id: null, roomflow_line_id: 'rf-line-1', category: 'material',
-        name: 'Drainage', description: '', pricing_method: 'fixed', quantity: 2, unit: 'each', unit_price: 125,
+        section_name: 'Basement Drainage', name: 'Drainage', description: '', pricing_method: 'fixed', quantity: 2, unit: 'each', unit_price: 125,
         taxable: false, optional: false, selected: true, sort_order: 0, calculation_metadata: {}, updated_at: now
       }]
     };
@@ -85,6 +85,7 @@
           [initialProjectOkay, 'complete project restored'],
           [job?.costing?.settings?.targetGrossMargin === 42, 'protected costing restored'],
           [draft?.estimateId === estimateId && draft?.lines?.[0]?.roomflow_line_id === 'rf-line-1', 'estimate lines restored'],
+          [draft?.header === 'Basement Drainage', 'estimate header restored'],
           [mergedAgain?.rooms?.[0]?.id === 'local-room' && mergedAgain.syncState === 'pending', 'newer unsynced local edits retained'],
           [rendered === 2, 'jobs dashboard refreshed']
         ];

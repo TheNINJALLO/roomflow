@@ -134,7 +134,7 @@ Automatic control discovery prefers labels, `aria-label`, roles, `name`, placeho
 
 ## Create or update a draft
 
-1. Complete the RoomFlow customer, service address, and estimate.
+1. Complete the RoomFlow customer and service address. In **Inline Customer Estimate**, enter an **Estimate Header** and add at least one item.
 2. Add at least one selected line item and verify quantity, price, discount, and tax.
 3. Save the RoomFlow draft.
 4. Press **Create Townsquare Draft** in the inline estimate builder.
@@ -211,6 +211,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\sync-android-a
 - **Multiple matches:** select the correct customer/property; do not merge automatically.
 - **Mapped record not found:** confirm it still exists. Do not remove the mapping until an integration manager verifies the record.
 - **Total mismatch:** compare RoomFlow and Townsquare tax, discount, quantity, and rounding. Nothing is saved as successful until totals match.
+- **RoomFlow draft not saved:** the Townsquare action now reports the exact missing RoomFlow field or database error. Enter the Estimate Header, add at least one Inline Customer Estimate item, and retry.
 - **Validation error:** correct the field identified by Townsquare and retry.
 - **Finalized estimate blocked:** review the existing estimate. Create an explicit revision according to Townsquare's supported process; RoomFlow will not overwrite it.
 - **Credential decryption failed:** restore the correct encryption secret or clear and replace the API token.

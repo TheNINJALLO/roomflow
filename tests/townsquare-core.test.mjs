@@ -63,7 +63,7 @@ function bundle(overrides = {}) {
       address: '25 Service Road'
     },
     lines: [
-      { id: 'line-a', name: 'Wall system', description: 'North wall', quantity: 2, unit: 'each', unit_price: '100.00', taxable: true, selected: true },
+      { id: 'line-a', section_name: 'Basement Waterproofing', name: 'Wall system', description: 'North wall', quantity: 2, unit: 'each', unit_price: '100.00', taxable: true, selected: true },
       { id: 'line-b', name: 'Inspection', quantity: 1, unit: 'visit', unit_price: '50.00', taxable: false, selected: true }
     ],
     attachments: [],
@@ -102,6 +102,7 @@ test('RoomFlow payload maps customer, property, estimate, lines, and totals', ()
   assert.equal(payload.customer.firstName, 'Taylor');
   assert.equal(payload.customer.email, 'taylor@example.com');
   assert.equal(payload.property.fullAddress, '25 Service Road, Grand Rapids, MI 49503');
+  assert.equal(payload.estimate.title, 'Basement Waterproofing');
   assert.equal(payload.estimate.estimateNumber, 'RF-2026-1001');
   assert.equal(payload.estimate.lines[0].unitPriceMinor, 10000);
   assert.equal(payload.estimate.grandTotalMinor, 26200);

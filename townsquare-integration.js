@@ -442,8 +442,8 @@
       this.showProgressDialog();
       this.updateProgress('validating', 'Saving and validating the RoomFlow draft');
       try {
-        const estimate = await this.integration.saveDraftEstimate();
-        if (!estimate?.id) throw new Error('Save the RoomFlow estimate draft before creating the Townsquare draft.');
+        const estimate = await this.integration.saveDraftEstimate({ throwOnError: true });
+        if (!estimate?.id) throw new Error('RoomFlow did not return a saved estimate ID. Save Draft and retry.');
         const response = await this.invoke('sync_estimate', { estimate_id: estimate.id, prefer_station: true });
         const result = response.result;
         if (result.completed) {

@@ -3983,6 +3983,10 @@ html, body {
 .townsquare-station-row span[data-state="success"] { color: #86efac; }
 .townsquare-station-row span[data-state="warning"], .townsquare-station-row small { color: #fcd34d; }
 .townsquare-api-limitation { border-color: rgba(245,158,11,.25); background: rgba(146,64,14,.1); color: #fde68a; }
+.roomflow-estimate-header-field { display: grid; gap: .35rem; margin-top: 1rem; min-width: 0; color: #e2e8f0; font-size: .78rem; font-weight: 700; }
+.roomflow-estimate-header-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: .65rem .7rem; border: 1px solid rgba(148,163,184,.25); border-radius: 8px; background: #111827; color: #f8fafc; font: inherit; font-weight: 500; }
+.roomflow-estimate-header-field input:focus { border-color: #38bdf8; outline: 2px solid rgba(56,189,248,.18); }
+.roomflow-estimate-header-field small { color: #64748b; font-size: .68rem; font-weight: 500; }
 .townsquare-estimate-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center; margin-top: 1rem; padding: 1rem; border: 1px solid rgba(56,189,248,.28); border-radius: 12px; background: linear-gradient(135deg, rgba(14,116,144,.13), rgba(37,99,235,.08)); }
 .townsquare-estimate-buttons { justify-content: flex-end; margin: 0; }
 .townsquare-estimate-buttons a { display: inline-flex; align-items: center; text-decoration: none; }
