@@ -34,6 +34,18 @@ test('extension never reads cookies or password values', async () => {
   assert.match(source, /UNSAFE_ACTION_BLOCKED/);
 });
 
+test('guided mapping can use nested Townsquare controls and resume safely', async () => {
+  const adapter = await read('townsquare-bridge-extension/townsquare-adapter.js');
+  const content = await read('townsquare-bridge-extension/townsquare-content.js');
+  assert.match(adapter, /Map \+ use next control/);
+  assert.match(adapter, /if \(actionable\) Core\.assertDraftSafeElement\(target\)/);
+  assert.match(adapter, /event\.stopImmediatePropagation\(\)/);
+  assert.match(adapter, /selectorMappingSession/);
+  assert.match(adapter, /persistProgress\(\)/);
+  assert.match(content, /resumeGuidedMapping/);
+  assert.match(content, /mapper\.start\(false, true\)/);
+});
+
 test('RoomFlow frontend never persists or displays the API token', async () => {
   const frontend = await read('townsquare-integration.js');
   assert.doesNotMatch(frontend, /localStorage\.(setItem|getItem)[^\n]*api[_-]?token/i);

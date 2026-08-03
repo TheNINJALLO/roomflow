@@ -5,6 +5,7 @@
   const Core = globalThis.RoomFlowBridgeCore;
   const Page = globalThis.RoomFlowTownsquarePageAdapter;
   if (!Core || !Page) return;
+  const mapper = new Page.GuidedMapper(document);
 
   async function progress(status, message) {
     await chrome.runtime.sendMessage({ type: 'SYNC_PROGRESS_FROM_TOWNSQUARE', detail: { status, message } }).catch(() => {});
@@ -39,12 +40,22 @@
 
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === 'START_GUIDED_MAPPING') {
-      new Page.GuidedMapper(document).start(Boolean(message.reset)).then(() => sendResponse({ ok: true }));
+      mapper.start(Boolean(message.reset), false).then(() => sendResponse({ ok: true }));
       return true;
     }
     return false;
   });
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(runPendingOperation, 500), { once: true });
-  else setTimeout(runPendingOperation, 500);
+  async function resumeGuidedMapping() {
+    const stored = await chrome.storage.local.get({ selectorMappingSession: null });
+    if (stored.selectorMappingSession?.active) await mapper.start(false, true);
+  }
+
+  function startPageWork() {
+    setTimeout(runPendingOperation, 500);
+    setTimeout(() => resumeGuidedMapping().catch(() => {}), 650);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startPageWork, { once: true });
+  else startPageWork();
 })();

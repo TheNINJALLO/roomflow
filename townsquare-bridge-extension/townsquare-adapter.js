@@ -36,6 +36,7 @@
     'taxSetting', 'discount', 'customerNotes', 'internalNotes', 'terms', 'deposit', 'expirationDate', 'grandTotal', 'estimateStatus', 'saveDraftButton', 'estimateDetail'
   ]);
   const REPEATED_LINE_KEYS = new Set(['lineItemRows', 'deleteLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnit', 'lineItemUnitPrice', 'lineItemTaxable']);
+  const MAPPING_SESSION_KEY = 'selectorMappingSession';
 
   function normalized(value) {
     return Core.cleanText(value, 1000).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -458,53 +459,116 @@
   }
 
   class GuidedMapper {
-    constructor(documentRef = document) { this.document = documentRef; this.overlay = null; this.index = 0; this.mappings = {}; }
-
-    async start(reset = false) {
-      const stored = await chrome.storage.local.get({ selectorMappings: {} });
-      this.mappings = reset ? {} : stored.selectorMappings;
+    constructor(documentRef = document) {
+      this.document = documentRef;
+      this.overlay = null;
       this.index = 0;
+      this.mappings = {};
+      this.capture = null;
+      this.allowNextActivation = false;
+    }
+
+    async start(reset = false, resume = false) {
+      this.removeCapture();
+      this.overlay?.remove();
+      const stored = await chrome.storage.local.get({ selectorMappings: {}, [MAPPING_SESSION_KEY]: null });
+      this.mappings = reset ? {} : stored.selectorMappings;
+      const savedIndex = Number(stored[MAPPING_SESSION_KEY]?.index);
+      this.index = resume && stored[MAPPING_SESSION_KEY]?.active && Number.isInteger(savedIndex)
+        ? Math.max(0, Math.min(savedIndex, REQUIRED_MAPPING_KEYS.length))
+        : 0;
+      await this.persistProgress();
       this.render();
     }
 
+    removeCapture() {
+      if (this.capture) this.document.removeEventListener('click', this.capture, true);
+      this.capture = null;
+    }
+
+    persistProgress() {
+      return chrome.storage.local.set({
+        selectorMappings: this.mappings,
+        selectorMappingsUpdatedAt: new Date().toISOString(),
+        [MAPPING_SESSION_KEY]: { active: true, index: this.index, updatedAt: new Date().toISOString() }
+      });
+    }
+
     render() {
+      this.removeCapture();
+      this.allowNextActivation = false;
       this.overlay?.remove();
       const key = REQUIRED_MAPPING_KEYS[this.index];
       if (!key) { this.finish(); return; }
       const overlay = this.document.createElement('div');
       overlay.id = 'roomflow-townsquare-mapper';
       overlay.style.cssText = 'position:fixed;right:16px;top:16px;z-index:2147483647;width:min(420px,calc(100vw - 32px));background:#0f172a;color:#fff;border:2px solid #38bdf8;border-radius:14px;padding:16px;box-shadow:0 20px 60px rgba(0,0,0,.5);font:14px system-ui;';
-      overlay.innerHTML = `<strong>RoomFlow guided mapping</strong><p style="margin:.5rem 0">${this.index + 1}/${REQUIRED_MAPPING_KEYS.length}: click the Townsquare control for <code>${key}</code>.</p><div style="display:flex;gap:8px"><button data-action="skip">Skip</button><button data-action="cancel">Cancel</button></div>`;
+      overlay.innerHTML = `<strong>RoomFlow guided mapping</strong><p style="margin:.5rem 0">${this.index + 1}/${REQUIRED_MAPPING_KEYS.length}: click the Townsquare control for <code>${key}</code>.</p><p data-mapping-help style="margin:.5rem 0;color:#bae6fd">For a control that must open a panel or receive input, choose <strong>Map + use next control</strong> first.</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button data-action="activate">Map + use next control</button><button data-action="skip">Skip</button><button data-action="cancel">Cancel</button></div>`;
       overlay.addEventListener('click', event => {
         event.stopPropagation();
         const action = event.target?.dataset?.action;
-        if (action === 'skip') { this.index += 1; this.render(); }
+        if (action === 'activate') {
+          this.allowNextActivation = true;
+          event.target.disabled = true;
+          event.target.textContent = 'Next control will be used';
+          overlay.querySelector('[data-mapping-help]').textContent = 'Now click the Townsquare control. RoomFlow will map it and allow its normal action.';
+        }
+        if (action === 'skip') {
+          this.index += 1;
+          this.persistProgress().catch(() => {});
+          this.render();
+        }
         if (action === 'cancel') this.stop();
       });
       this.document.body.appendChild(overlay);
       this.overlay = overlay;
       this.capture = event => {
         if (overlay.contains(event.target)) return;
-        event.preventDefault(); event.stopPropagation();
-        const selector = buildStableSelector(event.target, key);
+        const target = event.target?.closest?.('button,a,input,textarea,select,[role="button"],[role="row"],[role="option"],[data-testid],[data-test]') || event.target;
+        if (this.allowNextActivation) {
+          try {
+            const actionable = target?.matches?.('button,a,[role="button"],input[type="button"],input[type="submit"]');
+            if (actionable) Core.assertDraftSafeElement(target);
+          } catch (error) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            this.allowNextActivation = false;
+            overlay.querySelector('[data-mapping-help]').textContent = error.message;
+            const activate = overlay.querySelector('[data-action="activate"]');
+            activate.disabled = false;
+            activate.textContent = 'Map + use next control';
+            return;
+          }
+        } else {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+        const selector = buildStableSelector(target, key);
         if (selector) this.mappings[key] = selector;
         this.index += 1;
-        this.document.removeEventListener('click', this.capture, true);
-        this.render();
+        const allowActivation = this.allowNextActivation;
+        this.allowNextActivation = false;
+        this.removeCapture();
+        this.overlay?.remove();
+        this.persistProgress().catch(() => {});
+        setTimeout(() => this.render(), allowActivation ? 500 : 0);
       };
       this.document.addEventListener('click', this.capture, true);
     }
 
     async finish() {
       await chrome.storage.local.set({ selectorMappings: this.mappings, selectorMappingsUpdatedAt: new Date().toISOString() });
-      this.stop();
+      await chrome.storage.local.remove(MAPPING_SESSION_KEY);
+      this.stop(false);
       alert('RoomFlow Townsquare selector mapping saved. Use the extension popup to run a connection test.');
     }
 
-    stop() {
-      if (this.capture) this.document.removeEventListener('click', this.capture, true);
+    stop(clearSession = true) {
+      this.removeCapture();
       this.overlay?.remove();
       this.overlay = null;
+      this.allowNextActivation = false;
+      if (clearSession) chrome.storage.local.remove(MAPPING_SESSION_KEY).catch(() => {});
     }
   }
 
