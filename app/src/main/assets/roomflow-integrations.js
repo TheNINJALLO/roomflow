@@ -5,7 +5,7 @@
     'use strict';
 
     const Integration = {
-        version: '1.2.0',
+        version: '1.2.1',
         client: null,
         leadChannel: null,
         leadChannelOrgId: null,
@@ -15,6 +15,7 @@
         catalogCache: [],
         currentLines: [],
         currentEstimateId: null,
+        currentEstimateHeader: '',
         currentEstimateJobName: null,
         mainEstimateSyncJob: null,
         initialized: false,
@@ -777,13 +778,13 @@
 
         estimateStorage() {
             const all = JSON.parse(localStorage.getItem(this.estimateDraftKey) || '{}');
-            return { all, current: all[state.currentJobName] || { lines: [], estimateId: null } };
+            return { all, current: all[state.currentJobName] || { lines: [], estimateId: null, header: '' } };
         },
 
         saveEstimateStorage() {
             if (!state.currentJobName) return;
             const { all } = this.estimateStorage();
-            all[state.currentJobName] = { lines: this.currentLines, estimateId: this.currentEstimateId };
+            all[state.currentJobName] = { lines: this.currentLines, estimateId: this.currentEstimateId, header: this.currentEstimateHeader };
             localStorage.setItem(this.estimateDraftKey, JSON.stringify(all));
         },
 
@@ -807,6 +808,7 @@
                 this.currentEstimateJobName = state.currentJobName;
                 this.currentLines = Array.isArray(saved.lines) ? JSON.parse(JSON.stringify(saved.lines)) : [];
                 this.currentEstimateId = saved.estimateId || null;
+                this.currentEstimateHeader = String(saved.header || this.currentLines.find(line => line.section_name)?.section_name || `${state.currentJobName} Estimate`).slice(0, 240);
                 this.syncAllLinesToMainEstimate();
                 if (this.mainEstimateSyncJob !== state.currentJobName) {
                     this.mainEstimateSyncJob = state.currentJobName;
@@ -817,11 +819,17 @@
             const total = this.currentLines.filter(line => line.selected !== false).reduce((sum, line) => sum + (Number(line.quantity) || 0) * (Number(line.unit_price) || 0), 0);
             panel.innerHTML = `
                 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;"><div><h3 style="color:#fff;margin:0;">Inline Customer Estimate</h3><p style="color:#94a3b8;font-size:.78rem;margin:.25rem 0;">Build the draft here. Prices remain editable per estimate without changing the catalog.</p></div><strong style="font-size:1.25rem;color:#34d399;">${this.money(total)}</strong></div>
+                <label class="roomflow-estimate-header-field"><span>Estimate Header</span><input id="roomflow-estimate-header" type="text" maxlength="240" value="${this.escape(this.currentEstimateHeader)}" placeholder="Example: Basement Waterproofing"><small>This becomes the header in the Townsquare draft.</small></label>
                 <div style="display:flex;gap:.5rem;margin:.8rem 0;flex-wrap:wrap;"><select id="roomflow-add-catalog-select" style="flex:1;min-width:260px;background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;"><option value="">Select a product or service…</option>${catalogOptions}</select><button id="roomflow-add-estimate-line" class="btn-secondary">Add Item</button><button id="roomflow-save-estimate" class="btn-primary">Save Draft</button><button id="roomflow-mark-estimate-sent" class="btn-primary" style="background:#059669;">Mark Sent + Follow-ups</button></div>
                 <div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:.78rem;"><thead><tr style="color:#94a3b8;text-align:left;"><th>Item</th><th style="width:90px;">Qty</th><th style="width:120px;">Price</th><th style="width:110px;">Total</th><th style="width:65px;"></th></tr></thead><tbody>${this.currentLines.map((line, index) => `<tr style="border-top:1px solid rgba(255,255,255,.07);"><td style="padding:.55rem 0;color:#fff;"><strong>${this.escape(line.name)}</strong><div style="font-size:.68rem;color:#64748b;">${this.escape(line.unit || 'each')}</div></td><td><input class="roomflow-line-qty" data-index="${index}" type="number" step="0.01" value="${Number(line.quantity || 1)}" style="width:78px;background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:.35rem;"></td><td><input class="roomflow-line-price" data-index="${index}" type="number" step="0.01" value="${Number(line.unit_price || 0).toFixed(2)}" style="width:105px;background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:.35rem;"></td><td style="color:#cbd5e1;">${this.money((Number(line.quantity)||0)*(Number(line.unit_price)||0))}</td><td><button class="roomflow-remove-line btn-secondary" data-index="${index}">×</button></td></tr>`).join('') || '<tr><td colspan="5" style="padding:1rem;color:#64748b;text-align:center;">No estimate items added yet.</td></tr>'}</tbody></table></div>`;
             panel.querySelector('#roomflow-add-estimate-line')?.addEventListener('click', () => this.addEstimateLine());
             panel.querySelector('#roomflow-save-estimate')?.addEventListener('click', () => this.saveDraftEstimate());
             panel.querySelector('#roomflow-mark-estimate-sent')?.addEventListener('click', () => this.markEstimateSent());
+            panel.querySelector('#roomflow-estimate-header')?.addEventListener('input', event => {
+                this.currentEstimateHeader = String(event.target.value || '').slice(0, 240);
+                this.currentLines.forEach(line => { line.section_name = this.currentEstimateHeader || null; });
+                this.saveEstimateStorage();
+            });
             panel.querySelectorAll('.roomflow-line-qty,.roomflow-line-price').forEach(input => input.addEventListener('change', () => {
                 const index = Number(input.dataset.index);
                 if (input.classList.contains('roomflow-line-qty')) this.currentLines[index].quantity = Number(input.value) || 0;
@@ -852,6 +860,7 @@
                 catalog_item_id: item.id,
                 name: item.name,
                 description: item.description || '',
+                section_name: this.currentEstimateHeader || null,
                 category: item.category || 'other',
                 pricing_method: item.pricing_method,
                 quantity: 1,
@@ -887,8 +896,18 @@
             throw new Error('Could not create or resolve the cloud job record.');
         },
 
-        async saveDraftEstimate() {
-            if (!this.currentLines.length) return this.toast('Add at least one estimate item.', 'warning');
+        async saveDraftEstimate(options = {}) {
+            const throwOnError = Boolean(options?.throwOnError);
+            const fail = (reason, type = 'error') => {
+                const error = reason instanceof Error ? reason : new Error(String(reason));
+                this.toast(error.message, type);
+                if (throwOnError) throw error;
+                return null;
+            };
+            if (!this.currentLines.length) return fail('Add at least one item to the Inline Customer Estimate before saving or syncing.', 'warning');
+            this.currentEstimateHeader = String(this.currentEstimateHeader || '').trim().slice(0, 240);
+            if (!this.currentEstimateHeader) return fail('Enter an Estimate Header before saving or syncing.', 'warning');
+            this.currentLines.forEach(line => { line.section_name = this.currentEstimateHeader; });
             const client = this.getClient();
             const orgId = this.currentOrgId();
             try {
@@ -934,7 +953,7 @@
                     estimate_id: estimate.id,
                     catalog_item_id: line.catalog_item_id || null,
                     room_id: line.room_id || null,
-                    section_name: line.section_name || null,
+                    section_name: this.currentEstimateHeader,
                     roomflow_line_id: line.roomflow_line_id || this.lineId(),
                     category: line.category || 'other',
                     name: line.name,
@@ -958,8 +977,7 @@
                 this.refreshInboundLeads();
                 return estimate;
             } catch (error) {
-                this.toast(error.message || String(error), 'error');
-                return null;
+                return fail(error);
             }
         },
 

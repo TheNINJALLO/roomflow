@@ -835,9 +835,11 @@ window.RoomFlowSync = {
                     const existingDraft = estimateDrafts[storageName];
                     const existingIsLocalOnly = existingDraft?.lines?.length && !existingDraft.estimateId;
                     if (!existingIsLocalOnly && (!existingDraft?.cloudUpdatedAt || remoteEstimateTime >= existingDraft.cloudUpdatedAt)) {
+                        const estimateLines = linesByEstimate.get(estimate.id) || [];
                         estimateDrafts[storageName] = {
-                            lines: linesByEstimate.get(estimate.id) || [],
+                            lines: estimateLines,
                             estimateId: estimate.id,
+                            header: estimateLines.find(line => line.section_name)?.section_name || `${storageName} Estimate`,
                             estimateNumber: estimate.estimate_number,
                             status: estimate.status,
                             cloudUpdatedAt: remoteEstimateTime
