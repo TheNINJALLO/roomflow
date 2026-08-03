@@ -4,6 +4,7 @@
   const Core = root.RoomFlowBridgeCore;
 
   const FIELD_DEFINITIONS = Object.freeze({
+    quickActionsButton: ['quick actions', 'create new', 'new'],
     customerSearch: ['customer search', 'search customers', 'search clients', 'find customer'],
     customerSearchSubmit: ['search', 'find customer', 'find client'],
     customerResult: ['customer result', 'client result'],
@@ -11,8 +12,8 @@
     customerFirstName: ['first name'], customerLastName: ['last name'], customerCompanyName: ['company name', 'business name'],
     customerEmail: ['email', 'email address'], customerPhone: ['phone', 'phone number', 'mobile phone'],
     customerBillingAddress: ['billing address', 'customer address', 'address'], customerSaveButton: ['save customer', 'save client', 'create customer', 'create client'],
-    propertySearch: ['property search', 'search properties', 'service location search'], propertySearchSubmit: ['find property', 'search properties'],
-    propertyResult: ['property result', 'service location result'], createPropertyButton: ['create property', 'new property', 'add property', 'new service location'],
+    propertySearch: ['search by name email or tag', 'property search', 'search properties', 'service location search'], propertySearchSubmit: ['find property', 'search properties'],
+    propertyResult: ['property result', 'service location result', 'recently active'], createPropertyButton: ['new property', 'create property', 'add property', 'new service location'],
     propertyName: ['property name', 'service location name'], propertyStreetAddress: ['service address', 'street address', 'property address'],
     propertyCity: ['city'], propertyState: ['state', 'province'], propertyPostalCode: ['postal code', 'zip code', 'zip'],
     propertyAccessNotes: ['access notes', 'property notes'], propertySaveButton: ['save property', 'create property', 'save service location'],
@@ -30,9 +31,10 @@
   });
 
   const REQUIRED_MAPPING_KEYS = Object.freeze([
-    'customerSearch', 'customerResult', 'createCustomerButton', 'customerFirstName', 'customerLastName', 'customerEmail', 'customerPhone', 'customerBillingAddress', 'customerSaveButton',
-    'propertySearch', 'propertyResult', 'createPropertyButton', 'propertyName', 'propertyStreetAddress', 'propertyCity', 'propertyState', 'propertyPostalCode', 'propertySaveButton',
-    'createEstimateButton', 'estimateTitle', 'estimateNumber', 'estimateDescription', 'lineItemRows', 'deleteLineItemButton', 'addLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnitPrice',
+    'quickActionsButton', 'createEstimateButton', 'propertySearch', 'propertyResult', 'createPropertyButton',
+    'customerFirstName', 'customerLastName', 'customerEmail', 'customerPhone', 'customerBillingAddress',
+    'propertyName', 'propertyStreetAddress', 'propertyCity', 'propertyState', 'propertyPostalCode', 'propertySaveButton',
+    'estimateTitle', 'estimateNumber', 'estimateDescription', 'lineItemRows', 'deleteLineItemButton', 'addLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnitPrice',
     'taxSetting', 'discount', 'customerNotes', 'internalNotes', 'terms', 'deposit', 'expirationDate', 'grandTotal', 'estimateStatus', 'saveDraftButton', 'estimateDetail'
   ]);
   const REPEATED_LINE_KEYS = new Set(['lineItemRows', 'deleteLineItemButton', 'lineItemName', 'lineItemDescription', 'lineItemQuantity', 'lineItemUnit', 'lineItemUnitPrice', 'lineItemTaxable']);
@@ -339,7 +341,66 @@
       return { id, action: 'created', url: location.href };
     }
 
-    async openOrCreateDraft(estimate, externalMappings, progress) {
+    async openNewEstimateChooser(progress) {
+      progress('opening_townsquare', 'Opening Quick Actions and the New estimate workflow');
+      await this.safeClick('quickActionsButton');
+      await this.safeClick('createEstimateButton');
+    }
+
+    async selectOrCreateEstimateProperty(customer, property, externalMappings, progress) {
+      progress('finding_property', 'Matching the Townsquare property/customer record');
+      const search = this.locator.find('propertySearch');
+      const query = externalMappings?.propertyId || externalMappings?.customerId || customer.email || customer.phone || `${customer.firstName} ${customer.lastName}` || property.fullAddress;
+      dispatchValue(search, query);
+      await this.safeClick('propertySearchSubmit', false);
+      await this.wait();
+
+      const rows = this.locator.all('propertyResult');
+      const customerMatch = this.matchCustomerRows(rows, customer, externalMappings?.propertyId || externalMappings?.customerId);
+      const propertyMatch = customerMatch.matches.length ? customerMatch : this.matchPropertyRows(rows, property, externalMappings?.propertyId);
+      if ((externalMappings?.propertyId || externalMappings?.customerId) && !propertyMatch.matches.length) {
+        const fallback = this.matchCustomerRows(rows, customer);
+        if (fallback.matches.length) {
+          propertyMatch.method = fallback.method;
+          propertyMatch.matches = fallback.matches;
+        }
+      }
+
+      const selected = await this.chooseCandidate('property/customer', propertyMatch.matches);
+      if (selected) {
+        selected.click();
+        await this.wait();
+        const id = extractEntityId(selected) || extractEntityId();
+        if (!id) throw Object.assign(new Error('The selected Townsquare property/customer ID could not be confirmed. Map the complete result row and retry.'), { code: 'PROPERTY_ID_NOT_CONFIRMED' });
+        progress('property_matched', 'Existing Townsquare property/customer selected');
+        return {
+          customer: { id, action: 'matched', matchMethod: propertyMatch.method, url: location.href },
+          property: { id, action: 'matched', matchMethod: propertyMatch.method, url: location.href }
+        };
+      }
+
+      await this.safeClick('createPropertyButton');
+      this.fill('customerFirstName', customer.firstName);
+      this.fill('customerLastName', customer.lastName, false);
+      this.fill('customerEmail', customer.email, false);
+      this.fill('customerPhone', customer.phone, false);
+      this.fill('customerBillingAddress', customer.billingAddress, false);
+      this.fill('propertyName', property.name, false);
+      this.fill('propertyStreetAddress', property.streetAddress, false);
+      this.fill('propertyCity', property.city, false);
+      this.fill('propertyState', property.state, false);
+      this.fill('propertyPostalCode', property.postalCode, false);
+      const save = await this.safeClick('propertySaveButton');
+      const id = extractEntityId(save) || extractEntityId();
+      if (!id) throw Object.assign(new Error('The new Townsquare property/customer ID could not be confirmed. Map the Save control and the resulting record detail.'), { code: 'PROPERTY_ID_NOT_CONFIRMED' });
+      progress('property_created', 'Townsquare property/customer created');
+      return {
+        customer: { id, action: 'created', url: location.href },
+        property: { id, action: 'created', url: location.href }
+      };
+    }
+
+    async openOrCreateDraft(estimate, externalMappings, progress, editorAlreadyOpen = false) {
       let action = 'created';
       if (externalMappings?.estimateId) {
         const search = this.locator.find('estimateSearch', { required: false });
@@ -359,8 +420,10 @@
         for (const button of deleteButtons) { Core.assertDraftSafeElement(button); button.click(); await this.wait(100); }
         action = 'updated';
         progress('updating_estimate', 'Updating the mapped Townsquare draft');
-      } else {
+      } else if (!editorAlreadyOpen) {
         await this.safeClick('createEstimateButton');
+        progress('creating_estimate', 'Creating the Townsquare draft');
+      } else {
         progress('creating_estimate', 'Creating the Townsquare draft');
       }
 
@@ -444,9 +507,19 @@
     async run(operation, progress = () => {}) {
       this.ensureLoggedIn();
       const payload = operation.payload;
-      const customer = await this.findOrCreateCustomer(payload.customer, payload.externalMappings || {}, progress);
-      const property = await this.findOrCreateProperty(payload.property, payload.externalMappings || {}, progress);
-      const estimate = await this.openOrCreateDraft(payload.estimate, payload.externalMappings || {}, progress);
+      const externalMappings = payload.externalMappings || {};
+      let customer;
+      let property;
+      let estimate;
+      if (externalMappings.estimateId) {
+        customer = { id: externalMappings.customerId || externalMappings.propertyId, action: 'matched', url: location.href };
+        property = { id: externalMappings.propertyId || externalMappings.customerId, action: 'matched', url: location.href };
+        estimate = await this.openOrCreateDraft(payload.estimate, externalMappings, progress);
+      } else {
+        await this.openNewEstimateChooser(progress);
+        ({ customer, property } = await this.selectOrCreateEstimateProperty(payload.customer, payload.property, externalMappings, progress));
+        estimate = await this.openOrCreateDraft(payload.estimate, externalMappings, progress, true);
+      }
       const attachments = await this.attachDocuments(payload.attachments || [], progress);
       return {
         status: 'completed',
