@@ -68,6 +68,10 @@ const state = {
     syncState: 'synchronized'
 };
 
+// Integration modules load as separate classic scripts and need the same
+// application state object for organization, session, and capability checks.
+window.state = state;
+
 // Initialize default costing state
 initDefaultCosting(state);
 

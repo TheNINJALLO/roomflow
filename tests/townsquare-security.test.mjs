@@ -46,12 +46,17 @@ test('RoomFlow frontend never persists or displays the API token', async () => {
 test('web and Android entrypoints load the integration layers in dependency order', async () => {
   for (const path of ['index.html', 'app/src/main/assets/index.html']) {
     const entrypoint = await read(path);
+    const appIndex = entrypoint.indexOf('src="app.js?v=69"');
     const supabaseIndex = entrypoint.indexOf('src="supabase-service.js?v=61"');
     const integrationsIndex = entrypoint.indexOf('src="roomflow-integrations.js?v=6"');
     const townsquareIndex = entrypoint.indexOf('src="townsquare-integration.js?v=2"');
-    assert.ok(supabaseIndex >= 0, `${path} must load the Supabase service`);
+    assert.ok(appIndex >= 0, `${path} must load the current application state`);
+    assert.ok(supabaseIndex > appIndex, `${path} must load the Supabase service after application state`);
     assert.ok(integrationsIndex > supabaseIndex, `${path} must load RoomFlow integrations after Supabase`);
     assert.ok(townsquareIndex > integrationsIndex, `${path} must load Townsquare after RoomFlow integrations`);
+  }
+  for (const path of ['app.js', 'app/src/main/assets/app.js']) {
+    assert.match(await read(path), /window\.state\s*=\s*state;/, `${path} must expose state to integration modules`);
   }
 });
 
