@@ -3987,6 +3987,10 @@ html, body {
 .roomflow-estimate-header-field input { box-sizing: border-box; width: 100%; min-width: 0; padding: .65rem .7rem; border: 1px solid rgba(148,163,184,.25); border-radius: 8px; background: #111827; color: #f8fafc; font: inherit; font-weight: 500; }
 .roomflow-estimate-header-field input:focus { border-color: #38bdf8; outline: 2px solid rgba(56,189,248,.18); }
 .roomflow-estimate-header-field small { color: #64748b; font-size: .68rem; font-weight: 500; }
+.roomflow-service-address-grid { display: grid; grid-template-columns: minmax(150px, 1fr) minmax(110px, .65fr) minmax(80px, .35fr) minmax(100px, .4fr); gap: .65rem; margin-top: .8rem; min-width: 0; }
+.roomflow-service-address-grid label { display: grid; gap: .3rem; min-width: 0; color: #e2e8f0; font-size: .72rem; font-weight: 700; }
+.roomflow-service-address-grid input { box-sizing: border-box; width: 100%; min-width: 0; padding: .6rem .65rem; border: 1px solid rgba(148,163,184,.25); border-radius: 8px; background: #111827; color: #f8fafc; font: inherit; font-weight: 500; }
+.roomflow-service-address-grid input:focus { border-color: #38bdf8; outline: 2px solid rgba(56,189,248,.18); }
 .townsquare-estimate-action { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: center; margin-top: 1rem; padding: 1rem; border: 1px solid rgba(56,189,248,.28); border-radius: 12px; background: linear-gradient(135deg, rgba(14,116,144,.13), rgba(37,99,235,.08)); }
 .townsquare-estimate-buttons { justify-content: flex-end; margin: 0; }
 .townsquare-estimate-buttons a { display: inline-flex; align-items: center; text-decoration: none; }
@@ -4018,6 +4022,8 @@ html, body {
     .townsquare-estimate-buttons { justify-content: stretch; }
     .townsquare-estimate-buttons > * { width: 100%; justify-content: center; }
     .townsquare-station-heading, .townsquare-station-row { align-items: stretch; flex-direction: column; }
+    .roomflow-service-address-grid { grid-template-columns: minmax(0, 1fr) minmax(90px, .55fr); }
+    .roomflow-service-address-street { grid-column: 1 / -1; }
 }
 
 @media (max-width: 480px) {
@@ -4026,6 +4032,8 @@ html, body {
     .townsquare-settings-actions button { width: 100%; }
     .townsquare-dialog-overlay { padding: .5rem; align-items: flex-end; }
     .townsquare-dialog { max-height: 92vh; border-radius: 16px 16px 8px 8px; }
+    .roomflow-service-address-grid { grid-template-columns: 1fr; }
+    .roomflow-service-address-street { grid-column: auto; }
 }
 
 /* Responsive application header: all desktop actions remain reachable and

@@ -5,7 +5,7 @@
     'use strict';
 
     const Integration = {
-        version: '1.2.1',
+        version: '1.2.2',
         client: null,
         leadChannel: null,
         leadChannelOrgId: null,
@@ -16,6 +16,10 @@
         currentLines: [],
         currentEstimateId: null,
         currentEstimateHeader: '',
+        currentServiceStreet: '',
+        currentServiceCity: '',
+        currentServiceState: '',
+        currentServicePostalCode: '',
         currentEstimateJobName: null,
         mainEstimateSyncJob: null,
         initialized: false,
@@ -38,6 +42,30 @@
         money(value) {
             return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
                 .format(Number(value) || 0);
+        },
+
+        parseServiceAddress(value) {
+            const parts = String(value || '').split(',').map(part => part.trim()).filter(Boolean);
+            if (parts.length < 2) return { street: parts[0] || '', city: '', state: '', postalCode: '' };
+            const tail = parts.at(-1) || '';
+            const region = tail.match(/^(.+?)\s+([A-Za-z0-9-]{3,12})$/);
+            const stateValue = region ? region[1].trim() : (parts.length >= 3 ? tail : '');
+            const postalCode = region ? region[2].trim() : '';
+            const cityIndex = parts.length >= 3 ? parts.length - 2 : 1;
+            return {
+                street: parts.slice(0, cityIndex).join(', '),
+                city: parts[cityIndex] || '',
+                state: stateValue,
+                postalCode
+            };
+        },
+
+        serviceAddress() {
+            return [
+                this.currentServiceStreet,
+                this.currentServiceCity,
+                [this.currentServiceState, this.currentServicePostalCode].filter(Boolean).join(' ')
+            ].map(value => String(value || '').trim()).filter(Boolean).join(', ');
         },
 
         slug(value) {
@@ -778,13 +806,21 @@
 
         estimateStorage() {
             const all = JSON.parse(localStorage.getItem(this.estimateDraftKey) || '{}');
-            return { all, current: all[state.currentJobName] || { lines: [], estimateId: null, header: '' } };
+            return { all, current: all[state.currentJobName] || { lines: [], estimateId: null, header: '', serviceStreet: '', serviceCity: '', serviceState: '', servicePostalCode: '' } };
         },
 
         saveEstimateStorage() {
             if (!state.currentJobName) return;
             const { all } = this.estimateStorage();
-            all[state.currentJobName] = { lines: this.currentLines, estimateId: this.currentEstimateId, header: this.currentEstimateHeader };
+            all[state.currentJobName] = {
+                lines: this.currentLines,
+                estimateId: this.currentEstimateId,
+                header: this.currentEstimateHeader,
+                serviceStreet: this.currentServiceStreet,
+                serviceCity: this.currentServiceCity,
+                serviceState: this.currentServiceState,
+                servicePostalCode: this.currentServicePostalCode
+            };
             localStorage.setItem(this.estimateDraftKey, JSON.stringify(all));
         },
 
@@ -793,14 +829,30 @@
             const saved = this.estimateStorage().current;
             const storedLines = Array.isArray(saved.lines) ? saved.lines : [];
             const jobChanged = this.currentEstimateJobName !== state.currentJobName;
+            const parsed = this.parseServiceAddress(state.costing?.customerAddress || state.customerAddress || '');
+            const savedHeader = String(saved.header || storedLines.find(line => line.section_name)?.section_name || '').slice(0, 240);
+            const savedStreet = String(saved.serviceStreet || state.costing?.serviceStreet || parsed.street || '').slice(0, 300);
+            const savedCity = String(saved.serviceCity || state.costing?.serviceCity || parsed.city || '').slice(0, 120);
+            const savedState = String(saved.serviceState || state.costing?.serviceState || parsed.state || '').slice(0, 80);
+            const savedPostalCode = String(saved.servicePostalCode || state.costing?.servicePostalCode || parsed.postalCode || '').slice(0, 32);
             if (jobChanged || (!this.currentLines.length && storedLines.length)) {
                 this.currentEstimateJobName = state.currentJobName;
                 this.currentLines = JSON.parse(JSON.stringify(storedLines));
                 this.currentEstimateId = saved.estimateId || null;
             }
-            if (!String(this.currentEstimateHeader || '').trim()) {
-                this.currentEstimateHeader = String(saved.header || storedLines.find(line => line.section_name)?.section_name || '').slice(0, 240);
+            if (jobChanged) {
+                this.currentEstimateHeader = savedHeader;
+                this.currentServiceStreet = savedStreet;
+                this.currentServiceCity = savedCity;
+                this.currentServiceState = savedState;
+                this.currentServicePostalCode = savedPostalCode;
+                return;
             }
+            if (!String(this.currentEstimateHeader || '').trim()) this.currentEstimateHeader = savedHeader;
+            if (!this.currentServiceStreet) this.currentServiceStreet = savedStreet;
+            if (!this.currentServiceCity) this.currentServiceCity = savedCity;
+            if (!this.currentServiceState) this.currentServiceState = savedState;
+            if (!this.currentServicePostalCode) this.currentServicePostalCode = savedPostalCode;
         },
 
         renderEstimateBuilder(forceCost = false) {
@@ -824,6 +876,11 @@
                 this.currentLines = Array.isArray(saved.lines) ? JSON.parse(JSON.stringify(saved.lines)) : [];
                 this.currentEstimateId = saved.estimateId || null;
                 this.currentEstimateHeader = String(saved.header || this.currentLines.find(line => line.section_name)?.section_name || `${state.currentJobName} Estimate`).slice(0, 240);
+                const parsedAddress = this.parseServiceAddress(state.costing?.customerAddress || state.customerAddress || '');
+                this.currentServiceStreet = String(saved.serviceStreet || state.costing?.serviceStreet || parsedAddress.street || '').slice(0, 300);
+                this.currentServiceCity = String(saved.serviceCity || state.costing?.serviceCity || parsedAddress.city || '').slice(0, 120);
+                this.currentServiceState = String(saved.serviceState || state.costing?.serviceState || parsedAddress.state || '').slice(0, 80);
+                this.currentServicePostalCode = String(saved.servicePostalCode || state.costing?.servicePostalCode || parsedAddress.postalCode || '').slice(0, 32);
                 this.syncAllLinesToMainEstimate();
                 if (this.mainEstimateSyncJob !== state.currentJobName) {
                     this.mainEstimateSyncJob = state.currentJobName;
@@ -835,6 +892,7 @@
             panel.innerHTML = `
                 <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;"><div><h3 style="color:#fff;margin:0;">Inline Customer Estimate</h3><p style="color:#94a3b8;font-size:.78rem;margin:.25rem 0;">Build the draft here. Prices remain editable per estimate without changing the catalog.</p></div><strong style="font-size:1.25rem;color:#34d399;">${this.money(total)}</strong></div>
                 <label class="roomflow-estimate-header-field"><span>Estimate Header</span><input id="roomflow-estimate-header" type="text" maxlength="240" value="${this.escape(this.currentEstimateHeader)}" placeholder="Example: Basement Waterproofing"><small>This becomes the header in the Townsquare draft.</small></label>
+                <div class="roomflow-service-address-grid"><label class="roomflow-service-address-street"><span>Service Street Address</span><input data-service-field="street" maxlength="300" value="${this.escape(this.currentServiceStreet)}" placeholder="123 Main Street"></label><label><span>Service City</span><input data-service-field="city" maxlength="120" value="${this.escape(this.currentServiceCity)}" placeholder="Grand Rapids"></label><label><span>Service State</span><input data-service-field="state" maxlength="80" value="${this.escape(this.currentServiceState)}" placeholder="MI"></label><label><span>Postal Code</span><input data-service-field="postalCode" maxlength="32" value="${this.escape(this.currentServicePostalCode)}" placeholder="49503"></label></div>
                 <div style="display:flex;gap:.5rem;margin:.8rem 0;flex-wrap:wrap;"><select id="roomflow-add-catalog-select" style="flex:1;min-width:260px;background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:8px;padding:.55rem;"><option value="">Select a product or service…</option>${catalogOptions}</select><button id="roomflow-add-estimate-line" class="btn-secondary">Add Item</button><button id="roomflow-save-estimate" class="btn-primary">Save Draft</button><button id="roomflow-mark-estimate-sent" class="btn-primary" style="background:#059669;">Mark Sent + Follow-ups</button></div>
                 <div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:.78rem;"><thead><tr style="color:#94a3b8;text-align:left;"><th>Item</th><th style="width:90px;">Qty</th><th style="width:120px;">Price</th><th style="width:110px;">Total</th><th style="width:65px;"></th></tr></thead><tbody>${this.currentLines.map((line, index) => `<tr style="border-top:1px solid rgba(255,255,255,.07);"><td style="padding:.55rem 0;color:#fff;"><strong>${this.escape(line.name)}</strong><div style="font-size:.68rem;color:#64748b;">${this.escape(line.unit || 'each')}</div></td><td><input class="roomflow-line-qty" data-index="${index}" type="number" step="0.01" value="${Number(line.quantity || 1)}" style="width:78px;background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:.35rem;"></td><td><input class="roomflow-line-price" data-index="${index}" type="number" step="0.01" value="${Number(line.unit_price || 0).toFixed(2)}" style="width:105px;background:#1f2937;color:#fff;border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:.35rem;"></td><td style="color:#cbd5e1;">${this.money((Number(line.quantity)||0)*(Number(line.unit_price)||0))}</td><td><button class="roomflow-remove-line btn-secondary" data-index="${index}">×</button></td></tr>`).join('') || '<tr><td colspan="5" style="padding:1rem;color:#64748b;text-align:center;">No estimate items added yet.</td></tr>'}</tbody></table></div>`;
             panel.querySelector('#roomflow-add-estimate-line')?.addEventListener('click', () => this.addEstimateLine());
@@ -845,6 +903,19 @@
                 this.currentLines.forEach(line => { line.section_name = this.currentEstimateHeader || null; });
                 this.saveEstimateStorage();
             });
+            panel.querySelectorAll('[data-service-field]').forEach(input => input.addEventListener('input', event => {
+                const values = { street: 'currentServiceStreet', city: 'currentServiceCity', state: 'currentServiceState', postalCode: 'currentServicePostalCode' };
+                const property = values[event.target.dataset.serviceField];
+                if (property) this[property] = String(event.target.value || '').trimStart();
+                if (state.costing) {
+                    state.costing.serviceStreet = this.currentServiceStreet;
+                    state.costing.serviceCity = this.currentServiceCity;
+                    state.costing.serviceState = this.currentServiceState;
+                    state.costing.servicePostalCode = this.currentServicePostalCode;
+                    state.costing.customerAddress = this.serviceAddress();
+                }
+                this.saveEstimateStorage();
+            }));
             panel.querySelectorAll('.roomflow-line-qty,.roomflow-line-price').forEach(input => input.addEventListener('change', () => {
                 const index = Number(input.dataset.index);
                 if (input.classList.contains('roomflow-line-qty')) this.currentLines[index].quantity = Number(input.value) || 0;
@@ -923,7 +994,22 @@
             if (!this.currentLines.length) return fail('Add at least one item to the Inline Customer Estimate before saving or syncing.', 'warning');
             this.currentEstimateHeader = String(this.currentEstimateHeader || '').trim().slice(0, 240);
             if (!this.currentEstimateHeader) return fail('Enter an Estimate Header before saving or syncing.', 'warning');
+            this.currentServiceStreet = String(this.currentServiceStreet || '').trim().slice(0, 300);
+            this.currentServiceCity = String(this.currentServiceCity || '').trim().slice(0, 120);
+            this.currentServiceState = String(this.currentServiceState || '').trim().slice(0, 80);
+            this.currentServicePostalCode = String(this.currentServicePostalCode || '').trim().slice(0, 32);
+            if (!this.currentServiceStreet) return fail('Enter the Service Street Address before saving or syncing.', 'warning');
+            if (!this.currentServiceCity) return fail('Enter the Service City before saving or syncing.', 'warning');
+            if (!this.currentServiceState) return fail('Enter the Service State before saving or syncing.', 'warning');
+            if (!this.currentServicePostalCode) return fail('Enter the Postal Code before saving or syncing.', 'warning');
             this.currentLines.forEach(line => { line.section_name = this.currentEstimateHeader; });
+            if (state.costing) {
+                state.costing.serviceStreet = this.currentServiceStreet;
+                state.costing.serviceCity = this.currentServiceCity;
+                state.costing.serviceState = this.currentServiceState;
+                state.costing.servicePostalCode = this.currentServicePostalCode;
+                state.costing.customerAddress = this.serviceAddress();
+            }
             const client = this.getClient();
             const orgId = this.currentOrgId();
             try {
@@ -986,7 +1072,14 @@
                 }));
                 const linesResult = await client.from('estimate_lines').insert(rows);
                 if (linesResult.error) throw linesResult.error;
-                await client.from('jobs').update({ status: 'Estimate Draft', estimate_status: 'draft', tracking_color: 'purple' }).eq('id', jobId);
+                const jobResult = await client.from('jobs').update({
+                    status: 'Estimate Draft', estimate_status: 'draft', tracking_color: 'purple',
+                    property_address: this.currentServiceStreet,
+                    city: this.currentServiceCity,
+                    state: this.currentServiceState,
+                    postal_code: this.currentServicePostalCode
+                }).eq('id', jobId);
+                if (jobResult.error) throw jobResult.error;
                 await this.uploadLayoutAttachments(estimate.id, jobId);
                 this.saveEstimateStorage();
                 this.toast(`Draft ${estimate.estimate_number} saved.`, 'success');

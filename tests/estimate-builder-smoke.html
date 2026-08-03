@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8"><title>Estimate builder smoke test</title><link rel="stylesheet" href="../styles.css"></head>
 <body style="background:#08111f"><div id="cost-container"></div><pre id="result">Running…</pre>
 <script>
-window.state={currentJobName:'Taylor Basement',currentStep:6,currentOrganization:{id:'11111111-1111-4111-8111-111111111111'},sessionUser:{id:'22222222-2222-4222-8222-222222222222'},costing:{customItems:[],settings:{salesTaxRate:0}}};
+window.state={currentJobName:'Taylor Basement',currentStep:6,currentOrganization:{id:'11111111-1111-4111-8111-111111111111'},sessionUser:{id:'22222222-2222-4222-8222-222222222222'},costing:{customerAddress:'25 Service Road, Grand Rapids, MI 49503',customItems:[],settings:{salesTaxRate:0}}};
 localStorage.setItem('roomflow_estimate_drafts_v1',JSON.stringify({'Taylor Basement':{estimateId:null,header:'Basement Waterproofing',lines:[{roomflow_line_id:'line-1',section_name:'Basement Waterproofing',name:'Wall system',description:'North wall',quantity:2,unit:'each',unit_price:100,taxable:false,selected:true}]}}));
 </script>
 <script src="../roomflow-integrations.js"></script>
@@ -12,6 +12,7 @@ RoomFlowIntegrations.renderEstimateBuilder(true);
 const header=document.getElementById('roomflow-estimate-header');
 add('Estimate Header field is visible',Boolean(header));
 add('Saved Estimate Header is restored',header?.value==='Basement Waterproofing',header?.value);
+const serviceValues=[...document.querySelectorAll('[data-service-field]')].map(input=>input.value);add('Service address is split into street, city, state, and postal fields',serviceValues.join('|')==='25 Service Road|Grand Rapids|MI|49503',serviceValues.join('|'));
 header.value='Foundation Repair';header.dispatchEvent(new Event('input',{bubbles:true}));
 const stored=JSON.parse(localStorage.getItem('roomflow_estimate_drafts_v1'))['Taylor Basement'];
 add('Estimate Header persists with every line section',stored.header==='Foundation Repair'&&stored.lines[0].section_name==='Foundation Repair',`${stored.header}/${stored.lines[0].section_name}`);
@@ -22,6 +23,7 @@ const writes={};class Query{constructor(table){this.table=table}select(){return 
 RoomFlowIntegrations.client={from:table=>new Query(table)};RoomFlowIntegrations.refreshInboundLeads=()=>{};RoomFlowIntegrations.uploadLayoutAttachments=async()=>{};state.jobId='33333333-3333-4333-8333-333333333333';RoomFlowIntegrations.currentLines=lines;RoomFlowIntegrations.currentEstimateHeader='Foundation Repair';const savedEstimate=await RoomFlowIntegrations.saveDraftEstimate({throwOnError:true});
 add('Automatic sync save returns an estimate ID',savedEstimate?.id==='44444444-4444-4444-8444-444444444444',savedEstimate?.id);
 add('Saved estimate lines carry the Townsquare header',writes.estimate_linesInsert?.[0]?.section_name==='Foundation Repair',writes.estimate_linesInsert?.[0]?.section_name);
+add('Saved job carries structured Townsquare service address fields',writes.jobsUpdate?.property_address==='25 Service Road'&&writes.jobsUpdate?.city==='Grand Rapids'&&writes.jobsUpdate?.state==='MI'&&writes.jobsUpdate?.postal_code==='49503',JSON.stringify(writes.jobsUpdate));
 const report={passed:checks.every(check=>check.passed),checks};document.getElementById('result').textContent=JSON.stringify(report,null,2);document.body.dataset.passed=String(report.passed);
 })();
 </script></body></html>
