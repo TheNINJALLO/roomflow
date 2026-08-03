@@ -17,7 +17,7 @@
         var checks = [];
         function check(name, passed, detail) { checks.push({ name: name, passed: Boolean(passed), detail: detail || '' }); }
 
-        var required = ['quick-start', 'account', 'jobs', 'guided', 'rooms', 'cad', 'wall-work', 'pricing', 'documents', 'saving', 'tracker', 'zapier', 'mobile', 'troubleshooting', 'closeout'];
+        var required = ['quick-start', 'account', 'jobs', 'guided', 'rooms', 'cad', 'wall-work', 'pricing', 'documents', 'saving', 'tracker', 'zapier', 'mobile', 'townsquare', 'troubleshooting', 'closeout'];
         check('All required guide sections exist', required.every(function (id) { return doc.getElementById(id); }), required.filter(function (id) { return !doc.getElementById(id); }).join(', '));
         check('RoomFlow return link exists', Boolean(doc.querySelector('a[href="index.html"]')));
         check('Tracker link targets tracker instructions', Boolean(doc.querySelector('a[href="#tracker"]')));
@@ -31,6 +31,10 @@
         var visible = doc.querySelectorAll('.searchable:not(.is-hidden)').length;
         check('Search filters guide sections', visible > 0 && visible < required.length, String(visible));
         check('Tracker deletion remains searchable', !doc.getElementById('tracker').classList.contains('is-hidden'));
+
+        search.value = 'Townsquare draft';
+        search.dispatchEvent(new Event('input', { bubbles: true }));
+        check('Townsquare draft instructions are searchable', !doc.getElementById('townsquare').classList.contains('is-hidden'));
 
         var result = { passed: checks.every(function (item) { return item.passed; }), checks: checks };
         document.getElementById('test-result').textContent = JSON.stringify(result, null, 2);

@@ -37,7 +37,7 @@ node --check work-order.js
 node --check document-workflow.js
 ```
 
-For an end-to-end browser smoke test, serve the repository and open `tests/browser-smoke.html`. The page reports checks for per-wall quantities, document item synchronization, work-order dimensions, angled-room placement, and the mobile form layout.
+For an end-to-end browser smoke test, serve the repository and open `tests/browser-smoke.html`. The page reports checks for per-wall quantities, document item synchronization, work-order dimensions, angled-room placement, and the mobile form layout. Open `tests/header-responsive-smoke.html` to verify that every visible header action stays within the viewport at representative desktop, tablet, and phone widths from 1920px down to 320px.
 
 ## Native wrappers
 
@@ -71,3 +71,17 @@ RoomFlow accepts JSON, form data, URL-encoded fields, raw email text, and nested
 Use **Refresh Activity** in RoomFlow Settings or the **Zapier intake** health strip in Tracker to confirm that a delivery arrived and see which caller fields were parsed. A successful webhook test returns `ok: true`, a `job_id`, normalized fields, and warnings.
 
 See [ZAPIER_SETUP.md](ZAPIER_SETUP.md) for the complete deployment, Zap configuration, verification, and error-response guide.
+
+## Townsquare draft integration
+
+RoomFlow includes a secure, draft-only Townsquare Interactive integration with a Supabase Edge Function and a Manifest V3 desktop Chrome/Edge bridge. Authorized estimators can save a RoomFlow estimate and choose **Create Townsquare Draft** or **Update Townsquare Draft**. Customer delivery always remains a manual Townsquare action.
+
+Read [TOWNSQUARE_INTEGRATION.md](TOWNSQUARE_INTEGRATION.md) for architecture, security, database/function deployment, extension installation, guided selector mapping, Android limitations, testing, and troubleshooting.
+
+Additional validation:
+
+```powershell
+node --test tests/townsquare-core.test.mjs tests/townsquare-security.test.mjs
+```
+
+Serve the repository and open `tests/townsquare-extension-smoke.html` and `tests/townsquare-roomflow-smoke.html` for browser-level fixture checks.
